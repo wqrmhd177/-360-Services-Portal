@@ -1,0 +1,9 @@
+# Do not upload build output - Vercel builds from source
+.next
+
+# Local env files (use Vercel env vars instead)
+.env*.local
+
+# Dev / misc
+node_modules
+.git
