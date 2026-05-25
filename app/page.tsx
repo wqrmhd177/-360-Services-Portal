@@ -101,9 +101,12 @@ export default function HomePage() {
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700">Password</label>
                     {!isSignUp && (
-                      <span className="text-xs text-gray-400">
-                        Forgot your password? Contact your admin.
-                      </span>
+                      <Link
+                        href="/auth/forgot-password"
+                        className="text-xs text-portal-600 hover:text-portal-700 font-medium"
+                      >
+                        Forgot password?
+                      </Link>
                     )}
                   </div>
                   <input

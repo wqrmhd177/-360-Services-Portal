@@ -26,6 +26,8 @@ create table public.profiles (
   email text unique not null,
   full_name text,
   role public.user_role,
+  password text,
+  password_hash text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

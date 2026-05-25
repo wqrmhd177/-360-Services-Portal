@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { UserRole } from "@/lib/simpleAuth";
 
 export default function SignupPage() {
@@ -100,6 +101,16 @@ export default function SignupPage() {
             {loading ? "Signing up..." : "Sign up"}
           </button>
         </form>
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <Link href="/" className="text-portal-600 hover:text-portal-700 font-medium">
+            Sign in
+          </Link>
+          {" · "}
+          <Link href="/auth/forgot-password" className="text-portal-600 hover:text-portal-700 font-medium">
+            Forgot password?
+          </Link>
+        </p>
       </div>
     </div>
   );

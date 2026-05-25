@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createSupabaseClient } from "@/lib/supabaseClient";
+import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
 import type { UserRole } from "@/lib/simpleAuth";
 
 const DEFAULT_ROLE: UserRole = "growth";
@@ -27,8 +29,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
   }
 
-  if (email !== adminEmail || password !== adminPassword) {
+  if (email !== adminEmail) {
     return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
+  }
+
+  let authenticated = email === adminEmail && password === adminPassword;
+
+  if (!authenticated) {
+    try {
+      const supabase = createSupabaseClient();
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("email, password, password_hash")
+        .eq("email", adminEmail)
+        .maybeSingle();
+
+      if (!error && profile && (await passwordMatches(password, profile))) {
+        authenticated = true;
+      }
+    } catch (error) {
+      console.error("Admin login profile check error:", error);
+    }
+  }
+
+  if (!authenticated) {
+    return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
+  }
+
+  try {
+    const supabase = createSupabaseClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("password")
+      .eq("email", adminEmail)
+      .maybeSingle();
+
+    if (!profile?.password) {
+      const fields = await passwordFields(password);
+      await supabase.from("profiles").upsert(
+        {
+          email: adminEmail,
+          full_name: "Admin",
+          role: "admin",
+          ...fields,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "email" }
+      );
+    }
+  } catch (error) {
+    console.error("Admin password sync error:", error);
   }
 
   const session = {
@@ -43,7 +93,7 @@ export async function POST(request: Request) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 7,
   });
 
   return NextResponse.json({ ok: true });

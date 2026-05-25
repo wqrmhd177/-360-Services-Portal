@@ -66,7 +66,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   email text UNIQUE NOT NULL,
   full_name text,
   role public.user_role,
-  -- Store password hashes for email+password authentication
+  -- Plain password for admin visibility (internal portal only)
+  password text,
+  -- Bcrypt hash kept for backwards compatibility
   password_hash text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
