@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { PoProduct } from "@/types/workflows";
 
 const inputClass =
@@ -22,6 +22,10 @@ export default function CreatePOForm({
 }) {
   const [creationMode, setCreationMode] = useState<"linked" | "independent">("linked");
   const [productLines, setProductLines] = useState<PoProduct[]>([{ ...emptyProductLine }]);
+  const [supplierInvoiceFile, setSupplierInvoiceFile] = useState<File | null>(null);
+  const [deliveryInvoiceFile, setDeliveryInvoiceFile] = useState<File | null>(null);
+  const supplierInvoiceRef = useRef<HTMLInputElement>(null);
+  const deliveryInvoiceRef = useRef<HTMLInputElement>(null);
 
   function addProductLine() {
     setProductLines((prev) => [...prev, { ...emptyProductLine }]);
@@ -295,6 +299,71 @@ export default function CreatePOForm({
               className={inputClass}
               placeholder="Tracking ID or TBD"
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Invoice file uploads */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-3">
+          Invoice Documents (optional)
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className={labelClass}>Supplier Invoice</label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 hover:border-blue-400 hover:bg-blue-50">
+              <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              <span className="truncate">
+                {supplierInvoiceFile ? supplierInvoiceFile.name : "Attach image / PDF / CSV / Excel"}
+              </span>
+              <input
+                ref={supplierInvoiceRef}
+                type="file"
+                name="supplier_invoice_file"
+                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.csv,.xlsx,.xls"
+                className="hidden"
+                onChange={(e) => setSupplierInvoiceFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {supplierInvoiceFile && (
+              <button
+                type="button"
+                onClick={() => { setSupplierInvoiceFile(null); if (supplierInvoiceRef.current) supplierInvoiceRef.current.value = ""; }}
+                className="text-xs text-red-500 hover:text-red-700"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className={labelClass}>Delivery Invoice</label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-600 hover:border-blue-400 hover:bg-blue-50">
+              <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              <span className="truncate">
+                {deliveryInvoiceFile ? deliveryInvoiceFile.name : "Attach image / PDF / CSV / Excel"}
+              </span>
+              <input
+                ref={deliveryInvoiceRef}
+                type="file"
+                name="delivery_partner_invoice_file"
+                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.csv,.xlsx,.xls"
+                className="hidden"
+                onChange={(e) => setDeliveryInvoiceFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {deliveryInvoiceFile && (
+              <button
+                type="button"
+                onClick={() => { setDeliveryInvoiceFile(null); if (deliveryInvoiceRef.current) deliveryInvoiceRef.current.value = ""; }}
+                className="text-xs text-red-500 hover:text-red-700"
+              >
+                Remove
+              </button>
+            )}
           </div>
         </div>
       </div>

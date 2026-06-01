@@ -257,9 +257,13 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
     }
   }
 
-  function updateCost(index: number, field: "costPerUnit" | "freightCostPerUnit" | "landedCostPerUnit", value: number) {
+  function updateCost(index: number, field: "costPerUnit" | "freightCostPerUnit", value: number) {
     const updated = [...purchaseDetails];
-    updated[index] = { ...updated[index], [field]: value };
+    const row = { ...updated[index], [field]: value };
+    const cost = field === "costPerUnit" ? value : (row.costPerUnit ?? 0);
+    const freight = field === "freightCostPerUnit" ? value : (row.freightCostPerUnit ?? 0);
+    row.landedCostPerUnit = parseFloat((cost + freight).toFixed(2));
+    updated[index] = row;
     setPurchaseDetails(updated);
   }
 
@@ -313,6 +317,11 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
     setCombinationRows((prev) => {
       const rows = [...(prev[detailIndex] || [])];
       const row = { ...rows[rowIndex], [field]: value };
+      if (field === "costPerUnit" || field === "freightCostPerUnit") {
+        const cost = field === "costPerUnit" ? Number(value) : (row.costPerUnit ?? 0);
+        const freight = field === "freightCostPerUnit" ? Number(value) : (row.freightCostPerUnit ?? 0);
+        row.landedCostPerUnit = parseFloat((cost + freight).toFixed(2));
+      }
       rows[rowIndex] = row;
       return { ...prev, [detailIndex]: rows };
     });
@@ -427,7 +436,6 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
         (r) =>
           r.costPerUnit != null &&
           r.freightCostPerUnit != null &&
-          r.landedCostPerUnit != null &&
           r.destinationCountry
       );
       if (valid.length === 0) {
@@ -435,15 +443,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
         return;
       }
       if (!isSubmitted && valid.length !== rows.length) {
-        setError("Each combination must have destination country, cost, freight, and landed cost.");
+        setError("Each combination must have destination country, cost per unit, and freight per unit.");
         return;
       }
     } else {
       if (
         !isSubmitted &&
-        (!detail.costPerUnit || !detail.freightCostPerUnit || !detail.landedCostPerUnit)
+        (!detail.costPerUnit || !detail.freightCostPerUnit)
       ) {
-        setError("Please fill in all cost fields for this combination");
+        setError("Please fill in Cost per Unit and Freight Cost per Unit");
         return;
       }
     }
@@ -931,15 +939,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="block text-[10px] font-medium text-gray-600">Landed/Unit *</label>
+                            <label className="block text-[10px] font-medium text-gray-600">Landed/Unit (auto)</label>
                             <input
                               type="number"
                               step="0.01"
                               min={0}
                               value={row.landedCostPerUnit || ""}
-                              onChange={(e) => updateCombination(index, rowIndex, "landedCostPerUnit", Number(e.target.value) || 0)}
-                              className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
-                              placeholder="0"
+                              readOnly
+                              className="w-full rounded-lg border border-gray-200 bg-gray-100 px-2 py-1.5 text-xs text-gray-600 cursor-not-allowed"
+                              placeholder="Cost + Freight"
                             />
                           </div>
                           <div className="flex items-end gap-1">
@@ -1069,15 +1077,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-xs font-medium text-gray-700">Landed Cost per Unit <span className="text-red-600">*</span></label>
+                        <label className="block text-xs font-medium text-gray-700">Landed Cost per Unit <span className="text-gray-400 font-normal">(auto)</span></label>
                         <input
                           type="number"
                           step="0.01"
                           min={0}
                           value={currentLandedCostPerUnit}
-                          onChange={(e) => updateCost(index, "landedCostPerUnit", Number(e.target.value) || 0)}
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                          placeholder="0.00"
+                          readOnly
+                          className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-600 cursor-not-allowed outline-none"
+                          placeholder="Cost + Freight"
                         />
                       </div>
                       <div className="flex flex-col items-end gap-2">

@@ -6,6 +6,8 @@ import type { Po, PoStatus, PoStatusHistoryEntry } from "@/types/workflows";
 import POStatusUpdateForm from "@/components/POStatusUpdateForm";
 import { uploadPoInvoice } from "@/lib/poUploads";
 import { PoPaymentAndInvoiceEditForm } from "@/components/PoPaymentAndInvoiceEditForm";
+import ReopenPOButton from "@/components/ReopenPOButton";
+import PODownloadButton from "@/components/PODownloadButton";
 
 
 async function getPoDetails(poId: string) {
@@ -165,9 +167,13 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
             </span>
           )}
         </div>
-        <Link href="/dashboard/procurement/po" className="text-xs text-gray-700 font-medium hover:text-gray-900">
-          ← Back
-        </Link>
+        <div className="flex items-center gap-3">
+          <PODownloadButton po={po} prNumber={prNumber} />
+          {po.status === "canceled" && <ReopenPOButton poId={po.id} />}
+          <Link href="/dashboard/procurement/po" className="text-xs text-gray-700 font-medium hover:text-gray-900">
+            ← Back
+          </Link>
+        </div>
       </div>
 
       <div className="card">

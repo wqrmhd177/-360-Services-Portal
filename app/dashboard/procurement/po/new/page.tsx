@@ -3,6 +3,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import type { PaymentStatus, PoStatus } from "@/types/workflows";
+import { uploadPoInvoice } from "@/lib/poUploads";
 import CreatePOForm from "./CreatePOForm";
 
 async function createPo(formData: FormData) {
@@ -91,6 +92,37 @@ async function createPo(formData: FormData) {
       .from("pr")
       .update({ po_created: true, updated_at: new Date().toISOString() })
       .eq("id", prId);
+  }
+
+  // Handle optional invoice file uploads
+  const supplierInvoiceFileRaw = formData.get("supplier_invoice_file");
+  const deliveryInvoiceFileRaw = formData.get("delivery_partner_invoice_file");
+
+  const invoiceUpdates: Record<string, string> = {};
+
+  if (supplierInvoiceFileRaw instanceof File && supplierInvoiceFileRaw.size > 0) {
+    try {
+      const url = await uploadPoInvoice(supplierInvoiceFileRaw, newPo.id, "supplier");
+      invoiceUpdates.supplier_invoice_file = url;
+    } catch (e) {
+      console.error("Supplier invoice upload failed:", e);
+    }
+  }
+
+  if (deliveryInvoiceFileRaw instanceof File && deliveryInvoiceFileRaw.size > 0) {
+    try {
+      const url = await uploadPoInvoice(deliveryInvoiceFileRaw, newPo.id, "delivery");
+      invoiceUpdates.delivery_partner_invoice_file = url;
+    } catch (e) {
+      console.error("Delivery invoice upload failed:", e);
+    }
+  }
+
+  if (Object.keys(invoiceUpdates).length > 0) {
+    await supabase
+      .from("po")
+      .update({ ...invoiceUpdates, updated_at: new Date().toISOString() })
+      .eq("id", newPo.id);
   }
 
   const financeEmails = await getUsersByRole("finance");

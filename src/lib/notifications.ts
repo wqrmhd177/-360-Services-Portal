@@ -11,7 +11,9 @@ export type NotificationType =
   | "pr_finance_verified"
   | "pr_finance_rejected"
   | "po_created"
-  | "po_status_changed";
+  | "po_status_changed"
+  | "pr_reopened"
+  | "po_reopened";
 
 export interface NotificationPayload {
   qr_id?: string;
@@ -21,6 +23,7 @@ export interface NotificationPayload {
   po_id?: string;
   po_number?: string;
   message?: string;
+  reopened_by?: string;
   [key: string]: unknown;
 }
 

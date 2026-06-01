@@ -288,12 +288,12 @@ export default function MultiProductForm({
             <div>
               <CurrencyInput
                 label="Selling Price (Per Unit)"
-                value={product.sellingPricePerUnit}
+                value={product.sellingPricePerUnit || ""}
                 onChange={(val) => updateProduct(index, "sellingPricePerUnit", val)}
                 currency={product.currency}
                 required
                 disabled={disabled}
-                placeholder="0.00"
+                placeholder="Enter selling price"
               />
             </div>
 

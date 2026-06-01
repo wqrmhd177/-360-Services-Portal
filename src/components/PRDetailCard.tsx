@@ -86,6 +86,18 @@ export default function PRDetailCard({
     return pr.amount || 0;
   };
 
+  const getTotalLandedCost = (): number => {
+    if (pr.products && pr.products.length > 0) {
+      return pr.products.reduce(
+        (sum, p) => sum + (p.landedCostPrice ?? 0) * p.quantity,
+        0
+      );
+    }
+    return 0;
+  };
+
+  const getTotalMargin = (): number => getTotalAmount() - getTotalLandedCost();
+
   return (
     <div className={`bg-white rounded-lg shadow-md ${className}`}>
       {/* Header */}
@@ -196,8 +208,16 @@ export default function PRDetailCard({
                         {product.quantity} units
                       </p>
                     </div>
+                    {(product.landedCostPrice ?? 0) > 0 && (
+                      <div>
+                        <p className="text-gray-600">Landed Cost/Unit</p>
+                        <p className="font-medium text-gray-900">
+                          {formatCurrency(product.landedCostPrice ?? 0, product.currency)}
+                        </p>
+                      </div>
+                    )}
                     <div>
-                      <p className="text-gray-600">Price/Unit</p>
+                      <p className="text-gray-600">Selling Price/Unit</p>
                       <p className="font-medium text-gray-900">
                         {formatCurrency(
                           product.sellingPricePerUnit,
@@ -205,6 +225,17 @@ export default function PRDetailCard({
                         )}
                       </p>
                     </div>
+                    {(product.landedCostPrice ?? 0) > 0 && (
+                      <div>
+                        <p className="text-gray-600">Margin</p>
+                        <p className={`font-medium ${(product.sellingPricePerUnit - (product.landedCostPrice ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {formatCurrency(
+                            (product.sellingPricePerUnit - (product.landedCostPrice ?? 0)) * product.quantity,
+                            product.currency
+                          )}
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-gray-600">Shipping</p>
                       <p className="font-medium text-gray-900 capitalize">
@@ -228,10 +259,18 @@ export default function PRDetailCard({
                   </div>
                 </div>
               ))}
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-2">
+                {getTotalLandedCost() > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Total Landed Cost</span>
+                    <span className="font-semibold text-gray-700">
+                      {formatCurrency(getTotalLandedCost(), pr.products[0]?.currency || "AED")}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-700">
-                    Total Amount ({pr.products.length} products)
+                    Total Selling ({pr.products.length} products)
                   </span>
                   <span className="text-lg font-bold text-blue-600">
                     {formatCurrency(
@@ -240,6 +279,14 @@ export default function PRDetailCard({
                     )}
                   </span>
                 </div>
+                {getTotalLandedCost() > 0 && (
+                  <div className="flex items-center justify-between text-sm border-t border-blue-200 pt-2">
+                    <span className="text-gray-600 font-medium">Total Margin</span>
+                    <span className={`font-bold ${getTotalMargin() >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(getTotalMargin(), pr.products[0]?.currency || "AED")}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

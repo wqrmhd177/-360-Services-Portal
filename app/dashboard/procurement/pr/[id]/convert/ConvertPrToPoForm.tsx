@@ -9,9 +9,18 @@ interface ConvertPrToPoFormProps {
   userEmail: string;
 }
 
+const ACCEPT_INVOICE_FILES =
+  ".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls,image/*,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [supplierInvoiceName, setSupplierInvoiceName] = useState<string | null>(
+    null
+  );
+  const [deliveryInvoiceName, setDeliveryInvoiceName] = useState<string | null>(
+    null
+  );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,7 +36,10 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create PO");
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body.error === "string" ? body.error : "Failed to create PO"
+        );
       }
 
       const result = await response.json();
@@ -40,7 +52,11 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
       }
     } catch (error) {
       console.error("Error creating PO:", error);
-      alert("Failed to create Purchase Order. Please try again.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to create Purchase Order. Please try again."
+      );
       setIsSubmitting(false);
     }
   }
@@ -122,16 +138,30 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Supplier Invoice File Path
+              Supplier Invoice (Image or PDF)
             </label>
-            <input
-              type="text"
-              name="supplier_invoice_file"
-              placeholder="supplier-invoice-001.pdf"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="text-xs text-gray-400">
-              In production, this would be an image/file upload to Supabase Storage
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100">
+                Choose file
+                <input
+                  type="file"
+                  name="supplier_invoice_file"
+                  accept={ACCEPT_INVOICE_FILES}
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    setSupplierInvoiceName(file ? file.name : null);
+                  }}
+                />
+              </label>
+              {supplierInvoiceName && (
+                <span className="text-sm text-gray-600 truncate max-w-xs">
+                  {supplierInvoiceName}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">
+              Optional. PDF or image up to 5 MB.
             </p>
           </div>
         </div>
@@ -185,16 +215,30 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Delivery Invoice File Path
+              Delivery Invoice (Image or PDF)
             </label>
-            <input
-              type="text"
-              name="delivery_partner_invoice_file"
-              placeholder="delivery-invoice-001.pdf"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="text-xs text-gray-400">
-              In production, this would be an image/file upload to Supabase Storage
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100">
+                Choose file
+                <input
+                  type="file"
+                  name="delivery_partner_invoice_file"
+                  accept={ACCEPT_INVOICE_FILES}
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    setDeliveryInvoiceName(file ? file.name : null);
+                  }}
+                />
+              </label>
+              {deliveryInvoiceName && (
+                <span className="text-sm text-gray-600 truncate max-w-xs">
+                  {deliveryInvoiceName}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">
+              Optional. PDF or image up to 5 MB.
             </p>
           </div>
         </div>

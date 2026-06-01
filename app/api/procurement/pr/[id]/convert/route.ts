@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
+import { uploadPoInvoice } from "@/lib/poUploads";
 import type { PaymentStatus, PoStatus } from "@/types/workflows";
+
+function getInvoiceFile(formData: FormData, field: string): File | null {
+  const entry = formData.get(field);
+  if (entry instanceof File && entry.size > 0) {
+    return entry;
+  }
+  return null;
+}
 
 export async function POST(
   request: Request,
@@ -29,7 +38,7 @@ export async function POST(
     const poType = String(formData.get("po_type") ?? "internal");
     const supplierName = String(formData.get("supplier_name") ?? "");
     const supplierLocation = String(formData.get("supplier_location") ?? "");
-    const supplierInvoiceFile = (formData.get("supplier_invoice_file") as string | null) || null;
+    const supplierInvoiceFile = getInvoiceFile(formData, "supplier_invoice_file");
     const supplierPaymentAmountRaw = formData.get("supplier_payment_amount");
     const supplierPaymentAmount =
       supplierPaymentAmountRaw !== null && supplierPaymentAmountRaw !== ""
@@ -37,8 +46,10 @@ export async function POST(
         : undefined;
     const deliveryPartner = String(formData.get("delivery_partner") ?? "");
     const deliveryPartnerTrackingId = String(formData.get("delivery_partner_tracking_id") ?? "");
-    const deliveryPartnerInvoiceFile =
-      (formData.get("delivery_partner_invoice_file") as string | null) || null;
+    const deliveryPartnerInvoiceFile = getInvoiceFile(
+      formData,
+      "delivery_partner_invoice_file"
+    );
     const deliveryPartnerPaymentAmountRaw = formData.get("delivery_partner_payment_amount");
     const deliveryPartnerPaymentAmount =
       deliveryPartnerPaymentAmountRaw !== null && deliveryPartnerPaymentAmountRaw !== ""
@@ -65,11 +76,9 @@ export async function POST(
         po_type: poType,
         supplier_name: supplierName,
         supplier_location: supplierLocation,
-        supplier_invoice_file: supplierInvoiceFile,
         supplier_payment_amount: supplierPaymentAmount ?? null,
         delivery_partner: deliveryPartner,
         delivery_partner_tracking_id: deliveryPartnerTrackingId,
-        delivery_partner_invoice_file: deliveryPartnerInvoiceFile,
         delivery_partner_payment_amount: deliveryPartnerPaymentAmount ?? null,
         remarks,
         supplier_payment_status: "unpaid" as PaymentStatus,
@@ -81,6 +90,50 @@ export async function POST(
     if (poError) {
       console.error("Error creating PO:", poError);
       return NextResponse.json({ error: "Failed to create PO" }, { status: 500 });
+    }
+
+    const invoiceUpdates: Record<string, string> = {};
+    try {
+      if (supplierInvoiceFile) {
+        invoiceUpdates.supplier_invoice_file = await uploadPoInvoice(
+          supplierInvoiceFile,
+          newPo.id,
+          "supplier"
+        );
+      }
+      if (deliveryPartnerInvoiceFile) {
+        invoiceUpdates.delivery_partner_invoice_file = await uploadPoInvoice(
+          deliveryPartnerInvoiceFile,
+          newPo.id,
+          "delivery"
+        );
+      }
+    } catch (uploadError) {
+      console.error("PO invoice upload failed:", uploadError);
+      await supabase.from("po").delete().eq("id", newPo.id);
+      return NextResponse.json(
+        {
+          error:
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Failed to upload invoice file"
+        },
+        { status: 400 }
+      );
+    }
+
+    if (Object.keys(invoiceUpdates).length > 0) {
+      const { error: invoiceUpdateError } = await supabase
+        .from("po")
+        .update(invoiceUpdates)
+        .eq("id", newPo.id);
+      if (invoiceUpdateError) {
+        console.error("Error saving invoice URLs:", invoiceUpdateError);
+        return NextResponse.json(
+          { error: "Failed to save invoice files" },
+          { status: 500 }
+        );
+      }
     }
 
     // Mark PR as PO created
