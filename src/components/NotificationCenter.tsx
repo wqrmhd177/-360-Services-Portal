@@ -56,8 +56,26 @@ function getNotificationTitle(
       return poNumber 
         ? `New Purchase Order ${poNumber}` 
         : "New Purchase Order created";
+    case "pr_created":
+      return prNumber
+        ? `New Purchase Request ${prNumber}`
+        : "New Purchase Request submitted";
+    case "pr_resubmitted":
+      return prNumber
+        ? `${prNumber} - Re-submitted`
+        : "Purchase Request re-submitted";
+    case "pr_reopened":
+      return prNumber
+        ? `${prNumber} - Reopened`
+        : "Purchase Request reopened";
+    case "po_reopened":
+      return poNumber
+        ? `${poNumber} - PO Reopened`
+        : "Purchase Order reopened";
     default:
-      return `Notification: ${type}`;
+      return payload?.message
+        ? String(payload.message).slice(0, 60)
+        : `Notification: ${type}`;
   }
 }
 

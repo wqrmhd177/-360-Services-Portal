@@ -99,14 +99,20 @@ export default function PODownloadButton({ po, prNumber }: PODownloadButtonProps
       y += 5;
 
       const products = po.products && po.products.length > 0 ? po.products : [];
-      const tableRows: (string | number)[][] = products.map((p, i) => [
-        i + 1,
-        p.productName || "-",
-        p.skuCode || "-",
-        p.quantity,
-        p.rate != null ? `AED ${Number(p.rate).toFixed(2)}` : "-",
-        p.amount != null ? `AED ${Number(p.amount).toFixed(2)}` : "-",
-      ]);
+      // Determine currency: use linked PR currency if available, fallback AED
+      const currency = (po as any).pr?.products?.[0]?.currency || "AED";
+
+      const tableRows: (string | number)[][] = products.map((p, i) => {
+        const pCurrency = (p as any).currency || currency;
+        return [
+          i + 1,
+          p.productName || "-",
+          p.skuCode || "-",
+          p.quantity,
+          p.rate != null ? `${pCurrency} ${Number(p.rate).toFixed(2)}` : "-",
+          p.amount != null ? `${pCurrency} ${Number(p.amount).toFixed(2)}` : "-",
+        ];
+      });
 
       if (tableRows.length === 0) {
         tableRows.push([1, "See linked PR for product details", "-", "-", "-", "-"]);
@@ -133,9 +139,10 @@ export default function PODownloadButton({ po, prNumber }: PODownloadButtonProps
       // Total
       if (products.length > 0) {
         const total = products.reduce((s, p) => s + (p.amount ?? 0), 0);
+        const currency = (po as any).pr?.products?.[0]?.currency || "AED";
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.text(`Total: AED ${total.toFixed(2)}`, pageWidth - margin, finalY + 7, { align: "right" });
+        doc.text(`Total: ${currency} ${total.toFixed(2)}`, pageWidth - margin, finalY + 7, { align: "right" });
       }
 
       // Remarks

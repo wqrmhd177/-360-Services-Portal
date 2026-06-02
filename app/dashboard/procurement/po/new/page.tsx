@@ -36,11 +36,33 @@ async function createPo(formData: FormData) {
     if (!rawPrId) {
       redirect("/dashboard/procurement/po/new?error=pr_required");
     }
-    const { data: pr } = await supabase.from("pr").select("id, created_by_email").eq("id", rawPrId).single();
+    const { data: pr } = await supabase
+      .from("pr")
+      .select("id, created_by_email, products, product_name, sku_code, quantity, rate")
+      .eq("id", rawPrId)
+      .single();
     if (!pr) {
       redirect("/dashboard/procurement/po/new?error=invalid_pr");
     }
     prId = pr.id;
+    // Copy PR products into PO so SKUs/quantities are always visible
+    if (pr.products && Array.isArray(pr.products) && pr.products.length > 0) {
+      products = pr.products.map((p: any) => ({
+        productName: p.productName || p.product_name || "",
+        skuCode: p.skuCode || p.sku_code || undefined,
+        quantity: Number(p.quantity) || 0,
+        rate: Number(p.sellingPricePerUnit || p.landedCostPrice || p.rate) || undefined,
+        amount: Number(p.totalAmount || p.amount) || undefined,
+      }));
+    } else if (pr.product_name) {
+      products = [{
+        productName: pr.product_name,
+        skuCode: pr.sku_code || undefined,
+        quantity: Number(pr.quantity) || 0,
+        rate: Number(pr.rate) || undefined,
+        amount: Number(pr.rate) * Number(pr.quantity) || undefined,
+      }];
+    }
   } else {
     const productsJson = formData.get("products") as string | null;
     if (!productsJson) {
@@ -99,13 +121,20 @@ async function createPo(formData: FormData) {
   const deliveryInvoiceFileRaw = formData.get("delivery_partner_invoice_file");
 
   const invoiceUpdates: Record<string, string> = {};
+  const invoiceErrors: string[] = [];
+
+  // #region agent log
+  fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'po/new/page.tsx:invoiceUpload',message:'invoice files received in server action',data:{supplierFileIsFile:supplierInvoiceFileRaw instanceof File,supplierFileSize:(supplierInvoiceFileRaw instanceof File)?supplierInvoiceFileRaw.size:0,supplierFileName:(supplierInvoiceFileRaw instanceof File)?supplierInvoiceFileRaw.name:'',deliveryFileIsFile:deliveryInvoiceFileRaw instanceof File,deliveryFileSize:(deliveryInvoiceFileRaw instanceof File)?deliveryInvoiceFileRaw.size:0},timestamp:Date.now(),hypothesisId:'H-B'})}).catch(()=>{});
+  // #endregion
 
   if (supplierInvoiceFileRaw instanceof File && supplierInvoiceFileRaw.size > 0) {
     try {
       const url = await uploadPoInvoice(supplierInvoiceFileRaw, newPo.id, "supplier");
       invoiceUpdates.supplier_invoice_file = url;
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "Supplier invoice upload failed";
       console.error("Supplier invoice upload failed:", e);
+      invoiceErrors.push(`Supplier invoice: ${msg}`);
     }
   }
 
@@ -114,7 +143,9 @@ async function createPo(formData: FormData) {
       const url = await uploadPoInvoice(deliveryInvoiceFileRaw, newPo.id, "delivery");
       invoiceUpdates.delivery_partner_invoice_file = url;
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "Delivery invoice upload failed";
       console.error("Delivery invoice upload failed:", e);
+      invoiceErrors.push(`Delivery invoice: ${msg}`);
     }
   }
 
@@ -123,6 +154,12 @@ async function createPo(formData: FormData) {
       .from("po")
       .update({ ...invoiceUpdates, updated_at: new Date().toISOString() })
       .eq("id", newPo.id);
+  }
+
+  // Redirect with upload errors so user knows invoice wasn't saved
+  if (invoiceErrors.length > 0) {
+    const errMsg = encodeURIComponent(invoiceErrors.join("; "));
+    redirect(`/dashboard/procurement/po/${newPo.id}?warn=invoice_upload_failed&msg=${errMsg}`);
   }
 
   const financeEmails = await getUsersByRole("finance");

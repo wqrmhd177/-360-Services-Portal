@@ -59,18 +59,44 @@ export async function POST(
 
     const supabase = createSupabaseClient();
 
-    // Get PR details to notify the creator
+    // Get PR details (including products to copy into PO)
     const { data: prDetails } = await supabase
       .from("pr")
-      .select("created_by_email")
+      .select("created_by_email, products, product_name, sku_code, quantity, rate")
       .eq("id", prId)
       .single();
+
+    // Build product lines from PR to populate PO
+    let poProducts: Array<{ productName: string; skuCode?: string; quantity: number; rate?: number; amount?: number }> = [];
+    if (prDetails?.products && Array.isArray(prDetails.products) && prDetails.products.length > 0) {
+      poProducts = prDetails.products.map((p: any) => ({
+        productName: p.productName || p.product_name || "",
+        skuCode: p.skuCode || p.sku_code || undefined,
+        quantity: Number(p.quantity) || 0,
+        rate: Number(p.sellingPricePerUnit || p.landedCostPrice || p.rate) || undefined,
+        amount: Number(p.totalAmount || p.amount) || undefined,
+      }));
+    } else if (prDetails?.product_name) {
+      // Legacy single-product PR
+      poProducts = [{
+        productName: prDetails.product_name,
+        skuCode: prDetails.sku_code || undefined,
+        quantity: Number(prDetails.quantity) || 0,
+        rate: Number(prDetails.rate) || undefined,
+        amount: Number(prDetails.rate) * Number(prDetails.quantity) || undefined,
+      }];
+    }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'convert/route.ts:products',message:'PR products copied to PO',data:{prId,poProductsCount:poProducts.length,poProducts},timestamp:Date.now(),hypothesisId:'H-C'})}).catch(()=>{});
+    // #endregion
 
     // Create PO
     const { data: newPo, error: poError } = await supabase
       .from("po")
       .insert({
         pr_id: prId,
+        products: poProducts,
         created_by_email: session.email,
         status: "order_placed" as PoStatus,
         po_type: poType,

@@ -10,10 +10,18 @@ const ALLOWED_INVOICE_TYPES = [
   "application/pdf",
   "text/csv",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel"
+  "application/vnd.ms-excel",
+  // Some browsers/OS send empty or generic type for xlsx/csv
+  "application/octet-stream",
+  ""
 ];
 
-const MAX_INVOICE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_INVOICE_EXTENSIONS = [
+  ".jpg", ".jpeg", ".png", ".gif", ".webp",
+  ".pdf", ".csv", ".xlsx", ".xls"
+];
+
+const MAX_INVOICE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function uploadPoInvoice(
   file: File,
@@ -24,8 +32,16 @@ export async function uploadPoInvoice(
     throw new Error("Invoice file is required");
   }
 
-  if (!ALLOWED_INVOICE_TYPES.includes(file.type)) {
-    throw new Error("Invalid invoice file type");
+  const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+  const typeOk = ALLOWED_INVOICE_TYPES.includes(file.type);
+  const extOk = ALLOWED_INVOICE_EXTENSIONS.includes(ext);
+
+  // #region agent log
+  fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'poUploads.ts:uploadPoInvoice',message:'invoice upload attempt',data:{fileName:file.name,fileType:file.type,ext,typeOk,extOk,size:file.size},timestamp:Date.now(),hypothesisId:'H-A'})}).catch(()=>{});
+  // #endregion
+
+  if (!typeOk && !extOk) {
+    throw new Error(`Invalid invoice file type. Allowed: images, PDF, CSV, Excel. Got: "${file.type}" (${ext})`);
   }
 
   if (file.size > MAX_INVOICE_SIZE) {
