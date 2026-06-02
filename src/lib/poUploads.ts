@@ -37,10 +37,6 @@ export async function uploadPoInvoice(
   const typeOk = ALLOWED_INVOICE_TYPES.includes(file.type);
   const extOk = ALLOWED_INVOICE_EXTENSIONS.includes(extDotted);
 
-  // #region agent log
-  fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'poUploads.ts:uploadPoInvoice',message:'invoice upload attempt',data:{fileName:file.name,fileType:file.type,ext:extDotted,typeOk,extOk,size:file.size},timestamp:Date.now(),hypothesisId:'H-A'})}).catch(()=>{});
-  // #endregion
-
   if (!typeOk && !extOk) {
     throw new Error(`Invalid invoice file type. Allowed: images, PDF, CSV, Excel. Got: "${file.type}" (${extDotted})`);
   }

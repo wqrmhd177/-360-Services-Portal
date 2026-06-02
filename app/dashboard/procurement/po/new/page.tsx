@@ -123,10 +123,6 @@ async function createPo(formData: FormData) {
   const invoiceUpdates: Record<string, string> = {};
   const invoiceErrors: string[] = [];
 
-  // #region agent log
-  fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'po/new/page.tsx:invoiceUpload',message:'invoice files received in server action',data:{supplierFileIsFile:supplierInvoiceFileRaw instanceof File,supplierFileSize:(supplierInvoiceFileRaw instanceof File)?supplierInvoiceFileRaw.size:0,supplierFileName:(supplierInvoiceFileRaw instanceof File)?supplierInvoiceFileRaw.name:'',deliveryFileIsFile:deliveryInvoiceFileRaw instanceof File,deliveryFileSize:(deliveryInvoiceFileRaw instanceof File)?deliveryInvoiceFileRaw.size:0},timestamp:Date.now(),hypothesisId:'H-B'})}).catch(()=>{});
-  // #endregion
-
   if (supplierInvoiceFileRaw instanceof File && supplierInvoiceFileRaw.size > 0) {
     try {
       const url = await uploadPoInvoice(supplierInvoiceFileRaw, newPo.id, "supplier");

@@ -92,10 +92,6 @@ export async function POST(
       message: `PR ${pr.pr_number || prId.slice(0, 8)} has been reopened and is pending review`,
     };
 
-    // #region agent log
-    fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'pr/reopen/route.ts:notifications',message:'PR reopen notification target',data:{approverRejected,financeRejected,prCreator:pr.created_by_email,actor:session.email},timestamp:Date.now(),hypothesisId:'H-D'})}).catch(()=>{});
-    // #endregion
-
     if (approverRejected) {
       // Notify approver team so they know PR is back in their queue
       const approverEmails = await getUsersByRole("approver");

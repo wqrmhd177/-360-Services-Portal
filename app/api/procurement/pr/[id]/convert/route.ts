@@ -87,10 +87,6 @@ export async function POST(
       }];
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2da502'},body:JSON.stringify({sessionId:'2da502',location:'convert/route.ts:products',message:'PR products copied to PO',data:{prId,poProductsCount:poProducts.length,poProducts},timestamp:Date.now(),hypothesisId:'H-C'})}).catch(()=>{});
-    // #endregion
-
     // Create PO
     const { data: newPo, error: poError } = await supabase
       .from("po")
