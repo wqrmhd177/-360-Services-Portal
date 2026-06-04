@@ -10,10 +10,15 @@ CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
   created_at  timestamptz DEFAULT now()
 );
 
--- RLS: deny all direct client access (server-side only via service role)
+-- RLS: table is accessed only by server-side API routes (anon key, same as profiles/qr/pr)
 ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
 
--- No public policies — this table is accessed only by the API (service role key bypasses RLS)
+DROP POLICY IF EXISTS "password_reset_tokens_all" ON public.password_reset_tokens;
+CREATE POLICY "password_reset_tokens_all" ON public.password_reset_tokens
+  FOR ALL
+  TO anon, authenticated
+  USING (true)
+  WITH CHECK (true);
 
 -- Optional: auto-clean expired tokens daily
 -- CREATE EXTENSION IF NOT EXISTS pg_cron;

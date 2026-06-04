@@ -14,12 +14,14 @@ export default function ForgotPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [devConsoleHint, setDevConsoleHint] = useState(false);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setDevConsoleHint(false);
     setLoading(true);
     try {
       const res = await fetch("/api/forgot-password", {
@@ -33,6 +35,7 @@ export default function ForgotPasswordPage() {
         setLoading(false);
         return;
       }
+      setDevConsoleHint(data.deliveryMethod === "dev-console");
       setStep("otp");
     } catch {
       setError("Unexpected error. Please try again.");
@@ -107,7 +110,15 @@ export default function ForgotPasswordPage() {
         ) : (
           <>
             <p className="mb-6 text-sm text-gray-500 text-center">
-              A 6-digit code was sent to <strong>{email}</strong>. Enter it below along with your new password.
+              {devConsoleHint ? (
+                <>
+                  Email delivery is not configured. Check the <strong>dev server terminal</strong> for your 6-digit reset code sent to <strong>{email}</strong>.
+                </>
+              ) : (
+                <>
+                  A 6-digit code was sent to <strong>{email}</strong>. Enter it below along with your new password.
+                </>
+              )}
             </p>
             <form onSubmit={handleReset} className="space-y-4">
               <div className="space-y-1">

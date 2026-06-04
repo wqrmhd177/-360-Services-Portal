@@ -1,14 +1,21 @@
-import { createSupabaseClient } from "@/lib/supabaseClient";
+import { createSupabaseClient, createSupabaseServiceClient } from "@/lib/supabaseClient";
 import { Resend } from "resend";
 
 const OTP_EXPIRY_MINUTES = 15;
+
+function createOtpClient() {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return createSupabaseServiceClient();
+  }
+  return createSupabaseClient();
+}
 
 export function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export async function storeOtp(email: string, otp: string): Promise<void> {
-  const supabase = createSupabaseClient();
+  const supabase = createOtpClient();
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
   // Upsert — one active OTP per email at a time
@@ -24,7 +31,7 @@ export async function storeOtp(email: string, otp: string): Promise<void> {
 }
 
 export async function verifyOtp(email: string, otp: string): Promise<boolean> {
-  const supabase = createSupabaseClient();
+  const supabase = createOtpClient();
 
   const { data, error } = await supabase
     .from("password_reset_tokens")
@@ -46,12 +53,12 @@ export async function verifyOtp(email: string, otp: string): Promise<boolean> {
   return true;
 }
 
-export async function sendOtpEmail(email: string, otp: string): Promise<void> {
+export async function sendOtpEmail(email: string, otp: string): Promise<"email" | "dev-console"> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     // Dev fallback — log OTP to console so developers can still test locally
     console.info(`[DEV] Password reset OTP for ${email}: ${otp}`);
-    return;
+    return "dev-console";
   }
 
   const resend = new Resend(apiKey);
@@ -78,4 +85,6 @@ export async function sendOtpEmail(email: string, otp: string): Promise<void> {
     console.error("Resend email error:", error);
     throw new Error("Failed to send reset code email.");
   }
+
+  return "email";
 }

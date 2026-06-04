@@ -47,10 +47,11 @@ export async function POST(request: Request) {
       });
     }
 
+    let deliveryMethod: "email" | "dev-console" = "email";
     try {
       const otp = generateOtp();
       await storeOtp(email, otp);
-      await sendOtpEmail(email, otp);
+      deliveryMethod = await sendOtpEmail(email, otp);
     } catch (err) {
       console.error("OTP generation/send error:", err);
       return NextResponse.json({ error: "Unable to send reset code. Please try again." }, { status: 500 });
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: "If an account exists for that email, a reset code has been sent.",
+      deliveryMethod,
     });
   }
 
