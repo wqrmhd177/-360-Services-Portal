@@ -62,7 +62,7 @@ export async function uploadPoInvoice(
     });
 
   if (error) {
-    throw new Error("Upload failed");
+    throw new Error(error.message || "Invoice upload failed. Check storage bucket pr-payment-proofs exists.");
   }
 
   const {

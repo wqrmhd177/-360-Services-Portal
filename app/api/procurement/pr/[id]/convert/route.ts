@@ -3,7 +3,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import { uploadPoInvoice } from "@/lib/poUploads";
-import type { PaymentStatus, PoStatus } from "@/types/workflows";
+import { insertPurchaseOrder, type PoProductLine } from "@/lib/poCreate";
 
 function getInvoiceFile(formData: FormData, field: string): File | null {
   const entry = formData.get(field);
@@ -59,15 +59,40 @@ export async function POST(
 
     const supabase = createSupabaseClient();
 
-    // Get PR details (including products to copy into PO)
-    const { data: prDetails } = await supabase
+    const { data: prDetails, error: prFetchError } = await supabase
       .from("pr")
-      .select("created_by_email, products, product_name, sku_code, quantity, rate")
+      .select(
+        "created_by_email, products, product_name, sku_code, quantity, rate, approval_status, finance_verification_status, po_created"
+      )
       .eq("id", prId)
       .single();
 
-    // Build product lines from PR to populate PO
-    let poProducts: Array<{ productName: string; skuCode?: string; quantity: number; rate?: number; amount?: number }> = [];
+    if (prFetchError || !prDetails) {
+      return NextResponse.json({ error: "PR not found" }, { status: 404 });
+    }
+
+    if (prDetails.po_created) {
+      return NextResponse.json(
+        { error: "A purchase order already exists for this PR." },
+        { status: 400 }
+      );
+    }
+
+    if (prDetails.approval_status !== "approved") {
+      return NextResponse.json(
+        { error: "PR must be approved before creating a PO." },
+        { status: 400 }
+      );
+    }
+
+    if (prDetails.finance_verification_status !== "verified") {
+      return NextResponse.json(
+        { error: "PR must be finance-verified before creating a PO." },
+        { status: 400 }
+      );
+    }
+
+    let poProducts: PoProductLine[] = [];
     if (prDetails?.products && Array.isArray(prDetails.products) && prDetails.products.length > 0) {
       poProducts = prDetails.products.map((p: any) => ({
         productName: p.productName || p.product_name || "",
@@ -87,31 +112,26 @@ export async function POST(
       }];
     }
 
-    // Create PO
-    const { data: newPo, error: poError } = await supabase
-      .from("po")
-      .insert({
-        pr_id: prId,
-        products: poProducts,
-        created_by_email: session.email,
-        status: "order_placed" as PoStatus,
-        po_type: poType,
-        supplier_name: supplierName,
-        supplier_location: supplierLocation,
-        supplier_payment_amount: supplierPaymentAmount ?? null,
-        delivery_partner: deliveryPartner,
-        delivery_partner_tracking_id: deliveryPartnerTrackingId,
-        delivery_partner_payment_amount: deliveryPartnerPaymentAmount ?? null,
-        remarks,
-        supplier_payment_status: "unpaid" as PaymentStatus,
-        delivery_partner_payment_status: "unpaid" as PaymentStatus,
-      })
-      .select("id, po_number")
-      .single();
+    const { data: newPo, error: poError } = await insertPurchaseOrder(supabase, {
+      pr_id: prId,
+      created_by_email: session.email,
+      po_type: poType,
+      supplier_name: supplierName,
+      supplier_location: supplierLocation,
+      delivery_partner: deliveryPartner,
+      delivery_partner_tracking_id: deliveryPartnerTrackingId,
+      remarks,
+      products: poProducts,
+      supplier_payment_amount: supplierPaymentAmount ?? null,
+      delivery_partner_payment_amount: deliveryPartnerPaymentAmount ?? null,
+    });
 
-    if (poError) {
+    if (poError || !newPo) {
       console.error("Error creating PO:", poError);
-      return NextResponse.json({ error: "Failed to create PO" }, { status: 500 });
+      return NextResponse.json(
+        { error: poError || "Failed to create PO" },
+        { status: 500 }
+      );
     }
 
     const invoiceUpdates: Record<string, string> = {};

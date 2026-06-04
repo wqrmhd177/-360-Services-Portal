@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
-import type { PaymentStatus, PoStatus } from "@/types/workflows";
 import { uploadPoInvoice } from "@/lib/poUploads";
+import { insertPurchaseOrder } from "@/lib/poCreate";
 import CreatePOForm from "./CreatePOForm";
 
 async function createPo(formData: FormData) {
@@ -85,28 +85,36 @@ async function createPo(formData: FormData) {
     }
   }
 
-  const { data: newPo, error: poError } = await supabase
-    .from("po")
-    .insert({
-      pr_id: prId,
-      products: products ?? [],
-      created_by_email: session.email,
-      status: "order_placed" as PoStatus,
-      po_type: poType,
-      supplier_name: supplierName,
-      supplier_location: supplierLocation,
-      delivery_partner: deliveryPartner,
-      delivery_partner_tracking_id: deliveryPartnerTrackingId,
-      remarks,
-      supplier_payment_status: "unpaid" as PaymentStatus,
-      delivery_partner_payment_status: "unpaid" as PaymentStatus,
-    })
-    .select("id, po_number")
-    .single();
+  const supplierPaymentAmountRaw = formData.get("supplier_payment_amount");
+  const deliveryPaymentAmountRaw = formData.get("delivery_partner_payment_amount");
+  const supplierPaymentAmount =
+    supplierPaymentAmountRaw !== null && supplierPaymentAmountRaw !== ""
+      ? Number(supplierPaymentAmountRaw)
+      : null;
+  const deliveryPartnerPaymentAmount =
+    deliveryPaymentAmountRaw !== null && deliveryPaymentAmountRaw !== ""
+      ? Number(deliveryPaymentAmountRaw)
+      : null;
 
-  if (poError) {
+  const { data: newPo, error: poError } = await insertPurchaseOrder(supabase, {
+    pr_id: prId,
+    created_by_email: session.email,
+    po_type: poType,
+    supplier_name: supplierName,
+    supplier_location: supplierLocation,
+    delivery_partner: deliveryPartner,
+    delivery_partner_tracking_id: deliveryPartnerTrackingId,
+    remarks,
+    products: products ?? [],
+    supplier_payment_amount: supplierPaymentAmount,
+    delivery_partner_payment_amount: deliveryPartnerPaymentAmount,
+  });
+
+  if (poError || !newPo) {
     console.error("Create PO error:", poError);
-    redirect("/dashboard/procurement/po/new?error=create_failed");
+    redirect(
+      `/dashboard/procurement/po/new?error=create_failed&msg=${encodeURIComponent(poError || "Failed to create PO")}`
+    );
   }
 
   if (prId) {
