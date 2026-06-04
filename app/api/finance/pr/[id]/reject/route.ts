@@ -50,7 +50,7 @@ export async function POST(
     .from("pr")
     .update({
       finance_verification_status: "rejected",
-      finance_rejection_reason: reason || null,
+      finance_remarks: reason || null,
       finance_verified_by_email: session.email,
       updated_at: new Date().toISOString(),
     })

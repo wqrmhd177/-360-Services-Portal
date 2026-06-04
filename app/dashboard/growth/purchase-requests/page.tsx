@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
+import { canEditGrowthPr, canReopenGrowthPr } from "@/lib/growthPrAccess";
 
 export default function GrowthPurchaseRequestsPage() {
+  const router = useRouter();
   const [prs, setPrs] = useState<Pr[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -56,12 +60,19 @@ export default function GrowthPurchaseRequestsPage() {
     if (!confirm("Reopen this PR and send it back for approval?")) return;
     try {
       const res = await fetch(`/api/growth/pr/${prId}/reopen`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         alert(data.error || "Failed to reopen PR");
         return;
       }
       await loadPrs();
+      if (
+        confirm(
+          "PR reopened successfully. Open the edit page now to update details before it goes for approval?"
+        )
+      ) {
+        router.push(data.editUrl || `/dashboard/growth/pr/${prId}/edit`);
+      }
     } catch {
       alert("Failed to reopen PR");
     }
@@ -354,7 +365,16 @@ export default function GrowthPurchaseRequestsPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
-                        {(pr.approval_status === "rejected" || pr.finance_verification_status === "rejected") && (
+                        {canEditGrowthPr(pr) && (
+                          <Link
+                            href={`/dashboard/growth/pr/${pr.id}/edit`}
+                            className="inline-flex items-center gap-1 rounded border border-blue-400 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                            title="Edit this PR"
+                          >
+                            Edit
+                          </Link>
+                        )}
+                        {canReopenGrowthPr(pr) && (
                           <button
                             type="button"
                             onClick={() => reopenPR(pr.id)}

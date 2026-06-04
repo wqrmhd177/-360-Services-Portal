@@ -4,6 +4,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
+import { canEditGrowthPr } from "@/lib/growthPrAccess";
 
 interface PageProps {
   params: {
@@ -100,6 +101,43 @@ export default async function GrowthPRViewPage({ params }: PageProps) {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {pr.finance_verification_status === "rejected" && pr.approval_status === "approved" && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Finance Rejected</h3>
+                <p className="mt-1 text-sm text-red-700">
+                  Finance rejected this PR. You can reopen it from the list, or edit and resubmit details.
+                </p>
+                {canEditGrowthPr(pr) && (
+                  <div className="mt-3 flex gap-2">
+                    <Link
+                      href={`/dashboard/growth/pr/${pr.id}/edit`}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                    >
+                      Edit and Resubmit
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pr.approval_status === "pending" && canEditGrowthPr(pr) && (
+          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800">
+              This PR is pending approval. You can still update details before a decision is made.
+            </p>
+            <Link
+              href={`/dashboard/growth/pr/${pr.id}/edit`}
+              className="mt-3 inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-white bg-yellow-700 hover:bg-yellow-800"
+            >
+              Edit PR
+            </Link>
           </div>
         )}
 
