@@ -167,10 +167,11 @@ async function createPo(formData: FormData) {
   }
 
   const financeEmails = await getUsersByRole("finance");
+  const poLabel = newPo.po_number ?? newPo.id.slice(0, 8);
   const payload = {
     po_id: newPo.id,
-    po_number: newPo.po_number,
-    message: `New PO ${newPo.po_number || newPo.id.slice(0, 8)} created for ${supplierName}`,
+    po_number: newPo.po_number ?? undefined,
+    message: `New PO ${poLabel} created for ${supplierName}`,
   };
 
   if (creationMode === "independent") {
@@ -194,9 +195,9 @@ async function createPo(formData: FormData) {
     if (prDetails?.created_by_email && prId) {
       await createNotification(prDetails.created_by_email, "po_created", {
         po_id: newPo.id,
-        po_number: newPo.po_number,
+        po_number: newPo.po_number ?? undefined,
         pr_id: prId,
-        message: `Your PR has been converted to PO ${newPo.po_number || newPo.id.slice(0, 8)}`,
+        message: `Your PR has been converted to PO ${poLabel}`,
       });
     }
   }
