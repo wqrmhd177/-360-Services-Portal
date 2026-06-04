@@ -57,6 +57,18 @@ export async function POST(
         : undefined;
     const remarks = (formData.get("remarks") as string | null) || null;
 
+    if (
+      !supplierName.trim() ||
+      !supplierLocation.trim() ||
+      !deliveryPartner.trim() ||
+      !deliveryPartnerTrackingId.trim()
+    ) {
+      return NextResponse.json(
+        { error: "Supplier name, location, delivery partner, and tracking ID are required." },
+        { status: 400 }
+      );
+    }
+
     const supabase = createSupabaseClient();
 
     const { data: prDetails, error: prFetchError } = await supabase
@@ -134,34 +146,35 @@ export async function POST(
       );
     }
 
+    const warnings: string[] = [];
     const invoiceUpdates: Record<string, string> = {};
-    try {
-      if (supplierInvoiceFile) {
+
+    if (supplierInvoiceFile) {
+      try {
         invoiceUpdates.supplier_invoice_file = await uploadPoInvoice(
           supplierInvoiceFile,
           newPo.id,
           "supplier"
         );
+      } catch (e) {
+        warnings.push(
+          `Supplier invoice: ${e instanceof Error ? e.message : "upload failed"}`
+        );
       }
-      if (deliveryPartnerInvoiceFile) {
+    }
+
+    if (deliveryPartnerInvoiceFile) {
+      try {
         invoiceUpdates.delivery_partner_invoice_file = await uploadPoInvoice(
           deliveryPartnerInvoiceFile,
           newPo.id,
           "delivery"
         );
+      } catch (e) {
+        warnings.push(
+          `Delivery invoice: ${e instanceof Error ? e.message : "upload failed"}`
+        );
       }
-    } catch (uploadError) {
-      console.error("PO invoice upload failed:", uploadError);
-      await supabase.from("po").delete().eq("id", newPo.id);
-      return NextResponse.json(
-        {
-          error:
-            uploadError instanceof Error
-              ? uploadError.message
-              : "Failed to upload invoice file"
-        },
-        { status: 400 }
-      );
     }
 
     if (Object.keys(invoiceUpdates).length > 0) {
@@ -170,24 +183,16 @@ export async function POST(
         .update(invoiceUpdates)
         .eq("id", newPo.id);
       if (invoiceUpdateError) {
-        console.error("Error saving invoice URLs:", invoiceUpdateError);
-        return NextResponse.json(
-          { error: "Failed to save invoice files" },
-          { status: 500 }
-        );
+        warnings.push(`Invoice URLs not saved: ${invoiceUpdateError.message}`);
       }
     }
 
-    // Mark PR as PO created
     await supabase
       .from("pr")
-      .update({
-        po_created: true,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ po_created: true, updated_at: new Date().toISOString() })
       .eq("id", prId);
 
-    if (newPo) {
+    try {
       const financeEmails = await getUsersByRole("finance");
       const payload = {
         po_id: newPo.id,
@@ -195,29 +200,24 @@ export async function POST(
         pr_id: prId,
         message: `New PO ${newPo.po_number || newPo.id.slice(0, 8)} created for ${supplierName}`,
       };
-
-      // Notify Finance team
       if (financeEmails.length > 0) {
         await notifyMultipleUsers(financeEmails, "po_created", payload);
-      } else {
-        await createNotification("finance@example.com", "po_created", payload);
       }
-
-      // Notify Growth user who created the original PR
       if (prDetails?.created_by_email) {
         await createNotification(prDetails.created_by_email, "po_created", {
-          po_id: newPo.id,
-          po_number: newPo.po_number,
-          pr_id: prId,
+          ...payload,
           message: `Your PR has been converted to PO ${newPo.po_number || newPo.id.slice(0, 8)}`,
         });
       }
+    } catch (notifError) {
+      console.error("PO notification error:", notifError);
     }
 
     return NextResponse.json({
       success: true,
       po_id: newPo.id,
       po_number: newPo.po_number,
+      ...(warnings.length > 0 ? { warning: warnings.join("; ") } : {}),
     });
   } catch (error) {
     console.error("Error in PO creation:", error);

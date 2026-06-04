@@ -35,18 +35,24 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
         body: formData,
       });
 
+      const body = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          typeof body.error === "string" ? body.error : "Failed to create PO"
-        );
+        const msg =
+          typeof body.error === "string"
+            ? body.error
+            : typeof body.message === "string"
+              ? body.message
+              : `Request failed (${response.status})`;
+        throw new Error(msg);
       }
 
-      const result = await response.json();
-      
-      // Redirect with success message
-      if (result.po_number) {
-        router.push(`/dashboard/procurement?po_created=${result.po_number}`);
+      if (body.warning) {
+        alert(body.warning);
+      }
+
+      if (body.po_number) {
+        router.push(`/dashboard/procurement?po_created=${body.po_number}`);
       } else {
         router.push("/dashboard/procurement");
       }

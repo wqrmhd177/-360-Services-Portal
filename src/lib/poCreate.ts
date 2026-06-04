@@ -23,7 +23,7 @@ export type CreatePoInput = {
   delivery_partner_payment_amount?: number | null;
 };
 
-/** Insert PO using core columns; retries without optional migration columns if needed. */
+/** Insert PO using core columns first (works without migration columns). */
 export async function insertPurchaseOrder(
   supabase: SupabaseClient,
   input: CreatePoInput
@@ -42,7 +42,18 @@ export async function insertPurchaseOrder(
     delivery_partner_payment_status: "unpaid" as PaymentStatus,
   };
 
-  const optional: Record<string, unknown> = {};
+  const result = await supabase.from("po").insert(core).select("id").single();
+
+  if (result.error || !result.data) {
+    return {
+      data: null,
+      error: result.error?.message ?? "Failed to insert purchase order",
+    };
+  }
+
+  const poId = result.data.id;
+  const optional: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
   if (input.products && input.products.length > 0) {
     optional.products = input.products;
   }
@@ -56,40 +67,19 @@ export async function insertPurchaseOrder(
     optional.delivery_partner_payment_amount = input.delivery_partner_payment_amount;
   }
 
-  let result = await supabase
-    .from("po")
-    .insert({ ...core, ...optional })
-    .select("id, po_number")
-    .single();
-
-  if (!result.error && result.data) {
-    return { data: result.data, error: null };
-  }
-
-  const firstError = result.error?.message ?? "Unknown error";
-  const missingColumn =
-    firstError.includes("column") ||
-    firstError.includes("schema cache") ||
-    result.error?.code === "PGRST204";
-
-  if (!missingColumn) {
-    return { data: null, error: firstError };
-  }
-
-  result = await supabase.from("po").insert(core).select("id, po_number").single();
-
-  if (result.error || !result.data) {
-    return { data: null, error: result.error?.message ?? firstError };
-  }
-
-  const poId = result.data.id;
-  const followUp: Record<string, unknown> = { ...optional, updated_at: new Date().toISOString() };
-  if (Object.keys(optional).length > 0) {
-    const { error: updateError } = await supabase.from("po").update(followUp).eq("id", poId);
+  const optionalKeys = Object.keys(optional).filter((k) => k !== "updated_at");
+  if (optionalKeys.length > 0) {
+    const { error: updateError } = await supabase.from("po").update(optional).eq("id", poId);
     if (updateError) {
-      console.warn("PO created but optional fields not saved:", updateError.message);
+      console.warn("PO optional fields not saved:", updateError.message);
     }
   }
 
-  return { data: result.data, error: null };
+  let po_number: string | null = null;
+  const { data: poRow } = await supabase.from("po").select("po_number").eq("id", poId).maybeSingle();
+  if (poRow && typeof (poRow as { po_number?: string }).po_number === "string") {
+    po_number = (poRow as { po_number: string }).po_number;
+  }
+
+  return { data: { id: poId, po_number }, error: null };
 }
