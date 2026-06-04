@@ -194,11 +194,12 @@ export async function POST(
 
     try {
       const financeEmails = await getUsersByRole("finance");
+      const poLabel = newPo.po_number ?? newPo.id.slice(0, 8);
       const payload = {
         po_id: newPo.id,
-        po_number: newPo.po_number,
+        po_number: newPo.po_number ?? undefined,
         pr_id: prId,
-        message: `New PO ${newPo.po_number || newPo.id.slice(0, 8)} created for ${supplierName}`,
+        message: `New PO ${poLabel} created for ${supplierName}`,
       };
       if (financeEmails.length > 0) {
         await notifyMultipleUsers(financeEmails, "po_created", payload);
@@ -206,7 +207,7 @@ export async function POST(
       if (prDetails?.created_by_email) {
         await createNotification(prDetails.created_by_email, "po_created", {
           ...payload,
-          message: `Your PR has been converted to PO ${newPo.po_number || newPo.id.slice(0, 8)}`,
+          message: `Your PR has been converted to PO ${poLabel}`,
         });
       }
     } catch (notifError) {
