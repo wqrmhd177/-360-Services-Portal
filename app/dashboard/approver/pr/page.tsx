@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
 import ApproverPRActions from "./[id]/ApproverPRActions";
+import CreatorFilterDropdown from "@/components/CreatorFilterDropdown";
 
 // Format date as DD/MM/YYYY
 function formatDate(dateString: string | null | undefined): string {
@@ -32,16 +33,19 @@ export default function ApproverPurchaseRequestsPage() {
   const [prs, setPrs] = useState<Pr[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [selectedPr, setSelectedPr] = useState<Pr | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPrs();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadPrs() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/approver/prs");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/approver/prs${params}`);
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         const list = data?.prs ?? data;
@@ -152,6 +156,8 @@ export default function ApproverPurchaseRequestsPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CreatorFilterDropdown value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -193,6 +199,7 @@ export default function ApproverPurchaseRequestsPage() {
             >
               Rejected ({statusCounts.rejected})
             </button>
+          </div>
           </div>
         </div>
 

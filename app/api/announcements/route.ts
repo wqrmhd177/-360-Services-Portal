@@ -4,6 +4,7 @@ import {
   createAnnouncement,
   getAnnouncements,
 } from "@/lib/announcements";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function GET() {
   const session = getPortalSession();
@@ -29,13 +30,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Only Procurement (or admin) can create announcements
-  const isProcurement = session.role === "procurement";
-  const isAdmin = !!session.isAdmin;
-
-  if (!isProcurement && !isAdmin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const denied = requireWriteAccess(session, ["procurement"]);
+  if (denied) return denied;
 
   let body: unknown;
   try {

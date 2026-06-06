@@ -6,6 +6,7 @@ import { getUserName } from "@/lib/getUserName";
 import type { Pr } from "@/types/workflows";
 import Link from "next/link";
 import ImageGallery from "@/components/ImageGallery";
+import FinancePrVerifyActions from "@/components/FinancePrVerifyActions";
 
 async function verifyPrPayment(prId: string, email: string, formData: FormData) {
   "use server";
@@ -309,40 +310,7 @@ export default async function FinancePrVerificationPage({ params }: { params: { 
 
       <div className="card">
         <h3 className="mb-4 text-sm font-semibold text-gray-900">Payment Verification</h3>
-        <form action={verifyPrPayment.bind(null, pr.id, session.email)} className="space-y-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-500">
-              Payment Proof Reference IDs / File Paths
-            </label>
-            <p className="mb-2 text-[11px] text-gray-400">
-              Enter file paths or reference IDs (comma-separated). In production, this would be an
-              image upload to Supabase Storage.
-            </p>
-            <input
-              name="reference_files"
-              type="text"
-              placeholder="payment-proof-001.jpg, receipt-123.pdf"
-            />
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="submit" className="btn-primary">
-              Verify Payment
-            </button>
-          </div>
-          <p className="text-[11px] text-gray-400">
-            Once verified, this PR will be available for Procurement to convert into a Purchase
-            Order (PO).
-          </p>
-        </form>
-        
-        <form action={rejectPrPayment.bind(null, pr.id, session.email)} className="mt-4">
-          <button
-            type="submit"
-            className="rounded-xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
-          >
-            Reject Payment
-          </button>
-        </form>
+        <FinancePrVerifyActions prId={pr.id} />
       </div>
     </div>
   );

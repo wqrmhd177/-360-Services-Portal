@@ -6,12 +6,24 @@ import { TOP_COUNTRIES } from "@/lib/countries";
 import { getCurrencyByCountry } from "@/lib/currency";
 import CurrencyInput from "./CurrencyInput";
 
+export type ComboLookupEntry = {
+  landedCostPerUnit: number;
+  movementType: MovementType;
+  shippingType: ShippingType;
+};
+
 interface MultiProductFormProps {
   products: PrProduct[];
   onChange: (products: PrProduct[]) => void;
   disabled?: boolean;
   /** When false, hides the "Add Another Product" button (e.g. for QR-to-PR conversion). Default true. */
   showAddProductButton?: boolean;
+  /** Heading style: "combination" for QR→PR convert, "product" (default) otherwise. */
+  headingMode?: "combination" | "product";
+  /** Fields that cannot be edited (e.g. landed cost, quantity on convert). */
+  lockedFields?: (keyof PrProduct)[];
+  /** Lookup for shipping-type → landed cost when converting from QR. */
+  comboLookup?: Record<string, ComboLookupEntry>;
 }
 
 const emptyProduct: PrProduct = {
@@ -33,7 +45,11 @@ export default function MultiProductForm({
   onChange,
   disabled = false,
   showAddProductButton = true,
+  headingMode = "product",
+  lockedFields = [],
+  comboLookup = {},
 }: MultiProductFormProps) {
+  const isLocked = (field: keyof PrProduct) => lockedFields.includes(field);
   const [countrySearches, setCountrySearches] = useState<string[]>(
     products.map((p) => p.destinationCountry || "")
   );
@@ -90,6 +106,28 @@ export default function MultiProductForm({
       newProducts[index].totalAmount = quantity * pricePerUnit;
     }
 
+    onChange(newProducts);
+  };
+
+  const handleShippingTypeChange = (index: number, newShippingType: ShippingType) => {
+    const product = products[index];
+    const country = product.destinationCountry;
+    const movement = product.movementType;
+    let entry =
+      comboLookup[`${country}|${newShippingType}|${movement}`] ??
+      comboLookup[`${country}|${newShippingType}|${movement === "normal" ? "express" : "normal"}`];
+
+    const newProducts = [...products];
+    newProducts[index] = {
+      ...newProducts[index],
+      shippingType: newShippingType,
+      ...(entry
+        ? {
+            landedCostPrice: entry.landedCostPerUnit,
+            movementType: entry.movementType,
+          }
+        : {}),
+    };
     onChange(newProducts);
   };
 
@@ -154,7 +192,9 @@ export default function MultiProductForm({
           )}
 
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Product {index + 1}
+            {headingMode === "combination"
+              ? `Combination ${index + 1}`
+              : `Product ${index + 1}`}
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -163,17 +203,23 @@ export default function MultiProductForm({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Product Name <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={product.productName}
-                onChange={(e) =>
-                  updateProduct(index, "productName", e.target.value)
-                }
-                disabled={disabled}
-                required
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                placeholder="Enter product name"
-              />
+              {isLocked("productName") ? (
+                <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                  {product.productName || "—"}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={product.productName}
+                  onChange={(e) =>
+                    updateProduct(index, "productName", e.target.value)
+                  }
+                  disabled={disabled}
+                  required
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                  placeholder="Enter product name"
+                />
+              )}
             </div>
 
             {/* SKU Code */}
@@ -199,21 +245,27 @@ export default function MultiProductForm({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Destination Country <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={countrySearches[index] || product.destinationCountry}
-                onChange={(e) => handleCountrySearch(index, e.target.value)}
-                onFocus={() => {
-                  const newDropdowns = [...showDropdowns];
-                  newDropdowns[index] = true;
-                  setShowDropdowns(newDropdowns);
-                }}
-                disabled={disabled}
-                required
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                placeholder="Search country..."
-              />
-              {showDropdowns[index] && !disabled && (
+              {isLocked("destinationCountry") ? (
+                <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                  {product.destinationCountry || "—"}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={countrySearches[index] || product.destinationCountry}
+                  onChange={(e) => handleCountrySearch(index, e.target.value)}
+                  onFocus={() => {
+                    const newDropdowns = [...showDropdowns];
+                    newDropdowns[index] = true;
+                    setShowDropdowns(newDropdowns);
+                  }}
+                  disabled={disabled}
+                  required
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                  placeholder="Search country..."
+                />
+              )}
+              {showDropdowns[index] && !disabled && !isLocked("destinationCountry") && (
                 <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {filteredCountries(countrySearches[index]).map((country) => (
                     <div
@@ -257,31 +309,48 @@ export default function MultiProductForm({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Quantity (Units) <span className="text-red-500">*</span>
               </label>
-              <input
-                type="number"
-                value={product.quantity || ""}
-                onChange={(e) =>
-                  updateProduct(index, "quantity", parseFloat(e.target.value) || 0)
-                }
-                disabled={disabled}
-                required
-                min="0"
-                step="1"
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                placeholder="0"
-              />
+              {isLocked("quantity") ? (
+                <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                  {product.quantity}
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  value={product.quantity || ""}
+                  onChange={(e) =>
+                    updateProduct(index, "quantity", parseFloat(e.target.value) || 0)
+                  }
+                  disabled={disabled}
+                  required
+                  min="0"
+                  step="1"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                  placeholder="0"
+                />
+              )}
             </div>
 
             {/* Landed Cost Price (Per Unit) */}
             <div>
-              <CurrencyInput
-                label="Landed Cost Price"
-                value={product.landedCostPrice ?? 0}
-                onChange={(val) => updateProduct(index, "landedCostPrice", val)}
-                currency={product.currency}
-                disabled={disabled}
-                placeholder="0.00"
-              />
+              {isLocked("landedCostPrice") ? (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Landed Cost Price
+                  </label>
+                  <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                    {product.currency} {(product.landedCostPrice ?? 0).toFixed(2)}
+                  </div>
+                </>
+              ) : (
+                <CurrencyInput
+                  label="Landed Cost Price"
+                  value={product.landedCostPrice ?? 0}
+                  onChange={(val) => updateProduct(index, "landedCostPrice", val)}
+                  currency={product.currency}
+                  disabled={disabled}
+                  placeholder="0.00"
+                />
+              )}
             </div>
 
             {/* Selling Price Per Unit */}
@@ -329,13 +398,11 @@ export default function MultiProductForm({
               <select
                 value={product.shippingType}
                 onChange={(e) =>
-                  updateProduct(
-                    index,
-                    "shippingType",
-                    e.target.value as ShippingType
-                  )
+                  Object.keys(comboLookup).length > 0
+                    ? handleShippingTypeChange(index, e.target.value as ShippingType)
+                    : updateProduct(index, "shippingType", e.target.value as ShippingType)
                 }
-                disabled={disabled}
+                disabled={disabled || isLocked("shippingType")}
                 required
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
               >
@@ -359,7 +426,7 @@ export default function MultiProductForm({
                     e.target.value as MovementType
                   )
                 }
-                disabled={disabled}
+                disabled={disabled || isLocked("movementType")}
                 required
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
               >

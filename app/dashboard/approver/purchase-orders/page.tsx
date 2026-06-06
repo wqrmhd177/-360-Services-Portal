@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Po } from "@/types/workflows";
 import PODetailCard from "@/components/PODetailCard";
+import CreatorFilterDropdown from "@/components/CreatorFilterDropdown";
 
 function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "-";
@@ -18,16 +19,19 @@ export default function ApproverPurchaseOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPo, setSelectedPo] = useState<Po | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPos();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadPos() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/approver/pos");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/approver/pos${params}`);
       if (res.ok) {
         const data = await res.json();
         setPos(data || []);
@@ -162,6 +166,8 @@ export default function ApproverPurchaseOrdersPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CreatorFilterDropdown value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -203,6 +209,7 @@ export default function ApproverPurchaseOrdersPage() {
             >
               Delivered ({statusCounts.delivered})
             </button>
+          </div>
           </div>
         </div>
 

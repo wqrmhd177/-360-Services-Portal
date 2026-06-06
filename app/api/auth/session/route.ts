@@ -10,7 +10,10 @@ export async function GET() {
   
   try {
     const session = JSON.parse(raw) as PortalSession;
-    return NextResponse.json({ session });
+    return NextResponse.json({
+      session,
+      buildId: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    });
   } catch {
     return NextResponse.json({ session: null });
   }

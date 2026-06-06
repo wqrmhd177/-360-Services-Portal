@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Qr, PrProduct } from "@/types/workflows";
-import MultiProductForm from "@/components/MultiProductForm";
+import MultiProductForm, { type ComboLookupEntry } from "@/components/MultiProductForm";
 import PaymentEntriesInput, { PaymentEntryInput } from "@/components/PaymentEntriesInput";
 import { getCurrencyByCountry } from "@/lib/currency";
 
@@ -109,6 +109,42 @@ export default function ConvertQrToPrForm({
   };
 
   const [products, setProducts] = useState<PrProduct[]>(initializeProducts());
+
+  const comboLookup = useMemo(() => {
+    const map: Record<string, ComboLookupEntry> = {};
+    if (!qr.purchase_details) return map;
+    qr.purchase_details.forEach((detail: unknown, index: number) => {
+      const procResponse =
+        qr.procurement_response && typeof qr.procurement_response === "object"
+          ? (qr.procurement_response as Record<number, unknown>)[index]
+          : null;
+      const combos = (procResponse as { combinations?: unknown[] })?.combinations;
+      if (Array.isArray(combos)) {
+        combos.forEach((combo: unknown) => {
+          const c = combo as {
+            destinationCountry?: string;
+            shippingType?: string;
+            movementType?: string;
+            landedCostPerUnit?: number;
+          };
+          const key = `${c.destinationCountry ?? ""}|${c.shippingType ?? "sea"}|${c.movementType ?? "normal"}`;
+          map[key] = {
+            landedCostPerUnit: c.landedCostPerUnit ?? 0,
+            movementType: (c.movementType ?? "normal") as ComboLookupEntry["movementType"],
+            shippingType: (c.shippingType ?? "sea") as ComboLookupEntry["shippingType"],
+          };
+        });
+      }
+    });
+    return map;
+  }, [qr]);
+
+  const convertLockedFields: (keyof PrProduct)[] = [
+    "landedCostPrice",
+    "quantity",
+    "destinationCountry",
+    "productName",
+  ];
   const [sellerChannelName, setSellerChannelName] = useState(
     qr.reseller_code || ""
   );
@@ -146,23 +182,23 @@ export default function ConvertQrToPrForm({
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
       if (!p.productName.trim()) {
-        setError(`Product ${i + 1}: Product Name is required`);
+        setError(`Combination ${i + 1}: Product Name is required`);
         return false;
       }
       if (!p.skuCode.trim()) {
-        setError(`Product ${i + 1}: SKU Code is required`);
+        setError(`Combination ${i + 1}: SKU Code is required`);
         return false;
       }
       if (!p.destinationCountry) {
-        setError(`Product ${i + 1}: Destination Country is required`);
+        setError(`Combination ${i + 1}: Destination Country is required`);
         return false;
       }
       if (p.quantity <= 0) {
-        setError(`Product ${i + 1}: Quantity must be greater than 0`);
+        setError(`Combination ${i + 1}: Quantity must be greater than 0`);
         return false;
       }
       if (p.sellingPricePerUnit <= 0) {
-        setError(`Product ${i + 1}: Selling Price must be greater than 0`);
+        setError(`Combination ${i + 1}: Selling Price must be greater than 0`);
         return false;
       }
     }
@@ -338,6 +374,9 @@ export default function ConvertQrToPrForm({
             onChange={setProducts}
             disabled={loading}
             showAddProductButton={false}
+            headingMode="combination"
+            lockedFields={convertLockedFields}
+            comboLookup={comboLookup}
           />
         </div>
 

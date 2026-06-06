@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Qr } from "@/types/workflows";
 import QrDetailModal from "@/components/QrDetailModal";
+import CreatorFilterDropdown from "@/components/CreatorFilterDropdown";
 import { formatQrStatusLabel } from "@/lib/format";
 
 // Get currency based on destination country
@@ -52,17 +53,20 @@ export default function ApproverQuotationRequestsPage() {
   const [qrs, setQrs] = useState<Qr[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [selectedQrId, setSelectedQrId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedProcurementCosts, setExpandedProcurementCosts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadQrs();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadQrs() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/approver/qrs");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/approver/qrs${params}`);
       const data = await res.json().catch(() => null);
       if (res.ok && Array.isArray(data)) {
         setQrs(data);
@@ -212,6 +216,8 @@ export default function ApproverQuotationRequestsPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <CreatorFilterDropdown value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -263,6 +269,7 @@ export default function ApproverQuotationRequestsPage() {
             >
               Canceled ({statusCounts.canceled})
             </button>
+          </div>
           </div>
         </div>
 

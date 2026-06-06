@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
 import { canEditGrowthPr, canReopenGrowthPr } from "@/lib/growthPrAccess";
+import AdminCreatorFilter from "@/components/AdminCreatorFilter";
 
 export default function GrowthPurchaseRequestsPage() {
   const router = useRouter();
@@ -13,15 +14,18 @@ export default function GrowthPurchaseRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [selectedPr, setSelectedPr] = useState<Pr | null>(null);
 
   useEffect(() => {
     loadPrs();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadPrs() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/growth/prs");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/growth/prs${params}`);
       const data = await res.json().catch(() => null);
       if (res.ok && Array.isArray(data)) {
         setPrs(data);
@@ -176,6 +180,8 @@ export default function GrowthPurchaseRequestsPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <AdminCreatorFilter value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -227,6 +233,7 @@ export default function GrowthPurchaseRequestsPage() {
             >
               PO Created ({statusCounts.po_created})
             </button>
+          </div>
           </div>
         </div>
 

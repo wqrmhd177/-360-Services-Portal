@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function PATCH(
   request: NextRequest,
@@ -35,9 +36,7 @@ export async function PATCH(
       .from("qr")
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", id);
-    if (!session.isAdmin) {
-      updateQuery = updateQuery.eq("created_by_email", session.email);
-    }
+    updateQuery = updateQuery.eq("created_by_email", session!.email);
     const { error } = await updateQuery;
 
     if (error) {

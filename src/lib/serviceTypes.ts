@@ -12,6 +12,21 @@ export function isZambeelLikeService(service: string): boolean {
   return (ZAMBEEL_LIKE_SERVICES as readonly string[]).includes(service);
 }
 
+/** Service types that use the logistics carton form. */
+export const LOGISTICS_SERVICES = ["Logistics Only", "3PL & Logistics"] as const;
+
+export function isLogisticsService(service: string): boolean {
+  return (LOGISTICS_SERVICES as readonly string[]).includes(service);
+}
+
+export function isSourcingService(service: string): boolean {
+  return (
+    isZambeelLikeService(service) ||
+    service === "Sourcing & Logistics" ||
+    service === "Sourcing only"
+  );
+}
+
 /** Service types that Finance groups as "Zambeel Services". */
 export const ZAMBEEL_SERVICES = [
   "Zambeel 360",

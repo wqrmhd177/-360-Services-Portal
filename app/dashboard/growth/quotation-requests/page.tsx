@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Qr } from "@/types/workflows";
 import QrDetailModal from "@/components/QrDetailModal";
 import { formatQrStatusLabel } from "@/lib/format";
+import AdminCreatorFilter from "@/components/AdminCreatorFilter";
 
 // Get currency based on destination country
 function getCurrencyForCountry(country: string): string {
@@ -83,16 +84,19 @@ export default function GrowthQuotationRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [selectedQrId, setSelectedQrId] = useState<string | null>(null);
   const [expandedProcurementCosts, setExpandedProcurementCosts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadQrs();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadQrs() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/growth/qrs");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/growth/qrs${params}`);
       const data = await res.json().catch(() => null);
       if (res.ok && Array.isArray(data)) {
         setQrs(data);
@@ -254,6 +258,8 @@ export default function GrowthQuotationRequestsPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <AdminCreatorFilter value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -305,6 +311,7 @@ export default function GrowthQuotationRequestsPage() {
             >
               Canceled ({statusCounts.canceled})
             </button>
+          </div>
           </div>
         </div>
 

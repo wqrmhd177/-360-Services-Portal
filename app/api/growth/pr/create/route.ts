@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { notifyMultipleUsers, getUsersByRole } from "@/lib/notifications";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
+import { validateProductsAgainstQr } from "@/lib/qrQuantityValidation";
 
 /** Add N working days (Mon–Fri) to a date. */
 function addWorkingDays(fromDate: Date, workingDays: number): Date {
@@ -32,17 +34,9 @@ function canConvertQrToPr(qr: { status: string; updated_at?: string | null }): b
 export async function POST(request: NextRequest) {
   try {
     const session = getPortalSession();
-    if (!session?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only Growth role can create PRs
-    if (session.role !== "growth" && !session.isAdmin) {
-      return NextResponse.json(
-        { error: "Forbidden - Growth role required" },
-        { status: 403 }
-      );
-    }
+    const denied = requireWriteAccess(session, ["growth"], "Forbidden - Growth role required");
+    if (denied) return denied;
+    const authSession = session!;
 
     const body = await request.json();
     const {
@@ -113,7 +107,7 @@ export async function POST(request: NextRequest) {
     if (from_qr_id) {
       const { data: qr } = await supabase
         .from("qr")
-        .select("id, status, updated_at")
+        .select("id, status, updated_at, purchase_details")
         .eq("id", from_qr_id)
         .single();
       if (qr && qr.status === "responded" && !canConvertQrToPr(qr)) {
@@ -124,6 +118,12 @@ export async function POST(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+      if (qr && Array.isArray(products)) {
+        const qtyError = validateProductsAgainstQr(products, qr);
+        if (qtyError) {
+          return NextResponse.json({ error: qtyError }, { status: 400 });
+        }
       }
     }
 
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     const insertPayload: Record<string, unknown> = {
       from_qr_id: from_qr_id || null,
-      created_by_email: session.email,
+      created_by_email: authSession.email,
       seller_channel_name,
       seller_user_id,
       seller_service_type,
@@ -219,21 +219,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send notifications to Approvers
     try {
-      const approverEmails = await getUsersByRole("approver");
-      if (approverEmails.length > 0) {
-        await notifyMultipleUsers(
-          approverEmails,
-          "pr_created",
-          {
-            pr_id: newPr.id,
-            pr_number: newPr.pr_number,
-            created_by: session.email,
-            message: `New PR ${newPr.pr_number} created by ${session.email}`,
-          }
-        );
-      }
+      await notifyStandardUsers(
+        { creatorEmail: authSession.email, roles: ["admin", "approver"] },
+        "pr_created",
+        {
+          pr_id: newPr.id,
+          pr_number: newPr.pr_number,
+          created_by: authSession.email,
+          message: `New PR ${newPr.pr_number} created by ${authSession.email}`,
+        }
+      );
     } catch (notifError) {
       console.error("Error sending notifications:", notifError);
       // Don't fail the request if notifications fail

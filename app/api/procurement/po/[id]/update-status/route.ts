@@ -3,15 +3,16 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import type { PoStatus } from "@/types/workflows";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireWriteAccess(session, ["procurement"]);
+  if (denied) return denied;
+  const authSession = session!;
 
   const formData = await request.formData();
   const status = formData.get("status") as PoStatus;
@@ -38,7 +39,7 @@ export async function POST(
   const newEntry = {
     status,
     timestamp: new Date().toISOString(),
-    changed_by: session.email,
+    changed_by: authSession.email,
     remarks: status === "canceled" && cancelReason ? `Cancelled: ${cancelReason}` : `Status updated to ${status}`,
   };
   const updatedHistory = [...existingHistory, newEntry];

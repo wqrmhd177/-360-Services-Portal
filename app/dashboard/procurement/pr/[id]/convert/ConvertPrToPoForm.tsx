@@ -193,13 +193,12 @@ export default function ConvertPrToPoForm({ pr, userEmail }: ConvertPrToPoFormPr
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Tracking ID <span className="text-red-500">*</span>
+              Tracking ID
             </label>
             <input
               type="text"
               name="delivery_partner_tracking_id"
-              required
-              placeholder="Enter tracking ID"
+              placeholder="Optional — can be added after order placement"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

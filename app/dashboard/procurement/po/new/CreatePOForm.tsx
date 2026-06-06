@@ -289,15 +289,14 @@ export default function CreatePOForm({
           </div>
           <div className="space-y-2">
             <label htmlFor="delivery_partner_tracking_id" className={labelClass}>
-              Tracking ID <span className="text-red-500">*</span>
+              Tracking ID
             </label>
             <input
               id="delivery_partner_tracking_id"
               name="delivery_partner_tracking_id"
               type="text"
-              required
               className={inputClass}
-              placeholder="Tracking ID or TBD"
+              placeholder="Optional — can be added after order placement"
             />
           </div>
         </div>

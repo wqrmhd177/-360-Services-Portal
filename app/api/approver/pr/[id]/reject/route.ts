@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { createNotification } from "@/lib/notifications";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   request: NextRequest,
@@ -9,28 +10,17 @@ export async function POST(
 ) {
   try {
     const session = getPortalSession();
-    if (!session?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const canReject = session.role === "approver" || session.role === "finance" || session.isAdmin;
-    if (!canReject) {
-      return NextResponse.json(
-        { error: "Forbidden - Approver or Finance role required" },
-        { status: 403 }
-      );
-    }
+    const denied = requireWriteAccess(
+      session,
+      ["approver", "finance"],
+      "Forbidden - Approver or Finance role required"
+    );
+    if (denied) return denied;
+    const authSession = session!;
 
     const { id } = params;
     const body = await request.json();
-    const { reason } = body;
-
-    if (!reason || !reason.trim()) {
-      return NextResponse.json(
-        { error: "Rejection reason is required" },
-        { status: 400 }
-      );
-    }
+    const reason: string = typeof body.reason === "string" ? body.reason.trim() : "";
 
     const supabase = createSupabaseClient();
 
@@ -58,7 +48,7 @@ export async function POST(
       .update({
         approval_status: "rejected",
         rejected_at: new Date().toISOString(),
-        rejection_reason: reason,
+        rejection_reason: reason || null,
         pr_status: "rejected",
         updated_at: new Date().toISOString(),
       })
@@ -72,15 +62,14 @@ export async function POST(
       );
     }
 
-    // Send notification to PR creator (Growth user)
     try {
-      await createNotification(
-        pr.created_by_email,
+      await notifyStandardUsers(
+        { creatorEmail: pr.created_by_email, roles: ["admin", "approver"] },
         "pr_rejected",
         {
           pr_id: id,
           pr_number: pr.pr_number,
-          rejected_by: session.email,
+          rejected_by: authSession.email,
           reason: reason,
           message: `Your PR ${pr.pr_number || id.slice(0, 8)} has been rejected`,
         }

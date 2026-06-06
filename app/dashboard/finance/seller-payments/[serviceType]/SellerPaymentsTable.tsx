@@ -6,6 +6,7 @@ import type { Pr } from "@/types/workflows";
 import { Eye, X, FileText, ImageOff, CheckCircle, XCircle, BadgeCheck, Pencil, Check } from "lucide-react";
 import PRDetailCard from "@/components/PRDetailCard";
 import ApproverPRActions from "../../../approver/pr/[id]/ApproverPRActions";
+import ActionConfirmModal from "@/components/ActionConfirmModal";
 
 interface SellerPaymentsTableProps {
   prs: Pr[];
@@ -188,15 +189,27 @@ export default function SellerPaymentsTable({
   // ── Single-PR inline verify ──────────────────────────────────────────────
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyModalPrId, setVerifyModalPrId] = useState<string | null>(null);
+  const [verifyRemarks, setVerifyRemarks] = useState("");
 
-  const handleInlineVerify = async (prId: string) => {
-    setVerifyingId(prId);
+  const handleInlineVerify = (prId: string) => {
+    setVerifyModalPrId(prId);
+    setVerifyRemarks("");
+    setVerifyError(null);
+  };
+
+  const confirmInlineVerify = async () => {
+    if (!verifyModalPrId) return;
+    setVerifyingId(verifyModalPrId);
     setVerifyError(null);
     try {
-      const res = await fetch(`/api/finance/pr/${prId}/verify`, {
+      const res = await fetch(`/api/finance/pr/${verifyModalPrId}/verify`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remarks: verifyRemarks }),
       });
       if (res.ok) {
+        setVerifyModalPrId(null);
         router.refresh();
       } else {
         const data = await res.json();
@@ -309,10 +322,6 @@ export default function SellerPaymentsTable({
 
   const handleReject = async () => {
     if (!rejectPr) return;
-    if (!rejectReason.trim()) {
-      setRejectError("Rejection reason is required");
-      return;
-    }
     setRejectLoading(true);
     setRejectError(null);
     try {
@@ -1556,6 +1565,19 @@ export default function SellerPaymentsTable({
           </div>
         </div>
       )}
+
+      <ActionConfirmModal
+        open={!!verifyModalPrId}
+        title="Verify Payment"
+        description="Confirm that payment has been verified for this PR."
+        variant="verify"
+        remarks={verifyRemarks}
+        onRemarksChange={setVerifyRemarks}
+        confirmLabel="Confirm Verification"
+        loading={!!verifyingId}
+        onConfirm={confirmInlineVerify}
+        onCancel={() => !verifyingId && setVerifyModalPrId(null)}
+      />
     </div>
   );
 }

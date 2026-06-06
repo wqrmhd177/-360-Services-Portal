@@ -17,13 +17,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const createdBy = searchParams.get("createdBy")?.trim() || "";
+
     const supabase = createSupabaseClient();
 
-    // Get all PRs (Approver can see all)
-    const { data: prs, error } = await supabase
+    let query = supabase
       .from("pr")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (createdBy) {
+      query = query.eq("created_by_email", createdBy);
+    }
+
+    const { data: prs, error } = await query;
 
     if (error) {
       console.error("Error fetching PRs:", error);

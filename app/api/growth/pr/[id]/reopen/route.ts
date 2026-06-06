@@ -3,19 +3,16 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import { canReopenGrowthPr } from "@/lib/growthPrAccess";
+import { forbiddenResponse, requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (session.role !== "growth" && !session.isAdmin) {
-    return NextResponse.json({ error: "Forbidden — Growth role required" }, { status: 403 });
-  }
+  const denied = requireWriteAccess(session, ["growth"], "Forbidden — Growth role required");
+  if (denied) return denied;
+  const authSession = session!;
 
   const supabase = createSupabaseClient();
   const prId = params.id;
@@ -32,12 +29,9 @@ export async function POST(
     return NextResponse.json({ error: "PR not found" }, { status: 404 });
   }
 
-  const isOwner = session.email === pr.created_by_email;
-  if (!isOwner && !session.isAdmin) {
-    return NextResponse.json(
-      { error: "Forbidden — only the PR creator or admin can reopen" },
-      { status: 403 }
-    );
+  const isOwner = session!.email === pr.created_by_email;
+  if (!isOwner) {
+    return forbiddenResponse("Forbidden — only the PR creator can reopen");
   }
 
   if (!canReopenGrowthPr(pr)) {
@@ -93,7 +87,7 @@ export async function POST(
     const notifPayload = {
       pr_id: prId,
       pr_number: pr.pr_number,
-      reopened_by: session.email,
+      reopened_by: authSession.email,
       message: `PR ${pr.pr_number || prId.slice(0, 8)} has been reopened and is pending review`,
     };
 

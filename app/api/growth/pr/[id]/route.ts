@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { canEditGrowthPr } from "@/lib/growthPrAccess";
-import { getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
+import { validateProductsAgainstQr } from "@/lib/qrQuantityValidation";
 
 async function loadPrForGrowth(prId: string, session: { email: string; isAdmin?: boolean }) {
   const supabase = createSupabaseClient();
@@ -41,15 +43,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = requireWriteAccess(session, ["growth"]);
+  if (denied) return denied;
+  const authSession = session!;
 
-  if (session.role !== "growth" && !session.isAdmin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const pr = await loadPrForGrowth(params.id, session);
+  const pr = await loadPrForGrowth(params.id, authSession);
   if (!pr) {
     return NextResponse.json({ error: "PR not found" }, { status: 404 });
   }
@@ -100,6 +98,21 @@ export async function PATCH(
 
   if (!payment_type) {
     return NextResponse.json({ error: "Payment type is required" }, { status: 400 });
+  }
+
+  if (pr.from_qr_id) {
+    const supabase = createSupabaseClient();
+    const { data: qr } = await supabase
+      .from("qr")
+      .select("purchase_details")
+      .eq("id", pr.from_qr_id)
+      .single();
+    if (qr) {
+      const qtyError = validateProductsAgainstQr(products, qr);
+      if (qtyError) {
+        return NextResponse.json({ error: qtyError }, { status: 400 });
+      }
+    }
   }
 
   const payment_entries =
@@ -183,29 +196,31 @@ export async function PATCH(
 
   if (wasApproverRejected || updates.approval_status === "pending") {
     try {
-      const approverEmails = await getUsersByRole("approver");
-      if (approverEmails.length > 0) {
-        await notifyMultipleUsers(approverEmails, "pr_created", {
+      await notifyStandardUsers(
+        { creatorEmail: authSession.email, roles: ["admin", "approver"] },
+        "pr_created",
+        {
           pr_id: params.id,
           pr_number: pr.pr_number,
-          created_by: session.email,
+          created_by: authSession.email,
           message: `PR ${pr.pr_number || params.id.slice(0, 8)} was updated and resubmitted for approval`,
-        });
-      }
+        }
+      );
     } catch (notifError) {
       console.error("Notification error:", notifError);
     }
   } else if (wasFinanceRejected) {
     try {
-      const financeEmails = await getUsersByRole("finance");
-      if (financeEmails.length > 0) {
-        await notifyMultipleUsers(financeEmails, "pr_reopened", {
+      await notifyStandardUsers(
+        { creatorEmail: authSession.email, roles: ["admin", "finance"] },
+        "pr_reopened",
+        {
           pr_id: params.id,
           pr_number: pr.pr_number,
-          reopened_by: session.email,
+          reopened_by: authSession.email,
           message: `PR ${pr.pr_number || params.id.slice(0, 8)} was updated and resubmitted for finance review`,
-        });
-      }
+        }
+      );
     } catch (notifError) {
       console.error("Notification error:", notifError);
     }

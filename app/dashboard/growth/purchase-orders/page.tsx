@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Po } from "@/types/workflows";
 import PODetailCard from "@/components/PODetailCard";
+import AdminCreatorFilter from "@/components/AdminCreatorFilter";
 
 function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "-";
@@ -18,15 +19,18 @@ export default function GrowthPurchaseOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPo, setSelectedPo] = useState<Po | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [creatorFilter, setCreatorFilter] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPos();
-  }, []);
+  }, [creatorFilter]);
 
   async function loadPos() {
+    setLoading(true);
     try {
-      const res = await fetch("/api/growth/pos");
+      const params = creatorFilter ? `?createdBy=${encodeURIComponent(creatorFilter)}` : "";
+      const res = await fetch(`/api/growth/pos${params}`);
       const data = await res.json().catch(() => null);
       if (res.ok) {
         setPos(Array.isArray(data) ? data : []);
@@ -132,6 +136,8 @@ export default function GrowthPurchaseOrdersPage() {
 
       <div className="card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <AdminCreatorFilter value={creatorFilter} onChange={setCreatorFilter} />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setStatusFilter("all")}
@@ -173,6 +179,7 @@ export default function GrowthPurchaseOrdersPage() {
             >
               Delivered ({statusCounts.delivered})
             </button>
+          </div>
           </div>
         </div>
 

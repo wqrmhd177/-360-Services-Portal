@@ -4,6 +4,7 @@ import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import { uploadPoInvoice } from "@/lib/poUploads";
 import { insertPurchaseOrder, type PoProductLine } from "@/lib/poCreate";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 function getInvoiceFile(formData: FormData, field: string): File | null {
   const entry = formData.get(field);
@@ -18,17 +19,13 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const canConvert = session.role === "procurement" || session.isAdmin;
-  if (!canConvert) {
-    return NextResponse.json(
-      { error: "Forbidden - Procurement role required to convert PR to PO" },
-      { status: 403 }
-    );
-  }
+  const denied = requireWriteAccess(
+    session,
+    ["procurement"],
+    "Forbidden - Procurement role required to convert PR to PO"
+  );
+  if (denied) return denied;
+  const authSession = session!;
 
   const prId = params.id;
 
@@ -60,11 +57,10 @@ export async function POST(
     if (
       !supplierName.trim() ||
       !supplierLocation.trim() ||
-      !deliveryPartner.trim() ||
-      !deliveryPartnerTrackingId.trim()
+      !deliveryPartner.trim()
     ) {
       return NextResponse.json(
-        { error: "Supplier name, location, delivery partner, and tracking ID are required." },
+        { error: "Supplier name, location, and delivery partner are required." },
         { status: 400 }
       );
     }
@@ -126,7 +122,7 @@ export async function POST(
 
     const { data: newPo, error: poError } = await insertPurchaseOrder(supabase, {
       pr_id: prId,
-      created_by_email: session.email,
+      created_by_email: authSession.email,
       po_type: poType,
       supplier_name: supplierName,
       supplier_location: supplierLocation,

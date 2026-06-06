@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { MovementType, ShippingType } from "@/types/workflows";
 import { TOP_COUNTRIES } from "@/lib/countries";
-import { isZambeelLikeService } from "@/lib/serviceTypes";
+import { isZambeelLikeService, isLogisticsService, isSourcingService } from "@/lib/serviceTypes";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SuccessModal from "@/components/SuccessModal";
 
@@ -137,7 +137,7 @@ export default function GrowthQrFormPage() {
     const baseDetail: PurchaseDetail = {
       productName: "",
       destinationCountry: "",
-      destinationCountries: serviceNeeded === "Zambeel 360" || serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only" ? [] : undefined,
+      destinationCountries: isSourcingService(serviceNeeded) ? [] : undefined,
       countryDetails: [],
       countryOfPurchase: "China",
       shippingType: "sea",
@@ -351,59 +351,82 @@ export default function GrowthQrFormPage() {
     
     const supabase = createSupabaseClient();
 
+    // Resolve reseller country from search if user typed but didn't click dropdown
+    const resolvedResellerCountry =
+      resellerCountry ||
+      TOP_COUNTRIES.find(
+        (c) => c.toLowerCase() === resellerCountrySearch.trim().toLowerCase()
+      ) ||
+      "";
+    if (resolvedResellerCountry && resolvedResellerCountry !== resellerCountry) {
+      setResellerCountry(resolvedResellerCountry);
+    }
+
     // Validate
-    if (!resellerCode || !resellerContactNo || !resellerCountry || !serviceNeeded) {
+    if (!resellerCode || !resellerContactNo || !resolvedResellerCountry || !serviceNeeded) {
       setError("Please fill in all required fields at the top");
       setLoading(false);
       return;
     }
 
-    // Validate based on service type
-    let validDetails: PurchaseDetail[] = [];
-    
-    const isSourcingService = isZambeelLikeService(serviceNeeded) || serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only";
+    // Validate based on service type — keep original indices for image upload mapping
+    type ValidDetailEntry = { detail: PurchaseDetail; originalIndex: number };
+    let validDetailEntries: ValidDetailEntry[] = [];
+
     if (isZambeelLikeService(serviceNeeded)) {
-      validDetails = purchaseDetails.filter(
-        (d) => {
-          const hasCountry = (d.destinationCountries && d.destinationCountries.length > 0) || (d.destinationCountry && d.destinationCountry.trim() !== "");
+      validDetailEntries = purchaseDetails
+        .map((d, originalIndex) => ({ detail: d, originalIndex }))
+        .filter(({ detail: d }) => {
+          const hasCountry =
+            (d.destinationCountries && d.destinationCountries.length > 0) ||
+            (d.destinationCountry && d.destinationCountry.trim() !== "");
           const rows = ensureCountryDetailsSynced(d);
           const hasValidCountryDetails = rows.length > 0 && rows.every((r) => r.quantity > 0);
-          return d.productName && hasCountry && hasValidCountryDetails;
-        }
-      );
+          return !!(d.productName && hasCountry && hasValidCountryDetails);
+        });
     } else if (serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only") {
-      validDetails = purchaseDetails.filter(
-        (d) => {
-          const hasCountry = (d.destinationCountries && d.destinationCountries.length > 0) || (d.destinationCountry && d.destinationCountry.trim() !== "");
+      validDetailEntries = purchaseDetails
+        .map((d, originalIndex) => ({ detail: d, originalIndex }))
+        .filter(({ detail: d }) => {
+          const hasCountry =
+            (d.destinationCountries && d.destinationCountries.length > 0) ||
+            (d.destinationCountry && d.destinationCountry.trim() !== "");
           const rows = ensureCountryDetailsSynced(d);
           const hasValidCountryDetails = rows.length > 0 && rows.every((r) => r.quantity > 0);
-          return d.productName && hasCountry && hasValidCountryDetails && (serviceNeeded === "Sourcing & Logistics" ? d.shipToAddress : true);
-        }
-      );
-    } else if (serviceNeeded === "Logistics Only" || serviceNeeded === "3PL & Logistics") {
-      validDetails = purchaseDetails.filter(
-        (d) =>
-          d.productName &&
-          d.productName.trim() !== "" &&
-          d.shipFrom &&
-          d.shipTo &&
-          d.shippingType &&
-          d.productType &&
-          d.hasBrand &&
-          d.noOfCartons &&
-          d.noOfCartons > 0 &&
-          d.weightPerCarton &&
-          d.weightPerCarton > 0 &&
-          d.cartonLength &&
-          d.cartonLength > 0 &&
-          d.cartonWidth &&
-          d.cartonWidth > 0 &&
-          d.cartonHeight &&
-          d.cartonHeight > 0
-      );
+          return !!(
+            d.productName &&
+            hasCountry &&
+            hasValidCountryDetails &&
+            (serviceNeeded === "Sourcing & Logistics" ? d.shipToAddress : true)
+          );
+        });
+    } else if (isLogisticsService(serviceNeeded)) {
+      validDetailEntries = purchaseDetails
+        .map((d, originalIndex) => ({ detail: d, originalIndex }))
+        .filter(({ detail: d }) =>
+          !!(
+            d.productName &&
+            d.productName.trim() !== "" &&
+            d.shipFrom &&
+            d.shipTo &&
+            d.shippingType &&
+            d.productType &&
+            d.hasBrand &&
+            d.noOfCartons &&
+            d.noOfCartons > 0 &&
+            d.weightPerCarton &&
+            d.weightPerCarton > 0 &&
+            d.cartonLength &&
+            d.cartonLength > 0 &&
+            d.cartonWidth &&
+            d.cartonWidth > 0 &&
+            d.cartonHeight &&
+            d.cartonHeight > 0
+          )
+        );
     }
-    
-    if (validDetails.length === 0) {
+
+    if (validDetailEntries.length === 0) {
       setError("Please fill in all required fields for at least one purchase detail");
       setLoading(false);
       return;
@@ -416,24 +439,19 @@ export default function GrowthQrFormPage() {
       imagesCount: d.images?.length || 0,
       hasImages: !!d.images && d.images.length > 0
     })));
-    console.log("validDetails after filter:", validDetails.map((d, i) => ({
-      index: i,
-      productName: d.productName,
-      imagesCount: d.images?.length || 0,
-      hasImages: !!d.images && d.images.length > 0
-    })));
+    const validDetails = validDetailEntries.map((e) => e.detail);
 
     try {
       console.log("=== PROCESSING IMAGES ===");
-      console.log("Number of purchase details:", validDetails.length);
+      console.log("Number of purchase details:", validDetailEntries.length);
       
       // Process images for each purchase detail - Upload to Supabase Storage
       const processedDetails = await Promise.all(
-        validDetails.map(async (d, index) => {
-          console.log(`Processing detail ${index}`);
+        validDetailEntries.map(async ({ detail: d, originalIndex }) => {
+          console.log(`Processing detail ${originalIndex}`);
           
-          // Get files from ref instead of state (to avoid File object loss)
-          const filesFromRef = imageFilesRef.current.get(index) || [];
+          // Get files from ref using original purchaseDetails index
+          const filesFromRef = imageFilesRef.current.get(originalIndex) || [];
           console.log(`  - images from ref:`, filesFromRef.length);
           console.log(`  - images from state:`, d.images?.length || 0);
           
@@ -443,7 +461,7 @@ export default function GrowthQrFormPage() {
           const imagePaths: string[] = [];
           
           if (imagesToUpload.length > 0) {
-            console.log(`Uploading ${imagesToUpload.length} images for detail ${index}...`);
+            console.log(`Uploading ${imagesToUpload.length} images for detail ${originalIndex}...`);
             
                 for (const image of imagesToUpload) {
               try {
@@ -473,10 +491,10 @@ export default function GrowthQrFormPage() {
               }
             }
           } else {
-            console.log(`No images for detail ${index}`);
+            console.log(`No images for detail ${originalIndex}`);
           }
           
-          console.log(`Detail ${index} final imagePaths:`, imagePaths);
+          console.log(`Detail ${originalIndex} final imagePaths:`, imagePaths);
           
           const countryDetails = ensureCountryDetailsSynced(d);
           const quantity = countryDetails.reduce((sum, cd) => sum + (cd.quantity || 0), 0);
@@ -500,7 +518,7 @@ export default function GrowthQrFormPage() {
       const movementTypeByCountry: Record<string, MovementType> = {};
       const shippingTypeByCountry: Record<string, ShippingType> = {};
       
-      if (serviceNeeded === "Logistics Only" || serviceNeeded === "3PL & Logistics") {
+      if (isLogisticsService(serviceNeeded)) {
         // For logistics services, use shipTo as country identifier
         countries = validDetails.map((d) => d.shipTo || "");
         validDetails.forEach((d) => {
@@ -537,7 +555,7 @@ export default function GrowthQrFormPage() {
       const formData = new FormData();
       formData.append("reseller_code", resellerCode);
       formData.append("reseller_contact_no", resellerContactNo);
-      formData.append("reseller_country", resellerCountry);
+      formData.append("reseller_country", resolvedResellerCountry);
       formData.append("existing_seller", existingSeller);
       formData.append("gold_seller", goldSeller);
       formData.append("service_needed", serviceNeeded);
@@ -585,7 +603,7 @@ export default function GrowthQrFormPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-700">
-                Customer Name / Code <span className="text-red-400">*</span>
+                Channel Name/User ID <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
@@ -593,7 +611,7 @@ export default function GrowthQrFormPage() {
                 value={resellerCode}
                 onChange={(e) => setResellerCode(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                placeholder="Enter customer name or code"
+                placeholder="Enter channel name or user ID"
               />
             </div>
             <div className="space-y-1">
@@ -623,6 +641,15 @@ export default function GrowthQrFormPage() {
                     setShowResellerCountryDropdown(true);
                   }}
                   onFocus={() => setShowResellerCountryDropdown(true)}
+                  onBlur={() => {
+                    const match = TOP_COUNTRIES.find(
+                      (c) => c.toLowerCase() === resellerCountrySearch.trim().toLowerCase()
+                    );
+                    if (match) {
+                      setResellerCountry(match);
+                      setResellerCountrySearch(match);
+                    }
+                  }}
                   placeholder="Search or select country"
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
                 />

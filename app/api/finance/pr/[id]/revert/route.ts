@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const canAccess = session.role === "finance" || session.isAdmin;
-  if (!canAccess) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const denied = requireWriteAccess(session, ["finance"]);
+  if (denied) return denied;
 
   const supabase = createSupabaseClient();
   const prId = params.id;

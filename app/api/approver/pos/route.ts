@@ -17,13 +17,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const createdBy = searchParams.get("createdBy")?.trim() || "";
+
     const supabase = createSupabaseClient();
     
-    // Approvers see ALL POs (read-only)
-    const { data, error } = await supabase
+    let query = supabase
       .from("po")
       .select("*, pr!inner(id, pr_number, created_by_email, products, product_name)")
       .order("created_at", { ascending: false });
+
+    if (createdBy) {
+      query = query.eq("pr.created_by_email", createdBy);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching POs:", error);

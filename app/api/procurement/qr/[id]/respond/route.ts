@@ -1,46 +1,53 @@
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
-import { WAREHOUSE_CODES } from "@/types/workflows";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const canRespond = session.role === "procurement" || session.isAdmin;
-  if (!canRespond) {
-    return NextResponse.json(
-      { error: "Forbidden - Procurement role required to respond to QR" },
-      { status: 403 }
-    );
-  }
-
-  const VALID_WAREHOUSES = new Set(WAREHOUSE_CODES);
+  const denied = requireWriteAccess(
+    session,
+    ["procurement"],
+    "Forbidden - Procurement role required to respond to QR"
+  );
+  if (denied) return denied;
 
   const VALID_CURRENCIES = new Set(["AED", "SAR", "PKR"]);
 
-  function normalizeWarehouseStock(raw: unknown): { warehouse: string; qty: number; costPerUnit: number; currency?: string; procurementImagePaths?: string[] }[] {
+  function normalizeWarehouseStock(raw: unknown): {
+    sku: string;
+    country: string;
+    qty: number;
+    costPerUnit: number;
+    currency?: string;
+    procurementImagePaths?: string[];
+  }[] {
     if (!Array.isArray(raw)) return [];
     return raw
       .filter(
         (e: any) =>
           e != null &&
-          typeof e.warehouse === "string" &&
-          VALID_WAREHOUSES.has(e.warehouse as any) &&
+          typeof (e.sku ?? e.warehouse) === "string" &&
+          String(e.sku ?? e.warehouse).trim() !== "" &&
           (typeof e.qty === "number" || (typeof e.qty === "string" && e.qty !== "")) &&
           Number(e.qty) >= 0 &&
-          (typeof e.costPerUnit === "number" || (typeof e.costPerUnit === "string" && e.costPerUnit !== "")) &&
+          (typeof e.costPerUnit === "number" ||
+            (typeof e.costPerUnit === "string" && e.costPerUnit !== "")) &&
           Number(e.costPerUnit) >= 0
       )
       .map((e: any) => ({
-        warehouse: e.warehouse,
+        sku: String(e.sku ?? e.warehouse).trim(),
+        country: String(e.country ?? e.warehouse ?? "").trim(),
         qty: Number(e.qty),
         costPerUnit: Number(e.costPerUnit),
-        currency: typeof e.currency === "string" && VALID_CURRENCIES.has(e.currency) ? e.currency : undefined,
-        procurementImagePaths: Array.isArray(e.procurementImagePaths) ? e.procurementImagePaths : undefined
+        currency:
+          typeof e.currency === "string" && VALID_CURRENCIES.has(e.currency)
+            ? e.currency
+            : undefined,
+        procurementImagePaths: Array.isArray(e.procurementImagePaths)
+          ? e.procurementImagePaths
+          : undefined,
       }));
   }
 
@@ -59,6 +66,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
     } = body;
 
     const warehouseStock = normalizeWarehouseStock(bodyWarehouseStock);
+
+    for (const row of warehouseStock) {
+      if (!row.procurementImagePaths || row.procurementImagePaths.length === 0) {
+        return NextResponse.json(
+          { error: `Procurement images are required for warehouse SKU ${row.sku}` },
+          { status: 400 }
+        );
+      }
+    }
 
     if (purchaseDetailIndex === undefined) {
       return NextResponse.json({ error: "Missing purchaseDetailIndex" }, { status: 400 });
@@ -128,6 +144,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
         );
       }
 
+      const missingImages = validCombinations.find(
+        (c) => !c.procurementImagePaths || c.procurementImagePaths.length === 0
+      );
+      if (missingImages) {
+        return NextResponse.json(
+          { error: "Procurement images are required for each combination" },
+          { status: 400 }
+        );
+      }
+
       const isReEdit = existingResponse && (existingResponse.combinations?.length > 0 || existingResponse.costPerUnit !== undefined);
       if (isReEdit) {
         procurementResponse._metadata.editCount = (procurementResponse._metadata.editCount || 0) + 1;
@@ -175,6 +201,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
         ...(existingResponse?.procurementImagePaths || []),
         ...newProcurementImagePaths
       ];
+
+      if (mergedImagePaths.length === 0) {
+        return NextResponse.json(
+          { error: "Procurement images are required" },
+          { status: 400 }
+        );
+      }
 
       procurementResponse[purchaseDetailIndex] = {
         costPerUnit: Number(costPerUnit),
@@ -225,28 +258,26 @@ export async function POST(request: Request, { params }: { params: { id: string 
       
       const qrNumber = qr.qr_number || params.id;
       
-      // Get approver emails
-      const approverEmails = await getUsersByRole("approver");
-      const allNotifyEmails = qr.created_by_email 
-        ? [qr.created_by_email, ...approverEmails]
-        : approverEmails;
-      
-      if (allNotifyEmails.length > 0) {
-        if (isReEdit) {
-          // Notify about re-edit (always notify on re-edit)
-          await notifyMultipleUsers(allNotifyEmails, "qr_re_edited", {
+      if (isReEdit) {
+        await notifyStandardUsers(
+          { creatorEmail: qr.created_by_email, roles: ["admin", "approver"] },
+          "qr_re_edited",
+          {
             qr_id: params.id,
             qr_number: qrNumber,
-            message: `${qrNumber} has been re-submitted by Procurement for ${productNames}`
-          });
-        } else if (allSubmitted) {
-          // Notify about initial submission when all items are completed
-          await notifyMultipleUsers(allNotifyEmails, "qr_response", {
+            message: `${qrNumber} has been re-submitted by Procurement for ${productNames}`,
+          }
+        );
+      } else if (allSubmitted) {
+        await notifyStandardUsers(
+          { creatorEmail: qr.created_by_email, roles: ["admin", "approver"] },
+          "qr_response",
+          {
             qr_id: params.id,
             qr_number: qrNumber,
-            message: `${qrNumber} has been responded by Procurement for ${productNames}`
-          });
-        }
+            message: `${qrNumber} has been responded by Procurement for ${productNames}`,
+          }
+        );
       }
     } catch (notifError) {
       console.error("Failed to send notifications:", notifError);

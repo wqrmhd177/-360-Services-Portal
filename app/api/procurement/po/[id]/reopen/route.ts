@@ -2,23 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import type { PoStatusHistoryEntry } from "@/types/workflows";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const canReopen = session.role === "procurement" || session.isAdmin;
-  if (!canReopen) {
-    return NextResponse.json(
-      { error: "Forbidden — Procurement or Admin role required" },
-      { status: 403 }
-    );
-  }
+  const denied = requireWriteAccess(
+    session,
+    ["procurement"],
+    "Forbidden — Procurement role required"
+  );
+  if (denied) return denied;
+  const authSession = session!;
 
   const supabase = createSupabaseClient();
   const poId = params.id;
@@ -46,7 +43,7 @@ export async function POST(
   const historyEntry: PoStatusHistoryEntry = {
     status: "order_placed",
     timestamp: new Date().toISOString(),
-    changed_by: session.email,
+    changed_by: authSession.email,
     remarks: remarks || "PO reopened",
   };
 

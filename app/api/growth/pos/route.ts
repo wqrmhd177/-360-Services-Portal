@@ -19,15 +19,19 @@ export async function GET(request: Request) {
   try {
     const supabase = createSupabaseClient();
     
-    // Fetch POs by joining with PR table and filtering by PR creator
-    // Admin sees all POs, Growth users see only their own
+    const { searchParams } = new URL(request.url);
+    const createdByFilter = searchParams.get("createdBy")?.trim() || "";
+
     let query = supabase
       .from("po")
       .select("*, pr!inner(id, pr_number, created_by_email, products, product_name)")
       .order("created_at", { ascending: false });
 
-    // Growth users only see POs from their own PRs
-    if (!session.isAdmin) {
+    if (session.isAdmin) {
+      if (createdByFilter) {
+        query = query.eq("pr.created_by_email", createdByFilter);
+      }
+    } else {
       query = query.eq("pr.created_by_email", session.email);
     }
 

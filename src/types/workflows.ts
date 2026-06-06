@@ -7,9 +7,14 @@ export type WarehouseCode = "UAE" | "KSA" | "KWT" | "QTR" | "OMN" | "BHR" | "IRQ
 export const WAREHOUSE_CODES: WarehouseCode[] = ["UAE", "KSA", "KWT", "QTR", "OMN", "BHR", "IRQ", "PAK"];
 
 export interface WarehouseStockEntry {
-  warehouse: WarehouseCode;
+  /** @deprecated Legacy warehouse code — use sku for new entries */
+  warehouse?: WarehouseCode;
+  sku?: string;
+  country?: string;
   qty: number;
   costPerUnit: number;
+  currency?: string;
+  procurementImagePaths?: string[];
 }
 
 export type PrApprovalStatus = "pending" | "approved" | "rejected";

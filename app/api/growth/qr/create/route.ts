@@ -1,26 +1,18 @@
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { isZambeelLikeService } from "@/lib/serviceTypes";
+import { isLogisticsService, isSourcingService, isZambeelLikeService } from "@/lib/serviceTypes";
 import type { MovementType, ShippingType } from "@/types/workflows";
-import { getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(request: Request) {
   const session = getPortalSession();
-  if (!session?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const canCreate = session.role === "growth" || session.isAdmin;
-  if (!canCreate) {
-    return NextResponse.json(
-      { error: "Forbidden - Growth role required to create QR" },
-      { status: 403 }
-    );
-  }
+  const denied = requireWriteAccess(session, ["growth"], "Forbidden - Growth role required to create QR");
+  if (denied) return denied;
 
   try {
-    const email = session.email;
+    const email = session!.email;
 
     const formData = await request.formData();
     const resellerCode = String(formData.get("reseller_code") ?? "");
@@ -55,38 +47,56 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    
+
     if (countries.length === 0) {
       return NextResponse.json({ error: "At least one country is required" }, { status: 400 });
     }
 
-    const isSourcingService =
-      isZambeelLikeService(serviceNeeded) ||
-      serviceNeeded === "Sourcing & Logistics" ||
-      serviceNeeded === "Sourcing only";
+    const isLogistics = isLogisticsService(serviceNeeded);
+    const isSourcing = isSourcingService(serviceNeeded);
 
     // Normalize and validate purchase details
     const normalizedDetails = purchaseDetails.map((detail: any) => {
-      const hasCountries = Array.isArray(detail.destinationCountries) && detail.destinationCountries.length > 0;
-      const hasCountry = detail.destinationCountry && String(detail.destinationCountry).trim() !== "";
+      if (isLogistics) {
+        const shipTo = String(detail.shipTo ?? "").trim();
+        return {
+          ...detail,
+          destinationCountry: shipTo || detail.destinationCountry,
+          destinationCountries: shipTo ? [shipTo] : undefined,
+          quantity: detail.noOfCartons ? Number(detail.noOfCartons) : 0,
+        };
+      }
+
+      const hasCountries =
+        Array.isArray(detail.destinationCountries) && detail.destinationCountries.length > 0;
+      const hasCountry =
+        detail.destinationCountry && String(detail.destinationCountry).trim() !== "";
       const destinationCountries = hasCountries
         ? detail.destinationCountries
         : hasCountry
           ? [detail.destinationCountry]
           : [];
-      const countryDetails = Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
-        ? detail.countryDetails.map((cd: any) => ({
-            country: String(cd?.country ?? ""),
-            quantity: Number(cd?.quantity ?? 0),
-            targetPrice: Number(cd?.targetPrice ?? 0),
-          }))
-        : undefined;
-      const quantity = detail.quantity != null && detail.quantity !== "" ? Number(detail.quantity) : (countryDetails?.reduce((s: number, cd: any) => s + (cd.quantity || 0), 0) ?? 0);
-      const targetPrice = detail.targetPrice != null && detail.targetPrice !== "" ? Number(detail.targetPrice) : (countryDetails?.[0]?.targetPrice ?? undefined);
+      const countryDetails =
+        Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
+          ? detail.countryDetails.map((cd: any) => ({
+              country: String(cd?.country ?? ""),
+              quantity: Number(cd?.quantity ?? 0),
+              targetPrice: Number(cd?.targetPrice ?? 0),
+            }))
+          : undefined;
+      const quantity =
+        detail.quantity != null && detail.quantity !== ""
+          ? Number(detail.quantity)
+          : (countryDetails?.reduce((s: number, cd: any) => s + (cd.quantity || 0), 0) ?? 0);
+      const targetPrice =
+        detail.targetPrice != null && detail.targetPrice !== ""
+          ? Number(detail.targetPrice)
+          : (countryDetails?.[0]?.targetPrice ?? undefined);
       return {
         ...detail,
         destinationCountries: destinationCountries.length > 0 ? destinationCountries : undefined,
-        destinationCountry: destinationCountries.length === 1 ? destinationCountries[0] : detail.destinationCountry,
+        destinationCountry:
+          destinationCountries.length === 1 ? destinationCountries[0] : detail.destinationCountry,
         countryDetails: countryDetails?.length ? countryDetails : undefined,
         quantity,
         targetPrice,
@@ -100,6 +110,41 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+
+      if (isLogistics) {
+        if (!detail.shipFrom?.trim()) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have a ship-from address" },
+            { status: 400 }
+          );
+        }
+        if (!detail.shipTo?.trim()) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have a ship-to address" },
+            { status: 400 }
+          );
+        }
+        if (!detail.shippingType) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have a shipping type" },
+            { status: 400 }
+          );
+        }
+        if (!detail.productType) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have a product type" },
+            { status: 400 }
+          );
+        }
+        if (!detail.noOfCartons || Number(detail.noOfCartons) <= 0) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have number of cartons > 0" },
+            { status: 400 }
+          );
+        }
+        continue;
+      }
+
       const hasDest =
         (Array.isArray(detail.destinationCountries) && detail.destinationCountries.length > 0) ||
         (detail.destinationCountry && String(detail.destinationCountry).trim() !== "");
@@ -109,24 +154,47 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const hasCountryDetails = Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0;
-      const destCountries = detail.destinationCountries?.length ? detail.destinationCountries : (detail.destinationCountry ? [detail.destinationCountry] : []);
+
+      if (
+        serviceNeeded === "Sourcing & Logistics" &&
+        (!detail.shipToAddress || !String(detail.shipToAddress).trim())
+      ) {
+        return NextResponse.json(
+          { error: "Ship-to address is required for Sourcing & Logistics" },
+          { status: 400 }
+        );
+      }
+
+      const hasCountryDetails =
+        Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0;
+      const destCountries = detail.destinationCountries?.length
+        ? detail.destinationCountries
+        : detail.destinationCountry
+          ? [detail.destinationCountry]
+          : [];
       if (hasCountryDetails) {
-        const missing = destCountries.filter((c: string) => !detail.countryDetails.some((cd: any) => cd.country === c));
+        const missing = destCountries.filter(
+          (c: string) => !detail.countryDetails.some((cd: any) => cd.country === c)
+        );
         if (missing.length > 0) {
           return NextResponse.json(
             { error: "Each destination country must have quantity and target price" },
             { status: 400 }
           );
         }
-        const invalid = detail.countryDetails.find((cd: any) => (cd.quantity ?? 0) < 0 || (cd.targetPrice ?? 0) < 0);
+        const invalid = detail.countryDetails.find(
+          (cd: any) => (cd.quantity ?? 0) < 0 || (cd.targetPrice ?? 0) < 0
+        );
         if (invalid) {
           return NextResponse.json(
             { error: "Per-country quantity and target price must be >= 0" },
             { status: 400 }
           );
         }
-        const totalQty = detail.countryDetails.reduce((s: number, cd: any) => s + (cd.quantity || 0), 0);
+        const totalQty = detail.countryDetails.reduce(
+          (s: number, cd: any) => s + (cd.quantity || 0),
+          0
+        );
         if (totalQty <= 0) {
           return NextResponse.json(
             { error: "At least one destination country must have quantity > 0" },
@@ -140,7 +208,12 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
-        if (!isSourcingService && (detail.targetPrice == null || detail.targetPrice === "" || Number(detail.targetPrice) < 0)) {
+        if (
+          !isSourcing &&
+          (detail.targetPrice == null ||
+            detail.targetPrice === "" ||
+            Number(detail.targetPrice) < 0)
+        ) {
           return NextResponse.json(
             { error: "Target price is required for this service" },
             { status: 400 }
@@ -164,7 +237,7 @@ export async function POST(request: Request) {
         shipping_type: shippingType,
         shipping_type_by_country: shippingTypeByCountry,
         movement_type_by_country: movementTypeByCountry,
-        purchase_details: normalizedDetails
+        purchase_details: normalizedDetails,
       })
       .select("id, qr_number")
       .single();
@@ -176,7 +249,6 @@ export async function POST(request: Request) {
     // If qr_number is not generated by trigger, generate it manually
     let qrNumber = newQr.qr_number;
     if (!qrNumber) {
-      // Fetch the latest QR number to generate the next one
       const { data: latestQr } = await supabase
         .from("qr")
         .select("qr_number")
@@ -193,31 +265,23 @@ export async function POST(request: Request) {
         }
       }
       qrNumber = `QR-${String(nextNum).padStart(3, "0")}`;
-      
-      // Update the QR with the generated number
-      await supabase
-        .from("qr")
-        .update({ qr_number: qrNumber })
-        .eq("id", newQr.id);
+
+      await supabase.from("qr").update({ qr_number: qrNumber }).eq("id", newQr.id);
     }
 
-    // Notify Approver and Procurement teams about the new QR
     try {
-      const approverEmails = await getUsersByRole("approver");
-      const procurementEmails = await getUsersByRole("procurement");
-      const allRecipientsEmails = [...approverEmails, ...procurementEmails];
-
-      if (allRecipientsEmails.length > 0) {
-        const productNames = purchaseDetails.map((d: any) => d.productName).join(", ");
-        await notifyMultipleUsers(allRecipientsEmails, "qr_created", {
+      const productNames = purchaseDetails.map((d: any) => d.productName).join(", ");
+      await notifyStandardUsers(
+        { creatorEmail: email, roles: ["admin", "approver", "procurement"] },
+        "qr_created",
+        {
           qr_id: newQr.id,
           qr_number: qrNumber,
-          message: `New QR ${qrNumber} created for ${productNames}`
-        });
-      }
+          message: `New QR ${qrNumber} created for ${productNames}`,
+        }
+      );
     } catch (notifError) {
       console.error("Failed to send notifications:", notifError);
-      // Don't fail the QR creation if notifications fail
     }
 
     return NextResponse.json({ ok: true, qr_id: newQr.id, qr_number: qrNumber });

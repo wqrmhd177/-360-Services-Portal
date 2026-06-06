@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Qr } from "@/types/workflows";
-import { WAREHOUSE_CODES, type WarehouseCode } from "@/types/workflows";
 import { isZambeelLikeService } from "@/lib/serviceTypes";
 import { createSupabaseClient } from "@/lib/supabaseClient";
+import SkuSearchInput from "@/components/SkuSearchInput";
+import type { InventorySku } from "@/lib/metabaseInventory";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -67,7 +68,8 @@ interface CombinationRow {
 }
 
 interface WarehouseStockRow {
-  warehouse: string;
+  sku: string;
+  country: string;
   qty: number;
   costPerUnit: number;
   currency?: CurrencyCode;
@@ -238,13 +240,14 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
             const arr: WarehouseStockRow[] =
               Array.isArray(saved?.warehouseStock) && saved.warehouseStock.length > 0
                 ? saved.warehouseStock.map((e: any) => ({
-                    warehouse: e.warehouse ?? "",
+                    sku: e.sku ?? e.warehouse ?? "",
+                    country: e.country ?? e.warehouse ?? "",
                     qty: Number(e.qty) || 0,
                     costPerUnit: Number(e.costPerUnit) || 0,
                     currency: (e.currency === "AED" || e.currency === "SAR" || e.currency === "PKR" ? e.currency : undefined) ?? ("AED" as CurrencyCode),
                     procurementImagePaths: Array.isArray(e.procurementImagePaths) ? e.procurementImagePaths : []
                   }))
-                : [{ warehouse: "", qty: 0, costPerUnit: 0 }];
+                : [{ sku: "", country: "", qty: 0, costPerUnit: 0 }];
             ws[index] = arr;
           });
           setWarehouseStockByDetail(ws);
@@ -337,7 +340,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
   function addWarehouseStockRow(detailIndex: number) {
     setWarehouseStockByDetail((prev) => ({
       ...prev,
-      [detailIndex]: [...(prev[detailIndex] || []), { warehouse: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }]
+      [detailIndex]: [...(prev[detailIndex] || []), { sku: "", country: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }]
     }));
   }
 
@@ -346,7 +349,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
     warehouseImageFilesRef.current.delete(key);
     setWarehouseStockByDetail((prev) => {
       const rows = (prev[detailIndex] || []).filter((_, i) => i !== rowIndex);
-      return { ...prev, [detailIndex]: rows.length > 0 ? rows : [{ warehouse: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }] };
+      return { ...prev, [detailIndex]: rows.length > 0 ? rows : [{ sku: "", country: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }] };
     });
   }
 
@@ -358,7 +361,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
   ) {
     setWarehouseStockByDetail((prev) => {
       const rows = [...(prev[detailIndex] || [])];
-      const row: WarehouseStockRow = rows[rowIndex] || { warehouse: "", qty: 0, costPerUnit: 0 };
+      const row: WarehouseStockRow = rows[rowIndex] || { sku: "", country: "", qty: 0, costPerUnit: 0 };
       rows[rowIndex] = { ...row, [field]: value as any };
       return { ...prev, [detailIndex]: rows };
     });
@@ -446,12 +449,41 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
         setError("Each combination must have destination country, cost per unit, and freight per unit.");
         return;
       }
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const key = `${index}-${i}`;
+        const hasNewImages = (combinationImageFilesRef.current.get(key) || []).length > 0;
+        const hasSavedImages = (r.procurementImagePaths?.length ?? 0) > 0;
+        if (!hasNewImages && !hasSavedImages) {
+          setError(`Procurement images are required for combination ${i + 1}.`);
+          return;
+        }
+      }
     } else {
       if (
         !isSubmitted &&
         (!detail.costPerUnit || !detail.freightCostPerUnit)
       ) {
         setError("Please fill in Cost per Unit and Freight Cost per Unit");
+        return;
+      }
+      const hasNewImages = (procurementImageFilesRef.current.get(index) || []).length > 0;
+      const hasSavedImages = (detail.procurementImagePaths?.length ?? 0) > 0;
+      if (!hasNewImages && !hasSavedImages) {
+        setError("Procurement images are required.");
+        return;
+      }
+    }
+
+    const whRows = warehouseStockByDetail[index] || [];
+    for (let i = 0; i < whRows.length; i++) {
+      const r = whRows[i];
+      if (!r.sku?.trim()) continue;
+      const key = `${index}-wh-${i}`;
+      const hasNewImages = (warehouseImageFilesRef.current.get(key) || []).length > 0;
+      const hasSavedImages = (r.procurementImagePaths?.length ?? 0) > 0;
+      if (!hasNewImages && !hasSavedImages) {
+        setError(`Procurement images are required for warehouse SKU row ${i + 1}.`);
         return;
       }
     }
@@ -492,20 +524,28 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
       }
 
       const allWhRows = warehouseStockByDetail[index] || [];
-      const warehouseStockPayload: { warehouse: string; qty: number; costPerUnit: number; currency?: CurrencyCode; procurementImagePaths?: string[] }[] = [];
+      const warehouseStockPayload: {
+        sku: string;
+        country: string;
+        qty: number;
+        costPerUnit: number;
+        currency?: CurrencyCode;
+        procurementImagePaths?: string[];
+      }[] = [];
       for (let rowIndex = 0; rowIndex < allWhRows.length; rowIndex++) {
         const r = allWhRows[rowIndex];
-        if (!r.warehouse || !WAREHOUSE_CODES.includes(r.warehouse as WarehouseCode)) continue;
+        if (!r.sku?.trim()) continue;
         const key = `${index}-wh-${rowIndex}`;
         const whFiles = warehouseImageFilesRef.current.get(key) || [];
         const uploaded = whFiles.length > 0 ? await uploadFiles(whFiles) : [];
         const allPaths = [...(r.procurementImagePaths || []), ...uploaded];
         warehouseStockPayload.push({
-          warehouse: r.warehouse,
+          sku: r.sku.trim(),
+          country: r.country || "",
           qty: Number(r.qty) || 0,
           costPerUnit: Number(r.costPerUnit) || 0,
           currency: r.currency,
-          procurementImagePaths: allPaths.length > 0 ? allPaths : undefined
+          procurementImagePaths: allPaths
         });
       }
 
@@ -987,7 +1027,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                         </div>
                         {/* Procurement Images (optional) - per combination row */}
                         <div className="space-y-1">
-                          <div className="text-[10px] font-medium text-gray-600">Procurement Images (optional)</div>
+                          <div className="text-[10px] font-medium text-gray-600">Procurement Images <span className="text-red-500">*</span></div>
                           <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-700 hover:bg-gray-50">
                             Choose Files
                             <input
@@ -1130,53 +1170,57 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                   </>
                 )}
 
-                {/* Warehouse stock (optional) - per product */}
+                {/* Warehouse stock (SKU from inventory) - per product */}
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-medium text-gray-700">
-                      Warehouse stock (optional)
+                      Warehouse stock (SKU search)
                     </label>
                     <button
                       type="button"
                       onClick={() => addWarehouseStockRow(index)}
                       className="text-xs font-medium text-gray-900 hover:text-gray-700"
                     >
-                      + Add warehouse row
+                      + Add SKU row
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {(warehouseStockByDetail[index] || [{ warehouse: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }]).map(
+                    {(warehouseStockByDetail[index] || [{ sku: "", country: "", qty: 0, costPerUnit: 0, currency: "AED" as CurrencyCode }]).map(
                       (row, rowIndex) => (
                         <div
                           key={rowIndex}
                           className="rounded-lg border border-gray-200 bg-gray-50/50 p-2 space-y-2"
                         >
                           <div className="flex flex-wrap items-end gap-2">
-                            <div className="min-w-[100px] flex-1 space-y-1">
-                              <label className="block text-[10px] font-medium text-gray-600">Warehouse</label>
-                              <select
-                                value={row.warehouse}
-                                onChange={(e) => updateWarehouseStock(index, rowIndex, "warehouse", e.target.value)}
-                                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
-                              >
-                                <option value="">Select</option>
-                                {WAREHOUSE_CODES.map((code) => (
-                                  <option key={code} value={code}>
-                                    {code}
-                                  </option>
-                                ))}
-                              </select>
+                            <div className="min-w-[140px] flex-1 space-y-1">
+                              <label className="block text-[10px] font-medium text-gray-600">SKU <span className="text-red-500">*</span></label>
+                              <SkuSearchInput
+                                value={row.sku}
+                                onSelect={(item: InventorySku) => {
+                                  updateWarehouseStock(index, rowIndex, "sku", item.sku);
+                                  updateWarehouseStock(index, rowIndex, "country", item.country);
+                                  updateWarehouseStock(index, rowIndex, "qty", item.quantity);
+                                }}
+                              />
+                            </div>
+                            <div className="w-24 space-y-1">
+                              <label className="block text-[10px] font-medium text-gray-600">Country</label>
+                              <input
+                                type="text"
+                                readOnly
+                                value={row.country || ""}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-100 px-2 py-1.5 text-xs text-gray-700"
+                                placeholder="Auto"
+                              />
                             </div>
                             <div className="w-20 space-y-1">
                               <label className="block text-[10px] font-medium text-gray-600">Qty</label>
                               <input
                                 type="number"
                                 min={0}
+                                readOnly
                                 value={row.qty || ""}
-                                onChange={(e) =>
-                                  updateWarehouseStock(index, rowIndex, "qty", e.target.value === "" ? 0 : Number(e.target.value))
-                                }
-                                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
+                                className="w-full rounded-lg border border-gray-200 bg-gray-100 px-2 py-1.5 text-xs text-gray-700"
                                 placeholder="0"
                               />
                             </div>
@@ -1220,7 +1264,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                             </button>
                           </div>
                           <div className="space-y-1">
-                            <div className="text-[10px] font-medium text-gray-600">Procurement Images (optional)</div>
+                            <div className="text-[10px] font-medium text-gray-600">Procurement Images <span className="text-red-500">*</span></div>
                             <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-700 hover:bg-gray-50">
                               Choose Files
                               <input

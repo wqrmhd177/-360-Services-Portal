@@ -18,13 +18,19 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createSupabaseClient();
+    const { searchParams } = new URL(request.url);
+    const createdByFilter = searchParams.get("createdBy")?.trim() || "";
+
     let query = supabase
       .from("pr")
       .select("*")
       .order("created_at", { ascending: false });
 
-    // Admin sees all PRs; regular growth users see only their own
-    if (!session.isAdmin) {
+    if (session.isAdmin) {
+      if (createdByFilter) {
+        query = query.eq("created_by_email", createdByFilter);
+      }
+    } else {
       query = query.eq("created_by_email", session.email);
     }
 

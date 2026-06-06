@@ -146,6 +146,40 @@ export async function getUsersByRole(role: string): Promise<string[]> {
   }
 }
 
+export type NotifyRole = "approver" | "procurement" | "finance" | "admin";
+
+export async function getStandardNotifyEmails(options: {
+  creatorEmail?: string | null;
+  roles?: NotifyRole[];
+}): Promise<string[]> {
+  const emails = new Set<string>();
+
+  if (options.creatorEmail?.trim()) {
+    emails.add(options.creatorEmail.trim());
+  }
+
+  for (const role of options.roles ?? []) {
+    const roleEmails = await getUsersByRole(role === "admin" ? "admin" : role);
+    roleEmails.forEach((e) => emails.add(e));
+  }
+
+  return Array.from(emails);
+}
+
+export async function notifyStandardUsers(
+  options: {
+    creatorEmail?: string | null;
+    roles?: NotifyRole[];
+  },
+  type: NotificationType,
+  payload: NotificationPayload = {}
+) {
+  const emails = await getStandardNotifyEmails(options);
+  if (emails.length > 0) {
+    await notifyMultipleUsers(emails, type, payload);
+  }
+}
+
 // Notify multiple users at once
 export async function notifyMultipleUsers(
   userEmails: string[],

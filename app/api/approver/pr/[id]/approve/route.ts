@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { createNotification, getUsersByRole } from "@/lib/notifications";
+import { notifyStandardUsers } from "@/lib/notifications";
+import { requireWriteAccess } from "@/lib/accessControl";
 
 export async function POST(
   request: NextRequest,
@@ -9,17 +10,13 @@ export async function POST(
 ) {
   try {
     const session = getPortalSession();
-    if (!session?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const canApprove = session.role === "approver" || session.role === "finance" || session.isAdmin;
-    if (!canApprove) {
-      return NextResponse.json(
-        { error: "Forbidden - Approver or Finance role required" },
-        { status: 403 }
-      );
-    }
+    const denied = requireWriteAccess(
+      session,
+      ["approver", "finance"],
+      "Forbidden - Approver or Finance role required"
+    );
+    if (denied) return denied;
+    const authSession = session!;
 
     const { id } = params;
     const body = await request.json();
@@ -50,7 +47,7 @@ export async function POST(
       .from("pr")
       .update({
         approval_status: "approved",
-        approved_by_email: session.email,
+        approved_by_email: authSession.email,
         approved_at: new Date().toISOString(),
         approval_remarks: remarks || null,
         pr_status: "approved",
@@ -66,34 +63,17 @@ export async function POST(
       );
     }
 
-    // Send notifications
     try {
-      // Notify PR creator (Growth user)
-      await createNotification(
-        pr.created_by_email,
+      await notifyStandardUsers(
+        { creatorEmail: pr.created_by_email, roles: ["admin", "finance"] },
         "pr_approved",
         {
           pr_id: id,
           pr_number: pr.pr_number,
-          approved_by: session.email,
-          message: `Your PR ${pr.pr_number || id.slice(0, 8)} has been approved`,
+          approved_by: authSession.email,
+          message: `PR ${pr.pr_number || id.slice(0, 8)} has been approved`,
         }
       );
-
-      // Notify Finance team
-      const financeEmails = await getUsersByRole("finance");
-      for (const email of financeEmails) {
-        await createNotification(
-          email,
-          "pr_approved",
-          {
-            pr_id: id,
-            pr_number: pr.pr_number,
-            approved_by: session.email,
-            message: `PR ${pr.pr_number || id.slice(0, 8)} approved - awaiting payment verification`,
-          }
-        );
-      }
     } catch (notifError) {
       console.error("Error sending notifications:", notifError);
     }

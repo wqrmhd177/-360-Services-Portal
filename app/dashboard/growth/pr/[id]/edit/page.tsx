@@ -17,6 +17,7 @@ export default function EditPRPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prNumber, setPrNumber] = useState<string | null>(null);
+  const [fromQrId, setFromQrId] = useState<string | null>(null);
 
   const [products, setProducts] = useState<PrProduct[]>([]);
   const [sellerChannelName, setSellerChannelName] = useState("");
@@ -43,6 +44,7 @@ export default function EditPRPage() {
           return;
         }
         setPrNumber(pr.pr_number ?? null);
+        setFromQrId(pr.from_qr_id ?? null);
         setSellerChannelName(pr.seller_channel_name || pr.reseller_code || "");
         setSellerUserId(pr.seller_user_id || pr.reseller_code || "");
         setSellerServiceType(pr.seller_service_type || "Zambeel 360");
@@ -257,7 +259,12 @@ export default function EditPRPage() {
 
             <div>
               <h3 className="text-base font-semibold text-gray-900 mb-3 border-b pb-2">Product Information</h3>
-              <MultiProductForm products={products} onChange={setProducts} disabled={saving} />
+              <MultiProductForm
+                products={products}
+                onChange={setProducts}
+                disabled={saving}
+                lockedFields={fromQrId ? ["quantity"] : []}
+              />
             </div>
 
             <div>
