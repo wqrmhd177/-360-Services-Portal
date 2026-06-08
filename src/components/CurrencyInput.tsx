@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 interface CurrencyInputProps {
   value: number | string;
@@ -13,6 +13,13 @@ interface CurrencyInputProps {
   className?: string;
 }
 
+function formatDisplayValue(val: number | string): string {
+  if (!val || val === 0) return "";
+  const numVal = typeof val === "string" ? parseFloat(val) : val;
+  if (Number.isNaN(numVal) || numVal === 0) return "";
+  return numVal.toFixed(2);
+}
+
 export default function CurrencyInput({
   value,
   onChange,
@@ -20,19 +27,47 @@ export default function CurrencyInput({
   label,
   required = false,
   disabled = false,
-  placeholder = "0.00",
+  placeholder = "",
   className = "",
 }: CurrencyInputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [rawValue, setRawValue] = useState("");
+
+  useEffect(() => {
+    if (!isFocused) {
+      setRawValue("");
+    }
+  }, [value, isFocused]);
+
+  const displayValue = isFocused ? rawValue : formatDisplayValue(value);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    const numVal = typeof value === "string" ? parseFloat(value) : value;
+    if (numVal && numVal > 0) {
+      setRawValue(String(numVal));
+    } else {
+      setRawValue("");
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9.]/g, "");
-    const numValue = parseFloat(val) || 0;
+    const parts = val.split(".");
+    const sanitized =
+      parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : val;
+    setRawValue(sanitized);
+    const numValue = sanitized === "" || sanitized === "." ? 0 : parseFloat(sanitized) || 0;
     onChange(numValue);
   };
 
-  const formatValue = (val: number | string): string => {
-    if (!val || val === 0) return "";
-    const numVal = typeof val === "string" ? parseFloat(val) : val;
-    return numVal.toFixed(2);
+  const handleBlur = () => {
+    setIsFocused(false);
+    setRawValue("");
+    const numVal = typeof value === "string" ? parseFloat(value) : value;
+    if (Number.isNaN(numVal) || numVal <= 0) {
+      onChange(0);
+    }
   };
 
   return (
@@ -43,7 +78,6 @@ export default function CurrencyInput({
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
-      {/* Same visual style as Total Amount: currency left, value right so digits are not behind currency */}
       <div className="flex border border-gray-300 rounded-md shadow-sm bg-white focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500">
         <span className="pl-3 py-2 text-gray-700 font-medium sm:text-sm flex items-center">
           {currency}
@@ -51,8 +85,10 @@ export default function CurrencyInput({
         <input
           type="text"
           inputMode="decimal"
-          value={formatValue(value)}
+          value={displayValue}
           onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           disabled={disabled}
           required={required}
           placeholder={placeholder}

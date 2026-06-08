@@ -53,9 +53,10 @@ function formatTime(dateString: string | null | undefined): string {
 interface QrDetailModalProps {
   qrId: string;
   onClose: () => void;
+  apiPath?: string;
 }
 
-export default function QrDetailModal({ qrId, onClose }: QrDetailModalProps) {
+export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalProps) {
   const [qr, setQr] = useState<Qr | null>(null);
   const [loading, setLoading] = useState(true);
   const [creatorName, setCreatorName] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function QrDetailModal({ qrId, onClose }: QrDetailModalProps) {
 
   async function loadQr() {
     try {
-      const res = await fetch(`/api/growth/qr/${qrId}`);
+      const res = await fetch(apiPath ?? `/api/growth/qr/${qrId}`);
       if (res.ok) {
         const data = await res.json();
         setQr(data);
@@ -148,9 +149,9 @@ export default function QrDetailModal({ qrId, onClose }: QrDetailModalProps) {
         )}
 
         <div className="space-y-4 text-xs">
-          {/* Customer Information */}
+          {/* Seller Information */}
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <h4 className="text-xs font-semibold text-gray-900 mb-2 uppercase">Customer Information</h4>
+            <h4 className="text-xs font-semibold text-gray-900 mb-2 uppercase">Seller Information</h4>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <span className="text-gray-500">Code:</span>

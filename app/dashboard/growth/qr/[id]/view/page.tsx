@@ -153,18 +153,18 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
 
       {/* Customer Information */}
       <div className="card">
-        <h3 className="mb-4 text-sm font-semibold text-gray-900">Customer Information</h3>
+        <h3 className="mb-4 text-sm font-semibold text-gray-900">Seller Information</h3>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-500">Customer Name / Code</label>
             <div className="text-sm font-medium text-gray-900">{qr.reseller_code}</div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">Customer Contact No.</label>
+            <label className="text-xs font-medium text-gray-500">Seller Contact No.</label>
             <div className="text-sm font-medium text-gray-900">{qr.reseller_contact_no || "-"}</div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">Customer Country</label>
+            <label className="text-xs font-medium text-gray-500">Seller Country</label>
             <div className="text-sm font-medium text-gray-900">{qr.reseller_country || "-"}</div>
           </div>
           <div className="space-y-1">

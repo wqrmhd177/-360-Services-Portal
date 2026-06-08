@@ -7,6 +7,7 @@ import { TOP_COUNTRIES } from "@/lib/countries";
 import { isZambeelLikeService, isLogisticsService, isSourcingService } from "@/lib/serviceTypes";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SuccessModal from "@/components/SuccessModal";
+import CountrySelectInput from "@/components/CountrySelectInput";
 
 /** Per-country quantity, target price, and optional remarks. Currency is explicitly selected (AED/SAR/PKR). */
 export type CountryDetail = {
@@ -130,8 +131,26 @@ export default function GrowthQrFormPage() {
       setPurchaseDetails([baseDetail]);
       setCountrySearch([""]);
       setShowDropdown([false]);
+      imageFilesRef.current = new Map();
     }
   }, [serviceNeeded]);
+
+  function shiftImageFilesRefOnPrepend() {
+    const newMap = new Map<number, File[]>();
+    imageFilesRef.current.forEach((files, key) => {
+      newMap.set(key + 1, files);
+    });
+    imageFilesRef.current = newMap;
+  }
+
+  function shiftImageFilesRefOnRemove(removedIndex: number) {
+    const newMap = new Map<number, File[]>();
+    imageFilesRef.current.forEach((files, key) => {
+      if (key < removedIndex) newMap.set(key, files);
+      else if (key > removedIndex) newMap.set(key - 1, files);
+    });
+    imageFilesRef.current = newMap;
+  }
 
   function addPurchaseDetail() {
     const baseDetail: PurchaseDetail = {
@@ -163,13 +182,15 @@ export default function GrowthQrFormPage() {
       baseDetail.cartonHeight = 0;
     }
 
-    setPurchaseDetails([...purchaseDetails, baseDetail]);
-    setCountrySearch([...countrySearch, ""]);
-    setShowDropdown([...showDropdown, false]);
+    shiftImageFilesRefOnPrepend();
+    setPurchaseDetails([baseDetail, ...purchaseDetails]);
+    setCountrySearch(["", ...countrySearch]);
+    setShowDropdown([false, ...showDropdown]);
   }
 
   function removePurchaseDetail(index: number) {
     if (purchaseDetails.length > 1) {
+      shiftImageFilesRefOnRemove(index);
       setPurchaseDetails(purchaseDetails.filter((_, i) => i !== index));
       setCountrySearch(countrySearch.filter((_, i) => i !== index));
       setShowDropdown(showDropdown.filter((_, i) => i !== index));
@@ -599,7 +620,7 @@ export default function GrowthQrFormPage() {
 
       <form onSubmit={handleSubmit} className="card space-y-6">
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-900">Customer Information</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Seller Information</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-700">
@@ -616,7 +637,7 @@ export default function GrowthQrFormPage() {
             </div>
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-700">
-                Customer Contact No. <span className="text-red-400">*</span>
+                Seller Contact No. <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
@@ -629,7 +650,7 @@ export default function GrowthQrFormPage() {
             </div>
             <div className="relative space-y-1">
               <label className="block text-xs font-medium text-gray-700">
-                Customer Country <span className="text-red-400">*</span>
+                Seller Country <span className="text-red-400">*</span>
               </label>
               <div className="relative">
                 <input
@@ -932,12 +953,12 @@ export default function GrowthQrFormPage() {
                                               type="number"
                                               step="0.01"
                                               min={0}
-                                              value={row.targetPrice ?? ""}
+                                              value={row.targetPrice || ""}
                                               onChange={(e) =>
                                                 updateCountryDetail(index, row.country, "targetPrice", Number(e.target.value) || 0)
                                               }
                                               className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
-                                              placeholder={`0 ${currency}`}
+                                              placeholder="Enter price"
                                               title={currency}
                                             />
                                           </td>
@@ -1037,36 +1058,20 @@ export default function GrowthQrFormPage() {
                         />
                       </div>
                       <div className="grid gap-2 text-xs md:grid-cols-2">
-                        <div className="space-y-1">
-                          <label className="block text-xs font-medium text-gray-700">
-                            Ship From <span className="text-red-400">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={detail.shipFrom || ""}
-                            onChange={(e) =>
-                              updatePurchaseDetail(index, "shipFrom", e.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                            placeholder="Enter origin address"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-xs font-medium text-gray-700">
-                            Ship To <span className="text-red-400">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={detail.shipTo || ""}
-                            onChange={(e) =>
-                              updatePurchaseDetail(index, "shipTo", e.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                            placeholder="Enter destination address"
-                          />
-                        </div>
+                        <CountrySelectInput
+                          label="Ship From"
+                          required
+                          value={detail.shipFrom || ""}
+                          onChange={(country) => updatePurchaseDetail(index, "shipFrom", country)}
+                          placeholder="Select origin country"
+                        />
+                        <CountrySelectInput
+                          label="Ship To"
+                          required
+                          value={detail.shipTo || ""}
+                          onChange={(country) => updatePurchaseDetail(index, "shipTo", country)}
+                          placeholder="Select destination country"
+                        />
                         <div className="space-y-1">
                           <label className="block text-xs font-medium text-gray-700">
                             Shipping <span className="text-red-400">*</span>
