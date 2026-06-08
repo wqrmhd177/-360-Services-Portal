@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import {
+  buildPoProcurementMatchLines,
   extractProcurementImageGroups,
   type ProcurementResponseMap,
 } from "@/lib/procurementImages";
@@ -39,7 +40,7 @@ export async function GET(
     const supabase = createSupabaseClient();
     const { data: po, error: poError } = await supabase
       .from("po")
-      .select("id, pr_id, created_by_email")
+      .select("id, pr_id, created_by_email, products")
       .eq("id", params.id)
       .maybeSingle();
 
@@ -47,11 +48,15 @@ export async function GET(
       return NextResponse.json({ error: "PO not found" }, { status: 404 });
     }
 
-    let pr: { created_by_email?: string; from_qr_id?: string | null } | null = null;
+    let pr: {
+      created_by_email?: string;
+      from_qr_id?: string | null;
+      products?: unknown;
+    } | null = null;
     if (po.pr_id) {
       const { data: prRow } = await supabase
         .from("pr")
-        .select("created_by_email, from_qr_id")
+        .select("created_by_email, from_qr_id, products")
         .eq("id", po.pr_id)
         .maybeSingle();
       pr = prRow;
@@ -80,9 +85,12 @@ export async function GET(
         ? (qr.procurement_response as ProcurementResponseMap)
         : null;
 
+    const matchLines = buildPoProcurementMatchLines(po.products, pr?.products);
+
     const groups = extractProcurementImageGroups(
       qr.purchase_details as Array<{ productName?: string }> | null,
-      procurementResponse
+      procurementResponse,
+      { matchLines }
     );
 
     return NextResponse.json({
