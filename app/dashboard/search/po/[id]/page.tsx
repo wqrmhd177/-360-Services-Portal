@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import type { Po, PoStatus, PoStatusHistoryEntry } from "@/types/workflows";
+import ProcurementImagesSection from "@/components/ProcurementImagesSection";
+import PODownloadButton from "@/components/PODownloadButton";
 
 async function getPoDetails(poId: string) {
   const supabase = createSupabaseClient();
@@ -70,9 +72,12 @@ export default async function SearchPOViewPage({ params }: { params: { id: strin
             </span>
           )}
         </div>
-        <Link href="/dashboard" className="text-xs text-gray-700 font-medium hover:text-gray-900">
-          ← Back to Dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          <PODownloadButton po={po} prNumber={prNumber} />
+          <Link href="/dashboard" className="text-xs text-gray-700 font-medium hover:text-gray-900">
+            ← Back to Dashboard
+          </Link>
+        </div>
       </div>
 
       <div className="card">
@@ -218,6 +223,8 @@ export default async function SearchPOViewPage({ params }: { params: { id: strin
           )}
         </div>
       </div>
+
+      <ProcurementImagesSection poId={po.id} variant="card" />
     </div>
   );
 }

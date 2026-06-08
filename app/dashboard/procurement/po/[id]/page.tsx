@@ -8,6 +8,7 @@ import { uploadPoInvoice } from "@/lib/poUploads";
 import { PoPaymentAndInvoiceEditForm } from "@/components/PoPaymentAndInvoiceEditForm";
 import ReopenPOButton from "@/components/ReopenPOButton";
 import PODownloadButton from "@/components/PODownloadButton";
+import ProcurementImagesSection from "@/components/ProcurementImagesSection";
 
 
 async function getPoDetails(poId: string) {
@@ -350,6 +351,8 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
           </div>
         )}
       </div>
+
+      <ProcurementImagesSection poId={po.id} variant="card" />
 
       <PoPaymentAndInvoiceEditForm po={po} action={updatePoPaymentAndInvoices} />
 

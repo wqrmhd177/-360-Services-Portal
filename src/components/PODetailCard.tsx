@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { Po } from "@/types/workflows";
 import StatusBadge from "./StatusBadge";
 import StatusTimeline from "./StatusTimeline";
+import ProcurementImagesSection from "./ProcurementImagesSection";
+import PODownloadButton from "./PODownloadButton";
 
 interface PODetailCardProps {
   po: Po;
@@ -71,6 +73,16 @@ export default function PODetailCard({
             </p>
           </div>
           <div className="flex flex-col gap-2 items-end">
+            {showFullDetails && (
+              <PODownloadButton
+                po={po}
+                prNumber={
+                  po.pr?.pr_number ??
+                  (po.pr_id ? po.pr_id.slice(0, 8) : null)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20 disabled:opacity-50"
+              />
+            )}
             <StatusBadge status={po.status} type="po" />
             <StatusBadge status={po.supplier_payment_status} type="payment" />
           </div>
@@ -110,6 +122,10 @@ export default function PODetailCard({
             </div>
           </div>
         </div>
+
+        {showFullDetails && (
+          <ProcurementImagesSection poId={po.id} />
+        )}
 
         {/* Products / Line items (independent POs or when po.products is present) */}
         {showFullDetails && po.products && Array.isArray(po.products) && po.products.length > 0 && (
