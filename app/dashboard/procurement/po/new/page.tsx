@@ -4,6 +4,8 @@ import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import { uploadPoInvoice } from "@/lib/poUploads";
 import { insertPurchaseOrder } from "@/lib/poCreate";
+import { buildPoProductsFromPr } from "@/lib/poProductCosts";
+import type { ProcurementResponseMap } from "@/lib/procurementImages";
 import CreatePOForm from "./CreatePOForm";
 
 async function createPo(formData: FormData) {
@@ -38,31 +40,42 @@ async function createPo(formData: FormData) {
     }
     const { data: pr } = await supabase
       .from("pr")
-      .select("id, created_by_email, products, product_name, sku_code, quantity, rate")
+      .select("id, created_by_email, from_qr_id, products, product_name, sku_code, quantity, rate")
       .eq("id", rawPrId)
       .single();
     if (!pr) {
       redirect("/dashboard/procurement/po/new?error=invalid_pr");
     }
     prId = pr.id;
-    // Copy PR products into PO so SKUs/quantities are always visible
-    if (pr.products && Array.isArray(pr.products) && pr.products.length > 0) {
-      products = pr.products.map((p: any) => ({
-        productName: p.productName || p.product_name || "",
-        skuCode: p.skuCode || p.sku_code || undefined,
-        quantity: Number(p.quantity) || 0,
-        rate: Number(p.sellingPricePerUnit || p.landedCostPrice || p.rate) || undefined,
-        amount: Number(p.totalAmount || p.amount) || undefined,
-      }));
-    } else if (pr.product_name) {
-      products = [{
-        productName: pr.product_name,
-        skuCode: pr.sku_code || undefined,
-        quantity: Number(pr.quantity) || 0,
-        rate: Number(pr.rate) || undefined,
-        amount: Number(pr.rate) * Number(pr.quantity) || undefined,
-      }];
+
+    let qr: {
+      purchase_details?: Array<{ productName?: string }> | null;
+      procurement_response?: ProcurementResponseMap | null;
+    } | null = null;
+    if (pr.from_qr_id) {
+      const { data: qrRow } = await supabase
+        .from("qr")
+        .select("purchase_details, procurement_response")
+        .eq("id", pr.from_qr_id)
+        .maybeSingle();
+      if (qrRow) {
+        qr = {
+          purchase_details: qrRow.purchase_details as Array<{ productName?: string }> | null,
+          procurement_response: qrRow.procurement_response as ProcurementResponseMap | null,
+        };
+      }
     }
+
+    products = buildPoProductsFromPr(
+      pr.products as Parameters<typeof buildPoProductsFromPr>[0],
+      {
+        product_name: pr.product_name,
+        sku_code: pr.sku_code,
+        quantity: pr.quantity,
+        rate: pr.rate,
+      },
+      qr
+    );
   } else {
     const productsJson = formData.get("products") as string | null;
     if (!productsJson) {
@@ -75,11 +88,31 @@ async function createPo(formData: FormData) {
         quantity: number;
         rate?: number;
         amount?: number;
+        productCostPerUnit?: number;
+        product_cost?: number;
       }>;
       if (!Array.isArray(parsed) || parsed.length === 0) {
         redirect("/dashboard/procurement/po/new?error=products_required");
       }
-      products = parsed;
+      products = parsed.map((p) => {
+        const quantity = Number(p.quantity) || 0;
+        const productCostPerUnit =
+          p.productCostPerUnit != null
+            ? Number(p.productCostPerUnit)
+            : p.product_cost != null
+              ? Number(p.product_cost)
+              : undefined;
+        return {
+          productName: p.productName,
+          skuCode: p.skuCode,
+          quantity,
+          rate: p.rate != null ? Number(p.rate) : undefined,
+          amount: p.amount != null ? Number(p.amount) : undefined,
+          productCostPerUnit,
+          productCostAmount:
+            productCostPerUnit != null ? productCostPerUnit * quantity : undefined,
+        };
+      });
     } catch {
       redirect("/dashboard/procurement/po/new?error=products_required");
     }

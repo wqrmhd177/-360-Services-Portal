@@ -3,7 +3,9 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/notifications";
 import { uploadPoInvoice } from "@/lib/poUploads";
-import { insertPurchaseOrder, type PoProductLine } from "@/lib/poCreate";
+import { insertPurchaseOrder } from "@/lib/poCreate";
+import { buildPoProductsFromPr } from "@/lib/poProductCosts";
+import type { ProcurementResponseMap } from "@/lib/procurementImages";
 import { requireWriteAccess } from "@/lib/accessControl";
 
 function getInvoiceFile(formData: FormData, field: string): File | null {
@@ -70,7 +72,7 @@ export async function POST(
     const { data: prDetails, error: prFetchError } = await supabase
       .from("pr")
       .select(
-        "created_by_email, products, product_name, sku_code, quantity, rate, approval_status, finance_verification_status, po_created"
+        "created_by_email, from_qr_id, products, product_name, sku_code, quantity, rate, approval_status, finance_verification_status, po_created"
       )
       .eq("id", prId)
       .single();
@@ -100,25 +102,34 @@ export async function POST(
       );
     }
 
-    let poProducts: PoProductLine[] = [];
-    if (prDetails?.products && Array.isArray(prDetails.products) && prDetails.products.length > 0) {
-      poProducts = prDetails.products.map((p: any) => ({
-        productName: p.productName || p.product_name || "",
-        skuCode: p.skuCode || p.sku_code || undefined,
-        quantity: Number(p.quantity) || 0,
-        rate: Number(p.sellingPricePerUnit || p.landedCostPrice || p.rate) || undefined,
-        amount: Number(p.totalAmount || p.amount) || undefined,
-      }));
-    } else if (prDetails?.product_name) {
-      // Legacy single-product PR
-      poProducts = [{
-        productName: prDetails.product_name,
-        skuCode: prDetails.sku_code || undefined,
-        quantity: Number(prDetails.quantity) || 0,
-        rate: Number(prDetails.rate) || undefined,
-        amount: Number(prDetails.rate) * Number(prDetails.quantity) || undefined,
-      }];
+    let qr: {
+      purchase_details?: Array<{ productName?: string }> | null;
+      procurement_response?: ProcurementResponseMap | null;
+    } | null = null;
+    if (prDetails.from_qr_id) {
+      const { data: qrRow } = await supabase
+        .from("qr")
+        .select("purchase_details, procurement_response")
+        .eq("id", prDetails.from_qr_id)
+        .maybeSingle();
+      if (qrRow) {
+        qr = {
+          purchase_details: qrRow.purchase_details as Array<{ productName?: string }> | null,
+          procurement_response: qrRow.procurement_response as ProcurementResponseMap | null,
+        };
+      }
     }
+
+    const poProducts = buildPoProductsFromPr(
+      prDetails.products as Parameters<typeof buildPoProductsFromPr>[0],
+      {
+        product_name: prDetails.product_name,
+        sku_code: prDetails.sku_code,
+        quantity: prDetails.quantity,
+        rate: prDetails.rate,
+      },
+      qr
+    );
 
     const { data: newPo, error: poError } = await insertPurchaseOrder(supabase, {
       pr_id: prId,

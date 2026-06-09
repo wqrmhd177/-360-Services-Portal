@@ -92,9 +92,14 @@ export default function PurchaseOrdersClient({ initialPos }: PurchaseOrdersClien
         title="Purchase Orders"
         subtitle="View and manage all purchase orders with supplier and delivery partner details."
         actions={
-          <Link href="/dashboard/procurement/po/new" className="btn-primary">
-            Create New PO
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard/procurement/po/bulk" className="btn-secondary">
+              Bulk Upload CSV
+            </Link>
+            <Link href="/dashboard/procurement/po/new" className="btn-primary">
+              Create New PO
+            </Link>
+          </div>
         }
         filters={
           <StatusFilterPills options={filterOptions} activeKey={statusFilter} onChange={setStatusFilter} />

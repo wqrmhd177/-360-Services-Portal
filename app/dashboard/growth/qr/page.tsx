@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { MovementType, ShippingType } from "@/types/workflows";
 import { TOP_COUNTRIES } from "@/lib/countries";
-import { isZambeelLikeService, isLogisticsService, isSourcingService } from "@/lib/serviceTypes";
+import { isZambeelLikeService, isLogisticsService, isMovementsService, isSourcingService } from "@/lib/serviceTypes";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SuccessModal from "@/components/SuccessModal";
 import CountrySelectInput from "@/components/CountrySelectInput";
+import ServiceTypeSelect from "@/components/ServiceTypeSelect";
 
 /** Per-country quantity, target price, and optional remarks. Currency is explicitly selected (AED/SAR/PKR). */
 export type CountryDetail = {
@@ -405,7 +406,11 @@ export default function GrowthQrFormPage() {
           const hasValidCountryDetails = rows.length > 0 && rows.every((r) => r.quantity > 0);
           return !!(d.productName && hasCountry && hasValidCountryDetails);
         });
-    } else if (serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only") {
+    } else if (
+      serviceNeeded === "Sourcing & Logistics" ||
+      serviceNeeded === "Sourcing only" ||
+      isMovementsService(serviceNeeded)
+    ) {
       validDetailEntries = purchaseDetails
         .map((d, originalIndex) => ({ detail: d, originalIndex }))
         .filter(({ detail: d }) => {
@@ -736,24 +741,11 @@ export default function GrowthQrFormPage() {
               <label className="block text-xs font-medium text-gray-700">
                 Services <span className="text-red-400">*</span>
               </label>
-              <select
+              <ServiceTypeSelect
                 required
                 value={serviceNeeded}
-                onChange={(e) => setServiceNeeded(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-              >
-                <option value="">Select service</option>
-                <option value="Zambeel 360">Zambeel 360</option>
-                <option value="DS2">DS2</option>
-                <option value="DS3">DS3</option>
-                <option value="DS4">DS4</option>
-                <option value="Partner Stores">Partner Stores</option>
-                <option value="Amazon">Amazon</option>
-                <option value="Sourcing & Logistics">Sourcing & Logistics</option>
-                <option value="Sourcing only">Sourcing only</option>
-                <option value="Logistics Only">Logistics Only</option>
-                <option value="3PL & Logistics">3PL & Logistics</option>
-              </select>
+                onChange={setServiceNeeded}
+              />
             </div>
           </div>
         </div>
@@ -786,7 +778,8 @@ export default function GrowthQrFormPage() {
                   {/* Zambeel-like, Sourcing & Logistics, Sourcing only fields */}
                   {(isZambeelLikeService(serviceNeeded) ||
                     serviceNeeded === "Sourcing & Logistics" ||
-                    serviceNeeded === "Sourcing only") && (
+                    serviceNeeded === "Sourcing only" ||
+                    isMovementsService(serviceNeeded)) && (
                     <>
                       <div className="space-y-3">
                         <div className="grid gap-2 text-xs md:grid-cols-[1fr,1.5fr,auto]">

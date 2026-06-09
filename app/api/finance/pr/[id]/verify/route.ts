@@ -3,6 +3,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 export async function POST(
   _req: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
 
   const { data: pr, error: fetchError } = await supabase
     .from("pr")
-    .select("id, pr_number, product_name, products, approval_status, finance_verification_status, created_by_email")
+    .select("id, pr_number, product_name, products, approval_status, finance_verification_status, created_by_email, seller_service_type")
     .eq("id", prId)
     .single();
 
@@ -28,6 +29,13 @@ export async function POST(
 
   if (pr.approval_status !== "approved") {
     return NextResponse.json({ error: "PR must be approved before finance verification" }, { status: 400 });
+  }
+
+  if (isFinanceSkipService(pr.seller_service_type)) {
+    return NextResponse.json(
+      { error: "Finance verification is not required for this service type" },
+      { status: 400 }
+    );
   }
 
   if (pr.finance_verification_status !== "pending") {

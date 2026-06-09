@@ -7,6 +7,7 @@ import type { Pr } from "@/types/workflows";
 import Link from "next/link";
 import ImageGallery from "@/components/ImageGallery";
 import FinancePrVerifyActions from "@/components/FinancePrVerifyActions";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 async function verifyPrPayment(prId: string, email: string, formData: FormData) {
   "use server";
@@ -110,6 +111,23 @@ export default async function FinancePrVerificationPage({ params }: { params: { 
       <div className="card">
         <p className="text-sm text-gray-500">
           This PR must be approved before it can be verified for payment.
+        </p>
+        <Link href="/dashboard/finance" className="mt-4 text-xs font-medium text-gray-900 hover:text-gray-700">
+          ← Back to Finance Dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  if (isFinanceSkipService(pr.seller_service_type)) {
+    return (
+      <div className="card">
+        <p className="text-sm text-gray-700">
+          Finance payment verification is not required for service type{" "}
+          <span className="font-medium">{pr.seller_service_type}</span>.
+          {pr.finance_verification_status === "verified"
+            ? " This PR was auto-verified on approval and is ready for PO conversion."
+            : " This PR does not require manual finance verification."}
         </p>
         <Link href="/dashboard/finance" className="mt-4 text-xs font-medium text-gray-900 hover:text-gray-700">
           ← Back to Finance Dashboard

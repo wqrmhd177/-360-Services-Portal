@@ -7,6 +7,7 @@ import { Eye, X, FileText, ImageOff, CheckCircle, XCircle, BadgeCheck, Pencil, C
 import PRDetailCard from "@/components/PRDetailCard";
 import ApproverPRActions from "../../../approver/pr/[id]/ApproverPRActions";
 import ActionConfirmModal from "@/components/ActionConfirmModal";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 interface SellerPaymentsTableProps {
   prs: Pr[];
@@ -104,7 +105,8 @@ export default function SellerPaymentsTable({
   const verifiablePrs = prs.filter(
     (pr) =>
       pr.approval_status === "approved" &&
-      pr.finance_verification_status === "pending"
+      pr.finance_verification_status === "pending" &&
+      !isFinanceSkipService(pr.seller_service_type)
   );
   const actionablePrs = [...pendingPrs, ...verifiablePrs];
 

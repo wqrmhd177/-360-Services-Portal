@@ -7,6 +7,8 @@ export type PoProductLine = {
   quantity: number;
   rate?: number;
   amount?: number;
+  productCostPerUnit?: number;
+  productCostAmount?: number;
 };
 
 export type CreatePoInput = {

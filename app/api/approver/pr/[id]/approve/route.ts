@@ -3,6 +3,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 export async function POST(
   request: NextRequest,
@@ -24,7 +25,6 @@ export async function POST(
 
     const supabase = createSupabaseClient();
 
-    // Get PR to check status and get creator info
     const { data: pr, error: fetchError } = await supabase
       .from("pr")
       .select("*")
@@ -42,17 +42,29 @@ export async function POST(
       );
     }
 
-    // Approve PR
+    const serviceType = pr.seller_service_type as string | undefined;
+    const skipFinance = isFinanceSkipService(serviceType);
+    const now = new Date().toISOString();
+
+    const updatePayload: Record<string, unknown> = {
+      approval_status: "approved",
+      approved_by_email: authSession.email,
+      approved_at: now,
+      approval_remarks: remarks || null,
+      pr_status: "approved",
+      updated_at: now,
+    };
+
+    if (skipFinance) {
+      updatePayload.finance_verification_status = "verified";
+      updatePayload.finance_verified_by_email = authSession.email;
+      updatePayload.finance_verified_at = now;
+      updatePayload.finance_remarks = `Auto-verified — finance not required for ${serviceType}`;
+    }
+
     const { error: updateError } = await supabase
       .from("pr")
-      .update({
-        approval_status: "approved",
-        approved_by_email: authSession.email,
-        approved_at: new Date().toISOString(),
-        approval_remarks: remarks || null,
-        pr_status: "approved",
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", id);
 
     if (updateError) {
@@ -63,22 +75,38 @@ export async function POST(
       );
     }
 
+    const prNumber = pr.pr_number || id.slice(0, 8);
+    const productLabel =
+      pr.products?.[0]?.productName ?? pr.product_name ?? "product";
+
     try {
-      await notifyStandardUsers(
-        { creatorEmail: pr.created_by_email, roles: ["admin", "finance"] },
-        "pr_approved",
-        {
-          pr_id: id,
-          pr_number: pr.pr_number,
-          approved_by: authSession.email,
-          message: `PR ${pr.pr_number || id.slice(0, 8)} has been approved`,
-        }
-      );
+      if (skipFinance) {
+        await notifyStandardUsers(
+          { creatorEmail: pr.created_by_email, roles: ["admin", "procurement"] },
+          "pr_finance_verified",
+          {
+            pr_id: id,
+            pr_number: prNumber,
+            message: `PR ${prNumber} (${productLabel}) is approved and ready for PO conversion (${serviceType})`,
+          }
+        );
+      } else {
+        await notifyStandardUsers(
+          { creatorEmail: pr.created_by_email, roles: ["admin", "finance"] },
+          "pr_approved",
+          {
+            pr_id: id,
+            pr_number: prNumber,
+            approved_by: authSession.email,
+            message: `PR ${prNumber} has been approved`,
+          }
+        );
+      }
     } catch (notifError) {
       console.error("Error sending notifications:", notifError);
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, finance_skipped: skipFinance });
   } catch (error) {
     console.error("Error in approve PR:", error);
     return NextResponse.json(

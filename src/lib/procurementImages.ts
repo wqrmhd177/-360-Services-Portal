@@ -16,12 +16,14 @@ export type ProcurementResponseEntry = {
     countryOfPurchase?: string;
     shippingType?: string;
     movementType?: string;
+    costPerUnit?: number;
     procurementImagePaths?: string[];
   }>;
   warehouseStock?: Array<{
     sku?: string;
     warehouse?: string;
     country?: string;
+    costPerUnit?: number;
     procurementImagePaths?: string[];
   }>;
   procurementImagePaths?: string[];
