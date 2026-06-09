@@ -28,6 +28,19 @@ export type CreatePoInput = {
 };
 
 /** Insert PO using core columns first (works without migration columns). */
+export function formatPoInsertError(message: string): string {
+  if (
+    message.includes("pr_id") &&
+    (message.includes("not-null") || message.includes("null value"))
+  ) {
+    return (
+      "Bulk/independent POs require a database update. " +
+      "Run fix_bulk_po_pr_id_nullable.sql in the Supabase SQL Editor, then try again."
+    );
+  }
+  return message;
+}
+
 export async function insertPurchaseOrder(
   supabase: SupabaseClient,
   input: CreatePoInput
@@ -49,9 +62,10 @@ export async function insertPurchaseOrder(
   const result = await supabase.from("po").insert(core).select("id").single();
 
   if (result.error || !result.data) {
+    const raw = result.error?.message ?? "Failed to insert purchase order";
     return {
       data: null,
-      error: result.error?.message ?? "Failed to insert purchase order",
+      error: formatPoInsertError(raw),
     };
   }
 
