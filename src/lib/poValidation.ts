@@ -11,7 +11,7 @@ export const BULK_PO_CSV_HEADERS = [
   "sku_code",
   "quantity",
   "product_cost",
-  "selling_price",
+  "freight_cost",
 ] as const;
 
 export type BulkPoCsvRow = {
@@ -26,7 +26,7 @@ export type BulkPoCsvRow = {
   sku_code?: string;
   quantity: number;
   product_cost: number;
-  selling_price?: number;
+  freight_cost: number;
 };
 
 export type BulkPoGroup = {
@@ -56,7 +56,12 @@ export function validatePoHeaderFields(input: {
 }
 
 export function validatePoProductLine(
-  line: { productName: string; quantity: number; productCostPerUnit?: number },
+  line: {
+    productName: string;
+    quantity: number;
+    productCostPerUnit?: number;
+    freightCostPerUnit?: number;
+  },
   label = "Product"
 ): string | null {
   if (!line.productName.trim()) return `${label}: product name is required.`;
@@ -65,6 +70,9 @@ export function validatePoProductLine(
   }
   if (line.productCostPerUnit != null && Number.isNaN(line.productCostPerUnit)) {
     return `${label}: product cost must be a number.`;
+  }
+  if (line.freightCostPerUnit != null && Number.isNaN(line.freightCostPerUnit)) {
+    return `${label}: freight cost must be a number.`;
   }
   return null;
 }
@@ -117,7 +125,15 @@ export function parseBulkPoCsv(text: string): {
   }
 
   const header = table[0].map((h) => h.trim().toLowerCase());
-  const required = ["supplier_name", "supplier_location", "delivery_partner", "product_name", "quantity", "product_cost"];
+  const required = [
+    "supplier_name",
+    "supplier_location",
+    "delivery_partner",
+    "product_name",
+    "quantity",
+    "product_cost",
+    "freight_cost",
+  ];
   const missing = required.filter((col) => !header.includes(col));
   if (missing.length > 0) {
     return { rows: [], errors: [`Missing required columns: ${missing.join(", ")}`] };
@@ -137,8 +153,7 @@ export function parseBulkPoCsv(text: string): {
 
     const quantity = Number(get("quantity"));
     const productCost = Number(get("product_cost"));
-    const sellingRaw = get("selling_price");
-    const sellingPrice = sellingRaw !== "" ? Number(sellingRaw) : undefined;
+    const freightCost = Number(get("freight_cost"));
 
     const row: BulkPoCsvRow = {
       rowNumber,
@@ -152,7 +167,7 @@ export function parseBulkPoCsv(text: string): {
       sku_code: get("sku_code") || undefined,
       quantity,
       product_cost: productCost,
-      selling_price: sellingPrice,
+      freight_cost: freightCost,
     };
 
     if (!row.supplier_name) errors.push(`Row ${rowNumber}: supplier_name is required.`);
@@ -165,8 +180,8 @@ export function parseBulkPoCsv(text: string): {
     if (!Number.isFinite(productCost) || productCost < 0) {
       errors.push(`Row ${rowNumber}: product_cost is required and must be a non-negative number.`);
     }
-    if (sellingRaw !== "" && !Number.isFinite(sellingPrice)) {
-      errors.push(`Row ${rowNumber}: selling_price must be a number when provided.`);
+    if (!Number.isFinite(freightCost) || freightCost < 0) {
+      errors.push(`Row ${rowNumber}: freight_cost is required and must be a non-negative number.`);
     }
 
     rows.push(row);
@@ -208,15 +223,15 @@ export function groupBulkPoRows(rows: BulkPoCsvRow[]): BulkPoGroup[] {
 
     const quantity = row.quantity;
     const productCostPerUnit = row.product_cost;
-    const rate = row.selling_price;
+    const freightCostPerUnit = row.freight_cost;
     group.products.push({
       productName: row.product_name.trim(),
       skuCode: row.sku_code?.trim() || undefined,
       quantity,
       productCostPerUnit,
       productCostAmount: productCostPerUnit * quantity,
-      rate,
-      amount: rate != null ? rate * quantity : undefined,
+      freightCostPerUnit,
+      freightCostAmount: freightCostPerUnit * quantity,
     });
   }
 
@@ -236,7 +251,7 @@ export function bulkPoCsvTemplate(): string {
     "SKU-A",
     "10",
     "25.50",
-    "35.00",
+    "4.00",
   ].join(",");
   return `${header}\n${example}\n`;
 }

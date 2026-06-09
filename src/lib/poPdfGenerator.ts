@@ -1,5 +1,5 @@
 import type { jsPDF } from "jspdf";
-import type { Po } from "@/types/workflows";
+import type { Po, PoProduct } from "@/types/workflows";
 import type { ProcurementImageGroup } from "@/lib/procurementImages";
 import { appendProcurementImagesToPdf } from "@/lib/pdfImageUtils";
 
@@ -23,24 +23,31 @@ function getCurrency(po: Po): string {
   );
 }
 
-function getProductTotal(
-  p: {
-    quantity: number;
-    amount?: number;
-    rate?: number;
-    productCostPerUnit?: number;
-    productCostAmount?: number;
-  },
-  variant: PoPdfVariant
-): number {
-  if (variant === "supplier") {
-    if (p.productCostAmount != null) return Number(p.productCostAmount);
-    if (p.productCostPerUnit != null) return Number(p.productCostPerUnit) * p.quantity;
-    return 0;
-  }
+function formatMoney(currency: string, value: number | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "-";
+  return `${currency} ${Number(value).toFixed(2)}`;
+}
+
+function getInternalLineTotal(p: PoProduct): number {
   if (p.amount != null) return Number(p.amount);
   if (p.rate != null) return Number(p.rate) * p.quantity;
   return 0;
+}
+
+function getSupplierLineTotal(p: PoProduct): number {
+  const productTotal =
+    p.productCostAmount != null
+      ? Number(p.productCostAmount)
+      : p.productCostPerUnit != null
+        ? Number(p.productCostPerUnit) * p.quantity
+        : 0;
+  const freightTotal =
+    p.freightCostAmount != null
+      ? Number(p.freightCostAmount)
+      : p.freightCostPerUnit != null
+        ? Number(p.freightCostPerUnit) * p.quantity
+        : 0;
+  return productTotal + freightTotal;
 }
 
 export async function generatePoPdf(
@@ -136,39 +143,68 @@ export async function generatePoPdf(
 
   const products = po.products && po.products.length > 0 ? po.products : [];
   const currency = getCurrency(po);
-  const rateHeader = isInternal ? "Selling Price" : "Product Cost";
 
-  const tableRows: (string | number)[][] = products.map((p, i) => {
-    const pCurrency = (p as { currency?: string }).currency || currency;
-    const unitValue = isInternal ? p.rate : p.productCostPerUnit;
-    const lineTotal = getProductTotal(p, variant);
-    return [
-      i + 1,
-      p.productName || "-",
-      p.skuCode || "-",
-      p.quantity,
-      unitValue != null ? `${pCurrency} ${Number(unitValue).toFixed(2)}` : "-",
-      lineTotal > 0 ? `${pCurrency} ${lineTotal.toFixed(2)}` : "-",
-    ];
-  });
+  let tableRows: (string | number)[][];
+  let tableHead: string[][];
+
+  if (isInternal) {
+    tableHead = [["#", "Product Name", "SKU Code", "Qty", "Selling Price", "Total"]];
+    tableRows = products.map((p, i) => {
+      const pCurrency = (p as { currency?: string }).currency || currency;
+      const lineTotal = getInternalLineTotal(p);
+      return [
+        i + 1,
+        p.productName || "-",
+        p.skuCode || "-",
+        p.quantity,
+        formatMoney(pCurrency, p.rate),
+        lineTotal > 0 ? formatMoney(pCurrency, lineTotal) : "-",
+      ];
+    });
+  } else {
+    tableHead = [["#", "Product Name", "SKU Code", "Qty", "Product Cost", "Freight Cost", "Total"]];
+    tableRows = products.map((p, i) => {
+      const pCurrency = (p as { currency?: string }).currency || currency;
+      const lineTotal = getSupplierLineTotal(p);
+      return [
+        i + 1,
+        p.productName || "-",
+        p.skuCode || "-",
+        p.quantity,
+        formatMoney(pCurrency, p.productCostPerUnit),
+        formatMoney(pCurrency, p.freightCostPerUnit),
+        lineTotal > 0 ? formatMoney(pCurrency, lineTotal) : "-",
+      ];
+    });
+  }
 
   if (tableRows.length === 0) {
-    tableRows.push([1, "See linked PR for product details", "-", "-", "-", "-"]);
+    tableRows = isInternal
+      ? [[1, "See linked PR for product details", "-", "-", "-", "-"]]
+      : [[1, "See linked PR for product details", "-", "-", "-", "-", "-"]];
   }
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "Product Name", "SKU Code", "Qty", rateHeader, "Total"]],
+    head: tableHead,
     body: tableRows,
     theme: "striped",
-    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold", fontSize: 9 },
-    bodyStyles: { fontSize: 8 },
-    columnStyles: {
-      0: { cellWidth: 8 },
-      3: { halign: "center" },
-      4: { halign: "right" },
-      5: { halign: "right" },
-    },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold", fontSize: 8 },
+    bodyStyles: { fontSize: 7 },
+    columnStyles: isInternal
+      ? {
+          0: { cellWidth: 8 },
+          3: { halign: "center" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+        }
+      : {
+          0: { cellWidth: 8 },
+          3: { halign: "center" },
+          4: { halign: "right" },
+          5: { halign: "right" },
+          6: { halign: "right" },
+        },
     margin: { left: margin, right: margin },
   });
 
@@ -176,7 +212,10 @@ export async function generatePoPdf(
   let contentEndY = finalY;
 
   if (products.length > 0) {
-    const total = products.reduce((s, p) => s + getProductTotal(p, variant), 0);
+    const total = products.reduce(
+      (s, p) => s + (isInternal ? getInternalLineTotal(p) : getSupplierLineTotal(p)),
+      0
+    );
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.text(`Total: ${currency} ${total.toFixed(2)}`, pageWidth - margin, finalY + 7, {

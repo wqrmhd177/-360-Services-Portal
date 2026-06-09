@@ -22,6 +22,11 @@ type PrProductLine = {
   movementType?: string;
 };
 
+export type ResolvedProcurementCosts = {
+  productCostPerUnit?: number;
+  freightCostPerUnit?: number;
+};
+
 function norm(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
@@ -46,6 +51,7 @@ function comboMatchesLine(
     shippingType?: string;
     movementType?: string;
     costPerUnit?: number;
+    freightCostPerUnit?: number;
   },
   productName: string
 ): boolean {
@@ -61,12 +67,17 @@ function comboMatchesLine(
   return true;
 }
 
-export function resolveProductCostPerUnit(
+function toNumber(value: unknown): number | undefined {
+  if (value == null || Number.isNaN(Number(value))) return undefined;
+  return Number(value);
+}
+
+export function resolveProcurementCosts(
   line: PoProcurementMatchLine,
   purchaseDetails: Array<{ productName?: string }> | null | undefined,
   procurementResponse: ProcurementResponseMap | null | undefined
-): number | undefined {
-  if (!purchaseDetails?.length || !procurementResponse) return undefined;
+): ResolvedProcurementCosts {
+  if (!purchaseDetails?.length || !procurementResponse) return {};
 
   for (let index = 0; index < purchaseDetails.length; index++) {
     const productName = purchaseDetails[index]?.productName || `Product ${index + 1}`;
@@ -78,8 +89,10 @@ export function resolveProductCostPerUnit(
     if (response.combinations?.length) {
       for (const combo of response.combinations) {
         if (comboMatchesLine(line, combo, productName)) {
-          const cost = combo.costPerUnit;
-          if (cost != null && !Number.isNaN(Number(cost))) return Number(cost);
+          return {
+            productCostPerUnit: toNumber(combo.costPerUnit),
+            freightCostPerUnit: toNumber(combo.freightCostPerUnit),
+          };
         }
       }
     }
@@ -87,19 +100,36 @@ export function resolveProductCostPerUnit(
     if (response.warehouseStock?.length && line.skuCode) {
       for (const row of response.warehouseStock) {
         if (norm(row.sku ?? row.warehouse) === norm(line.skuCode)) {
-          const cost = row.costPerUnit;
-          if (cost != null && !Number.isNaN(Number(cost))) return Number(cost);
+          return {
+            productCostPerUnit: toNumber(row.costPerUnit),
+            freightCostPerUnit: undefined,
+          };
         }
       }
     }
 
-    const legacyCost = (response as { costPerUnit?: number }).costPerUnit;
-    if (legacyCost != null && !Number.isNaN(Number(legacyCost))) {
-      return Number(legacyCost);
+    const legacy = response as {
+      costPerUnit?: number;
+      freightCostPerUnit?: number;
+    };
+    if (legacy.costPerUnit != null || legacy.freightCostPerUnit != null) {
+      return {
+        productCostPerUnit: toNumber(legacy.costPerUnit),
+        freightCostPerUnit: toNumber(legacy.freightCostPerUnit),
+      };
     }
   }
 
-  return undefined;
+  return {};
+}
+
+/** @deprecated Use resolveProcurementCosts */
+export function resolveProductCostPerUnit(
+  line: PoProcurementMatchLine,
+  purchaseDetails: Array<{ productName?: string }> | null | undefined,
+  procurementResponse: ProcurementResponseMap | null | undefined
+): number | undefined {
+  return resolveProcurementCosts(line, purchaseDetails, procurementResponse).productCostPerUnit;
 }
 
 export function buildPoProductsFromPr(
@@ -139,9 +169,7 @@ export function buildPoProductsFromPr(
 
   return lines.map((p, idx) => {
     const quantity = Number(p.quantity) || 0;
-    const sellingRate =
-      Number(p.sellingPricePerUnit ?? p.rate) ||
-      undefined;
+    const sellingRate = Number(p.sellingPricePerUnit ?? p.rate) || undefined;
     const amount =
       Number(p.totalAmount ?? p.amount) ||
       (sellingRate != null ? sellingRate * quantity : undefined);
@@ -155,12 +183,11 @@ export function buildPoProductsFromPr(
       movementType: p.movementType,
     };
 
+    const resolved = resolveProcurementCosts(matchLine, purchaseDetails, procurementResponse);
     const productCostPerUnit =
-      resolveProductCostPerUnit(matchLine, purchaseDetails, procurementResponse) ??
+      resolved.productCostPerUnit ??
       (p.landedCostPrice != null ? Number(p.landedCostPrice) : undefined);
-
-    const productCostAmount =
-      productCostPerUnit != null ? productCostPerUnit * quantity : undefined;
+    const freightCostPerUnit = resolved.freightCostPerUnit;
 
     return {
       productName: p.productName || p.product_name || "",
@@ -169,7 +196,11 @@ export function buildPoProductsFromPr(
       rate: sellingRate,
       amount,
       productCostPerUnit,
-      productCostAmount,
+      productCostAmount:
+        productCostPerUnit != null ? productCostPerUnit * quantity : undefined,
+      freightCostPerUnit,
+      freightCostAmount:
+        freightCostPerUnit != null ? freightCostPerUnit * quantity : undefined,
     };
   });
 }

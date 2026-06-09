@@ -17,6 +17,7 @@ export type ProcurementResponseEntry = {
     shippingType?: string;
     movementType?: string;
     costPerUnit?: number;
+    freightCostPerUnit?: number;
     procurementImagePaths?: string[];
   }>;
   warehouseStock?: Array<{

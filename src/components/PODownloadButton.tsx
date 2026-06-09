@@ -42,6 +42,21 @@ export default function PODownloadButton({
 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+      let poForPdf = po;
+      if (variant === "supplier") {
+        try {
+          const costRes = await fetch(`/api/po/${po.id}/supplier-costs`);
+          if (costRes.ok) {
+            const costData = await costRes.json();
+            if (costData.products?.length) {
+              poForPdf = { ...po, products: costData.products };
+            }
+          }
+        } catch {
+          // continue with stored products
+        }
+      }
+
       let procurementGroups: import("@/lib/procurementImages").ProcurementImageGroup[] = [];
       let qrNumber: string | null = null;
       try {
@@ -55,7 +70,7 @@ export default function PODownloadButton({
         // continue without images
       }
 
-      await generatePoPdf(doc, autoTable, po, {
+      await generatePoPdf(doc, autoTable, poForPdf, {
         variant,
         prNumber,
         procurementGroups,

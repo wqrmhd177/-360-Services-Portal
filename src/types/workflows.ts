@@ -181,6 +181,9 @@ export interface PoProduct {
   /** Procurement product cost per unit (excludes freight). Used on Supplier PO PDF. */
   productCostPerUnit?: number;
   productCostAmount?: number;
+  /** Freight cost per unit. Used on Supplier PO PDF. */
+  freightCostPerUnit?: number;
+  freightCostAmount?: number;
 }
 
 export interface Po {

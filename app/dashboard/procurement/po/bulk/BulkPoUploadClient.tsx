@@ -152,9 +152,9 @@ export default function BulkPoUploadPage() {
                     {group.products.map((p, i) => (
                       <li key={`${group.groupKey}-${i}`}>
                         {p.productName}
-                        {p.skuCode ? ` (${p.skuCode})` : ""} — qty {p.quantity}, cost{" "}
-                        {p.productCostPerUnit?.toFixed(2)}
-                        {p.rate != null ? `, sell ${p.rate.toFixed(2)}` : ""}
+                        {p.skuCode ? ` (${p.skuCode})` : ""} — qty {p.quantity}, product cost{" "}
+                        {p.productCostPerUnit?.toFixed(2)}, freight{" "}
+                        {p.freightCostPerUnit?.toFixed(2)}
                       </li>
                     ))}
                   </ul>

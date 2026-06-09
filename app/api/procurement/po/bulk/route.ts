@@ -58,6 +58,7 @@ export async function POST(request: Request) {
             productName: group.products[i].productName,
             quantity: group.products[i].quantity,
             productCostPerUnit: group.products[i].productCostPerUnit,
+            freightCostPerUnit: group.products[i].freightCostPerUnit,
           },
           `Line ${i + 1}`
         );
