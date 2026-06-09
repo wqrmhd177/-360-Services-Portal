@@ -194,6 +194,59 @@ export function bulkPoGroupKey(row: Pick<BulkPoCsvRow, "supplier_name" | "suppli
   return `${norm(row.supplier_name)}|${norm(row.supplier_location)}|${norm(row.delivery_partner)}`;
 }
 
+export type BulkPoGroupingMode = "grouped" | "split" | "single";
+
+export function rowToProductLine(row: BulkPoCsvRow) {
+  const quantity = row.quantity;
+  const productCostPerUnit = row.product_cost;
+  const freightCostPerUnit = row.freight_cost;
+  return {
+    productName: row.product_name.trim(),
+    skuCode: row.sku_code?.trim() || undefined,
+    quantity,
+    productCostPerUnit,
+    productCostAmount: productCostPerUnit * quantity,
+    freightCostPerUnit,
+    freightCostAmount: freightCostPerUnit * quantity,
+  };
+}
+
+export function groupBulkPoRowsByMode(
+  rows: BulkPoCsvRow[],
+  mode: BulkPoGroupingMode
+): BulkPoGroup[] {
+  if (mode === "split") {
+    return rows.map((row, index) => ({
+      groupKey: `row-${row.rowNumber ?? index + 1}`,
+      supplier_name: row.supplier_name.trim(),
+      supplier_location: row.supplier_location.trim(),
+      delivery_partner: row.delivery_partner.trim(),
+      delivery_partner_tracking_id: row.delivery_partner_tracking_id?.trim() ?? "",
+      po_type: row.po_type.trim() || "internal",
+      remarks: row.remarks?.trim() || null,
+      products: [rowToProductLine(row)],
+    }));
+  }
+
+  if (mode === "single") {
+    const first = rows[0];
+    return [
+      {
+        groupKey: "single-po",
+        supplier_name: first.supplier_name.trim(),
+        supplier_location: first.supplier_location.trim(),
+        delivery_partner: first.delivery_partner.trim(),
+        delivery_partner_tracking_id: first.delivery_partner_tracking_id?.trim() ?? "",
+        po_type: first.po_type.trim() || "internal",
+        remarks: first.remarks?.trim() || null,
+        products: rows.map(rowToProductLine),
+      },
+    ];
+  }
+
+  return groupBulkPoRows(rows);
+}
+
 export function groupBulkPoRows(rows: BulkPoCsvRow[]): BulkPoGroup[] {
   const map = new Map<string, BulkPoGroup>();
 
@@ -221,18 +274,7 @@ export function groupBulkPoRows(rows: BulkPoCsvRow[]): BulkPoGroup[] {
       group.remarks = row.remarks.trim();
     }
 
-    const quantity = row.quantity;
-    const productCostPerUnit = row.product_cost;
-    const freightCostPerUnit = row.freight_cost;
-    group.products.push({
-      productName: row.product_name.trim(),
-      skuCode: row.sku_code?.trim() || undefined,
-      quantity,
-      productCostPerUnit,
-      productCostAmount: productCostPerUnit * quantity,
-      freightCostPerUnit,
-      freightCostAmount: freightCostPerUnit * quantity,
-    });
+    group.products.push(rowToProductLine(row));
   }
 
   return Array.from(map.values());

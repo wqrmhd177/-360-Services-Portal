@@ -5,11 +5,61 @@ import { createNotification, getUsersByRole, notifyMultipleUsers } from "@/lib/n
 import { insertPurchaseOrder } from "@/lib/poCreate";
 import { requireWriteAccess } from "@/lib/accessControl";
 import {
-  groupBulkPoRows,
+  groupBulkPoRowsByMode,
   parseBulkPoCsv,
   validatePoHeaderFields,
   validatePoProductLine,
+  type BulkPoGroup,
+  type BulkPoGroupingMode,
 } from "@/lib/poValidation";
+
+async function createGroupsFromRequest(request: Request): Promise<{
+  groups: BulkPoGroup[];
+  error: string | null;
+}> {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = await request.json();
+    const groups = body.groups as BulkPoGroup[] | undefined;
+    if (!Array.isArray(groups) || groups.length === 0) {
+      return { groups: [], error: "At least one PO group is required." };
+    }
+    return { groups, error: null };
+  }
+
+  const formData = await request.formData();
+  const groupsJson = formData.get("groups");
+  if (typeof groupsJson === "string" && groupsJson.trim()) {
+    try {
+      const groups = JSON.parse(groupsJson) as BulkPoGroup[];
+      if (!Array.isArray(groups) || groups.length === 0) {
+        return { groups: [], error: "At least one PO group is required." };
+      }
+      return { groups, error: null };
+    } catch {
+      return { groups: [], error: "Invalid groups payload." };
+    }
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { groups: [], error: "CSV file or groups payload is required." };
+  }
+
+  const mode = (String(formData.get("grouping_mode") ?? "grouped") ||
+    "grouped") as BulkPoGroupingMode;
+  const text = await file.text();
+  const { rows, errors: parseErrors } = parseBulkPoCsv(text);
+  if (parseErrors.length > 0) {
+    return { groups: [], error: parseErrors.join(" ") };
+  }
+  if (rows.length === 0) {
+    return { groups: [], error: "No data rows found in CSV." };
+  }
+
+  return { groups: groupBulkPoRowsByMode(rows, mode), error: null };
+}
 
 export async function POST(request: Request) {
   const session = getPortalSession();
@@ -22,24 +72,12 @@ export async function POST(request: Request) {
   const authSession = session!;
 
   try {
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ error: "CSV file is required." }, { status: 400 });
+    const { groups, error: inputError } = await createGroupsFromRequest(request);
+    if (inputError) {
+      return NextResponse.json({ error: inputError }, { status: 400 });
     }
 
-    const text = await file.text();
-    const { rows, errors: parseErrors } = parseBulkPoCsv(text);
-    if (parseErrors.length > 0) {
-      return NextResponse.json({ error: parseErrors.join(" ") }, { status: 400 });
-    }
-    if (rows.length === 0) {
-      return NextResponse.json({ error: "No data rows found in CSV." }, { status: 400 });
-    }
-
-    const groups = groupBulkPoRows(rows);
     const supabase = createSupabaseClient();
-
     const created: Array<{ po_id: string; po_number: string | null | undefined; lineCount: number }> =
       [];
     const failed: Array<{ groupKey: string; error: string }> = [];

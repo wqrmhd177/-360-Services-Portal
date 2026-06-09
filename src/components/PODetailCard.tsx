@@ -6,6 +6,7 @@ import StatusBadge from "./StatusBadge";
 import StatusTimeline from "./StatusTimeline";
 import ProcurementImagesSection from "./ProcurementImagesSection";
 import PODownloadButton from "./PODownloadButton";
+import PoProductsTable from "./PoProductsTable";
 
 interface PODetailCardProps {
   po: Po;
@@ -134,30 +135,10 @@ export default function PODetailCard({
               Products
             </h3>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-left text-gray-700">
-                <thead className="border-b border-gray-200 text-gray-600">
-                  <tr>
-                    <th className="py-2 pr-4 font-medium">Product</th>
-                    <th className="py-2 pr-4 font-medium">SKU</th>
-                    <th className="py-2 pr-4 font-medium">Qty</th>
-                    <th className="py-2 pr-4 font-medium">Rate</th>
-                    <th className="py-2 pr-4 font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {po.products.map((item: { productName?: string; product_name?: string; skuCode?: string; quantity?: number; rate?: number; amount?: number }, idx: number) => (
-                    <tr key={idx} className="border-b border-gray-100 last:border-0">
-                      <td className="py-2 pr-4 font-medium text-gray-900">
-                        {item.productName ?? item.product_name ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4">{item.skuCode ?? "—"}</td>
-                      <td className="py-2 pr-4">{item.quantity ?? "—"}</td>
-                      <td className="py-2 pr-4">{item.rate != null ? Number(item.rate) : "—"}</td>
-                      <td className="py-2 pr-4">{item.amount != null ? Number(item.amount) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <PoProductsTable
+                products={po.products}
+                isIndependent={!po.pr_id}
+              />
             </div>
           </div>
         )}

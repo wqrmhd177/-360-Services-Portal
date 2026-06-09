@@ -9,6 +9,8 @@ import { PoPaymentAndInvoiceEditForm } from "@/components/PoPaymentAndInvoiceEdi
 import ReopenPOButton from "@/components/ReopenPOButton";
 import PODownloadButton from "@/components/PODownloadButton";
 import ProcurementImagesSection from "@/components/ProcurementImagesSection";
+import ProcurementPoEditForm from "@/components/ProcurementPoEditForm";
+import PoProductsTable from "@/components/PoProductsTable";
 
 
 async function getPoDetails(poId: string) {
@@ -156,6 +158,7 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
   }
 
   const canProgress = po.status !== "canceled";
+  const canEditPo = session.role === "procurement" && !session.isAdmin;
 
   return (
     <div className="space-y-4">
@@ -324,33 +327,12 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
         {po.products && Array.isArray(po.products) && po.products.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-200">
             <h3 className="mb-2 text-sm font-semibold text-gray-900">Products</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs text-left text-gray-700">
-                <thead className="border-b border-gray-200 text-gray-600">
-                  <tr>
-                    <th className="py-2 pr-3 font-medium">Product</th>
-                    <th className="py-2 pr-3 font-medium">SKU</th>
-                    <th className="py-2 pr-3 font-medium">Qty</th>
-                    <th className="py-2 pr-3 font-medium">Rate</th>
-                    <th className="py-2 pr-3 font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {po.products.map((item: { productName?: string; product_name?: string; skuCode?: string; quantity?: number; rate?: number; amount?: number }, idx: number) => (
-                    <tr key={idx} className="border-b border-gray-100 last:border-0">
-                      <td className="py-2 pr-3 font-medium text-gray-900">{item.productName ?? item.product_name ?? "—"}</td>
-                      <td className="py-2 pr-3">{item.skuCode ?? "—"}</td>
-                      <td className="py-2 pr-3">{item.quantity ?? "—"}</td>
-                      <td className="py-2 pr-3">{item.rate != null ? Number(item.rate) : "—"}</td>
-                      <td className="py-2 pr-3">{item.amount != null ? Number(item.amount) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PoProductsTable products={po.products} isIndependent={!po.pr_id} compact />
           </div>
         )}
       </div>
+
+      {canEditPo && <ProcurementPoEditForm po={po} />}
 
       <ProcurementImagesSection poId={po.id} variant="card" />
 
