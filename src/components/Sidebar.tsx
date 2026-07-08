@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   Tag,
   Megaphone,
+  ClipboardList,
 } from "lucide-react";
 import type { UserRole } from "@/lib/simpleAuth";
 
@@ -839,6 +840,21 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 </div>
               )}
             </>
+          )}
+          {/* Product Availability — admin, agent, purchaser, manager */}
+          {(showAll || role === "admin" || role === "agent" || role === "purchaser" || role === "manager") && (
+            <Link
+              href="/dashboard/product-availability"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                pathname.startsWith("/dashboard/product-availability")
+                  ? "bg-portal-700 text-white"
+                  : "text-portal-100 hover:bg-portal-800"
+              }`}
+              title="Product Availability"
+            >
+              <ClipboardList className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>Product Availability</span>}
+            </Link>
           )}
         </div>
       </nav>

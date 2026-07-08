@@ -1,0 +1,630 @@
+import { createSupabaseClient } from "./supabaseClient";
+
+const supabase = createSupabaseClient();
+
+export type ProductAvailabilityStatus = "pending" | "delayed" | "completed" | "cancelled";
+export type ProductStatusInput = "already_listed" | "not_listed" | "not_sure";
+export type PriorityLevel = "urgent" | "normal";
+export type AvailabilityOption = "available" | "not_available" | "on_demand" | "alternative";
+export type StockStatusOption = "limited" | "on_demand" | "bulk_limited_both";
+
+export interface ProductAvailabilityRequest {
+  id: string;
+  request_number?: number;
+  requested_by_user_id: string;
+  requested_by_role: string;
+  product_status: ProductStatusInput;
+  markets: string[];
+  market: string | null;
+  assigned_purchaser_user_id: string | null;
+  assignment_status: "pending" | "completed";
+  responded_at: string | null;
+  reseller_name: string;
+  product_name: string;
+  sku: string | null;
+  reference_link: string | null;
+  remarks: string | null;
+  priority_level: PriorityLevel;
+  request_images: string[];
+  inventory_matches: unknown[];
+  status: ProductAvailabilityStatus;
+  is_draft: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductAvailabilityResponse {
+  id: string;
+  request_id: string;
+  assignment_id: string | null;
+  responded_by_user_id: string;
+  availability: AvailabilityOption;
+  stock_status: StockStatusOption;
+  single_unit_price: number | null;
+  bulk_unit_price: number | null;
+  response_images: string[];
+  remarks: string | null;
+  round_number: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductAvailabilityRequestWithDetails extends ProductAvailabilityRequest {
+  derived_status: ProductAvailabilityStatus;
+  response: ProductAvailabilityResponse | null;
+  responseHistory: ProductAvailabilityResponse[];
+}
+
+export interface CreateProductAvailabilityInput {
+  requestedByUserId: string;
+  requestedByRole: string;
+  productStatus: ProductStatusInput;
+  market: string;
+  resellerName: string;
+  productName: string;
+  sku?: string | null;
+  referenceLink?: string | null;
+  remarks?: string | null;
+  priorityLevel: PriorityLevel;
+  requestImages: string[];
+  inventoryMatches?: unknown[];
+  isDraft?: boolean;
+}
+
+export interface BulkUploadRow {
+  product_name: string;
+  reseller_name: string;
+  market: string;
+  sku: string;
+  reference_link: string;
+  product_status: ProductStatusInput;
+  priority_level: PriorityLevel;
+  remarks: string;
+}
+
+export interface BulkUploadRowValidated extends BulkUploadRow {
+  rowIndex: number;
+  errors: string[];
+}
+
+export interface SubmitProductAvailabilityResponseInput {
+  requestId: string;
+  respondedByUserId: string;
+  availability: AvailabilityOption;
+  stockStatus: StockStatusOption;
+  singleUnitPrice?: number | null;
+  bulkUnitPrice?: number | null;
+  responseImages: string[];
+  remarks?: string | null;
+}
+
+const MARKET_TO_COUNTRY_KEYWORDS: Record<string, string[]> = {
+  UAE: ["UAE", "UNITED ARAB EMIRATES"],
+  KSA: ["KSA", "SAUDI", "SAUDI ARABIA"],
+  PAK: ["PAK", "PAKISTAN", "KARACHI"],
+  QTR: ["QTR", "QATAR"],
+  KWT: ["KWT", "KUWAIT"],
+  OMN: ["OMN", "OMAN"],
+  BHR: ["BHR", "BAHRAIN"],
+  IRQ: ["IRQ", "IRAQ"],
+  USA: ["USA", "UNITED STATES", "US"],
+};
+
+function normalizeMarket(market: string): string {
+  return market.trim().toUpperCase();
+}
+
+function deriveStatus(
+  dbStatus: ProductAvailabilityStatus,
+  assignmentStatus: "pending" | "completed",
+  createdAt: string
+): ProductAvailabilityStatus {
+  if (dbStatus === "cancelled") return "cancelled";
+  if (dbStatus === "completed" || assignmentStatus === "completed") return "completed";
+  const elapsedHours = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
+  return elapsedHours >= 48 ? "delayed" : "pending";
+}
+
+export type ProductAvailabilityListFilter =
+  | "all"
+  | "completed"
+  | "delayed"
+  | "urgent_open"
+  | "normal_pending"
+  | "cancelled"
+  | "draft";
+
+export function matchesProductAvailabilityListFilter(
+  row: ProductAvailabilityRequestWithDetails,
+  filter: ProductAvailabilityListFilter
+): boolean {
+  if (filter === "draft") return row.is_draft === true;
+  if (row.is_draft) return false;
+  if (row.derived_status === "cancelled") return filter === "cancelled" || filter === "all";
+  if (filter === "cancelled") return false;
+  if (filter === "all") return true;
+  const priority = row.priority_level as PriorityLevel;
+  if (filter === "completed") return row.derived_status === "completed";
+  if (filter === "delayed") return row.derived_status === "delayed";
+  if (filter === "urgent_open") return priority === "urgent" && row.derived_status === "pending";
+  if (filter === "normal_pending") return priority === "normal" && row.derived_status === "pending";
+  return false;
+}
+
+export function formatDerivedStatusLabel(status: ProductAvailabilityStatus): string {
+  switch (status) {
+    case "pending": return "Pending";
+    case "delayed": return "Delayed";
+    case "completed": return "Completed";
+    case "cancelled": return "Cancelled";
+    default: return status;
+  }
+}
+
+export function formatAvailabilityLabel(av: AvailabilityOption): string {
+  switch (av) {
+    case "available": return "Available";
+    case "not_available": return "Not Available";
+    case "on_demand": return "On Demand";
+    case "alternative": return "Alternative Option";
+    default: return av;
+  }
+}
+
+export function formatStockStatusLabel(stock: StockStatusOption): string {
+  switch (stock) {
+    case "limited": return "Limited Quantity";
+    case "on_demand": return "On Demand";
+    case "bulk_limited_both": return "Normal Qty (Single/Bulk)";
+    default: return stock;
+  }
+}
+
+export function titleCaseWords(input: string): string {
+  if (!input || !input.trim()) return input;
+  return input
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function countryMatchesMarket(market: string, country: string | null | undefined): boolean {
+  if (!country) return false;
+  const normalizedCountry = country.trim().toUpperCase();
+  const keywords = MARKET_TO_COUNTRY_KEYWORDS[market] || [market];
+  return keywords.some((keyword) => normalizedCountry.includes(keyword));
+}
+
+export async function cancelProductAvailabilityRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("product_availability_requests")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", requestId);
+  if (error) throw new Error(error.message || "Failed to cancel request");
+}
+
+export async function requestAlternativeSearch(requestId: string, newRemarks: string): Promise<void> {
+  const { error } = await supabase.rpc("request_alternative_search", {
+    p_request_id: requestId,
+    p_new_remarks: newRemarks,
+  });
+  if (error) throw new Error(error.message || "Failed to re-open request for alternative search");
+}
+
+export async function maybeSyncDelayedRequests(): Promise<void> {
+  const thresholdIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  await supabase
+    .from("product_availability_requests")
+    .update({ status: "delayed" })
+    .eq("status", "pending")
+    .lte("created_at", thresholdIso);
+}
+
+export async function createProductAvailabilityRequest(
+  input: CreateProductAvailabilityInput
+): Promise<ProductAvailabilityRequest | null> {
+  const isDraft = input.isDraft === true;
+  const normalizedMarket = normalizeMarket(input.market);
+
+  if (!normalizedMarket) throw new Error("A market is required");
+  if (!isDraft && (input.requestImages.length === 0 || input.requestImages.length > 5)) {
+    throw new Error("Request images must contain between 1 and 5 files");
+  }
+  if (input.productStatus === "already_listed" && !String(input.sku || "").trim()) {
+    throw new Error("SKU is required when product status is Already Listed");
+  }
+
+  // Find the purchaser for this market using profiles table (email as identifier)
+  const { data: purchasers } = await supabase
+    .from("profiles")
+    .select("email, country")
+    .eq("role", "purchaser");
+
+  const matchingPurchaser = (purchasers || []).find((p: { email: string; country: string | null }) =>
+    countryMatchesMarket(normalizedMarket, p.country)
+  );
+
+  const { data: createdRequest, error: requestError } = await supabase
+    .from("product_availability_requests")
+    .insert([
+      {
+        requested_by_user_id: input.requestedByUserId,
+        requested_by_role: input.requestedByRole,
+        product_status: input.productStatus,
+        markets: [normalizedMarket],
+        market: normalizedMarket,
+        assigned_purchaser_user_id: matchingPurchaser?.email ?? null,
+        assignment_status: "pending",
+        reseller_name: input.resellerName.trim(),
+        product_name: input.productName.trim(),
+        sku: input.sku?.trim() || null,
+        reference_link: input.referenceLink?.trim() || null,
+        remarks: input.remarks?.trim() || null,
+        priority_level: input.priorityLevel,
+        request_images: isDraft ? [] : input.requestImages,
+        inventory_matches: input.inventoryMatches || [],
+        status: "pending",
+        is_draft: isDraft,
+      },
+    ])
+    .select("*")
+    .single<ProductAvailabilityRequest>();
+
+  if (requestError || !createdRequest) {
+    throw new Error(requestError?.message || "Failed to create product availability request");
+  }
+
+  return createdRequest;
+}
+
+export async function fetchAllProductAvailabilityData(params: {
+  userRole: string;
+  userFriendlyId: string;
+}): Promise<ProductAvailabilityRequestWithDetails[]> {
+  const role = (params.userRole || "").toLowerCase();
+
+  let requestQuery = supabase
+    .from("product_availability_requests")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (role === "agent") {
+    requestQuery = requestQuery.eq("requested_by_user_id", params.userFriendlyId);
+  } else if (role === "purchaser") {
+    requestQuery = requestQuery
+      .eq("assigned_purchaser_user_id", params.userFriendlyId)
+      .eq("is_draft", false);
+  } else if (role === "manager") {
+    // Managers see only requests for their country's market
+    const { data: mgrProfile } = await supabase
+      .from("profiles")
+      .select("country")
+      .eq("email", params.userFriendlyId)
+      .single();
+    const mgrCountry = String((mgrProfile as { country?: string } | null)?.country || "").trim().toUpperCase();
+    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+      keywords.some((k) => mgrCountry.includes(k))
+    )?.[0];
+    requestQuery = requestQuery.eq("is_draft", false);
+    if (mgrMarket) requestQuery = requestQuery.eq("market", mgrMarket);
+  }
+  // admin and other roles: no is_draft filter — returns everything including drafts
+
+  const { data: requestRows, error: requestError } = await requestQuery;
+  if (requestError) throw new Error(requestError.message || "Failed to fetch availability requests");
+
+  const requestIds = (requestRows || []).map((row: { id: string }) => row.id);
+  if (requestIds.length === 0) return [];
+
+  const { data: allResponseRows } = await supabase
+    .from("product_availability_responses")
+    .select("*")
+    .in("request_id", requestIds)
+    .order("round_number", { ascending: false });
+
+  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {};
+  (allResponseRows || []).forEach((r: ProductAvailabilityResponse) => {
+    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = [];
+    historyByRequestId[r.request_id].push(r);
+  });
+
+  return (requestRows || []).map((request: ProductAvailabilityRequest) => {
+    const derived = deriveStatus(
+      request.status,
+      request.assignment_status ?? "pending",
+      request.created_at
+    );
+    const history = historyByRequestId[request.id] || [];
+    return {
+      ...request,
+      derived_status: derived,
+      response: history[0] ?? null,
+      responseHistory: history,
+    } as ProductAvailabilityRequestWithDetails;
+  });
+}
+
+export function deriveCountsFromRows(allRows: ProductAvailabilityRequestWithDetails[]): {
+  urgent: number;
+  normalRequests: number;
+  delayed: number;
+  completed: number;
+  cancelled: number;
+  drafts: number;
+  all: number;
+} {
+  const liveRows = allRows.filter((r) => !r.is_draft);
+  const draftRows = allRows.filter((r) => r.is_draft);
+
+  const counts = {
+    urgent: 0,
+    normalRequests: 0,
+    delayed: 0,
+    completed: 0,
+    cancelled: 0,
+    drafts: draftRows.length,
+    all: liveRows.length,
+  };
+
+  liveRows.forEach((row) => {
+    const priority = row.priority_level as PriorityLevel;
+    if (row.derived_status === "cancelled") { counts.cancelled += 1; return; }
+    if (priority === "urgent" && row.derived_status === "pending") counts.urgent += 1;
+    if (priority === "normal" && row.derived_status === "pending") counts.normalRequests += 1;
+    if (row.derived_status === "delayed") counts.delayed += 1;
+    if (row.derived_status === "completed") counts.completed += 1;
+  });
+
+  return counts;
+}
+
+export async function submitProductAvailabilityResponse(
+  input: SubmitProductAvailabilityResponseInput
+): Promise<boolean> {
+  const requiresImages = input.availability !== "not_available";
+  if (requiresImages && (input.responseImages.length === 0 || input.responseImages.length > 5)) {
+    throw new Error("Response images must contain between 1 and 5 files");
+  }
+
+  const singleUnitPrice =
+    input.singleUnitPrice === null || input.singleUnitPrice === undefined
+      ? null
+      : Number(input.singleUnitPrice);
+  const bulkUnitPrice =
+    input.bulkUnitPrice === null || input.bulkUnitPrice === undefined
+      ? null
+      : Number(input.bulkUnitPrice);
+
+  if (
+    input.availability !== "not_available" &&
+    input.stockStatus !== "bulk_limited_both" &&
+    (singleUnitPrice === null || Number.isNaN(singleUnitPrice))
+  ) {
+    throw new Error("Single unit price is required for this stock status");
+  }
+
+  const { error } = await supabase.rpc("submit_availability_response", {
+    p_request_id: input.requestId,
+    p_responded_by_user_id: input.respondedByUserId,
+    p_availability: input.availability,
+    p_stock_status: input.availability === "not_available" ? "on_demand" : input.stockStatus,
+    p_single_unit_price: input.availability === "not_available" ? null : singleUnitPrice,
+    p_bulk_unit_price:
+      input.availability === "not_available"
+        ? null
+        : input.stockStatus === "bulk_limited_both"
+          ? bulkUnitPrice
+          : null,
+    p_response_images: input.availability === "not_available" ? [] : input.responseImages,
+    p_remarks: input.availability === "not_available" ? null : (input.remarks?.trim() || null),
+  });
+
+  if (error) throw new Error(error.message || "Failed to save purchaser response");
+  return true;
+}
+
+const VALID_MARKETS = new Set(["UAE", "KSA", "PAK", "QTR", "KWT", "OMN", "BHR", "IRQ", "USA"]);
+const VALID_PRODUCT_STATUSES = new Set<ProductStatusInput>(["already_listed", "not_listed", "not_sure"]);
+const VALID_PRIORITIES = new Set<PriorityLevel>(["urgent", "normal"]);
+
+function normalizeBulkHeaderCell(h: string): string {
+  return String(h ?? "")
+    .replace(/^\ufeff/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function parseCsvStrict(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let i = 0;
+  let inQuotes = false;
+
+  while (i < text.length) {
+    const c = text[i];
+
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i += 1; continue;
+      }
+      field += c; i += 1; continue;
+    }
+
+    if (c === '"') { inQuotes = true; i += 1; continue; }
+    if (c === ",") { row.push(field.trim()); field = ""; i += 1; continue; }
+    if (c === "\r") { i += 1; continue; }
+    if (c === "\n") {
+      row.push(field.trim()); field = "";
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = []; i += 1; continue;
+    }
+
+    field += c; i += 1;
+  }
+
+  row.push(field.trim());
+  if (row.some((cell) => cell.length > 0)) rows.push(row);
+  return rows;
+}
+
+function padRowToLength(cells: string[], len: number): string[] {
+  const out = cells.map((c) => String(c ?? "").trim());
+  while (out.length < len) out.push("");
+  return out.slice(0, len);
+}
+
+function normalizeEnumToken(raw: string): string {
+  return String(raw ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+export function parseBulkUploadFromRows(matrix: string[][]): BulkUploadRowValidated[] {
+  if (!matrix.length || matrix.length < 2) return [];
+
+  const headers = matrix[0].map(normalizeBulkHeaderCell);
+  const headerCount = headers.length;
+  const parsed: BulkUploadRowValidated[] = [];
+
+  matrix.slice(1).forEach((cellsRaw, idx) => {
+    const rawTrimmed = cellsRaw.map((c) => String(c ?? "").trim());
+    if (!rawTrimmed.some((c) => c.length > 0)) return;
+
+    const rowIndex = idx + 2;
+    const cells = padRowToLength(rawTrimmed, headerCount);
+    const get = (col: string) => cells[headers.indexOf(col)] ?? "";
+
+    const rawMarket = get("market").trim().toUpperCase();
+    const product_status = normalizeEnumToken(get("product_status")) as ProductStatusInput;
+    const priority_level = normalizeEnumToken(get("priority_level")) as PriorityLevel;
+
+    const errors: string[] = [];
+
+    if (!get("product_name")) errors.push("product_name is required");
+    if (!get("reseller_name")) errors.push("reseller_name is required");
+    if (!rawMarket) errors.push("market is required");
+    else if (!VALID_MARKETS.has(rawMarket)) errors.push(`unknown market "${rawMarket}"`);
+    if (!VALID_PRODUCT_STATUSES.has(product_status)) {
+      errors.push("product_status must be already_listed, not_listed, or not_sure");
+    }
+    if (!VALID_PRIORITIES.has(priority_level)) {
+      errors.push("priority_level must be urgent or normal");
+    }
+    if (product_status === "already_listed" && !get("sku")) {
+      errors.push("sku is required when product_status is already_listed");
+    }
+
+    parsed.push({
+      rowIndex,
+      product_name: get("product_name"),
+      reseller_name: get("reseller_name"),
+      market: rawMarket,
+      sku: get("sku"),
+      reference_link: get("reference_link"),
+      product_status,
+      priority_level,
+      remarks: get("remarks"),
+      errors,
+    });
+  });
+
+  return parsed;
+}
+
+export function parseBulkUploadCsv(csvText: string): BulkUploadRowValidated[] {
+  const stripped = csvText.startsWith("\ufeff") ? csvText.slice(1) : csvText;
+  const matrix = parseCsvStrict(stripped);
+  return parseBulkUploadFromRows(matrix);
+}
+
+export async function createBulkDraftRequests(
+  rows: BulkUploadRow[],
+  agentUserId: string,
+  agentRole: string
+): Promise<{ successCount: number; failedRows: number[] }> {
+  let successCount = 0;
+  const failedRows: number[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    try {
+      await createProductAvailabilityRequest({
+        requestedByUserId: agentUserId,
+        requestedByRole: agentRole,
+        productStatus: row.product_status,
+        market: row.market,
+        resellerName: row.reseller_name,
+        productName: row.product_name,
+        sku: row.sku || null,
+        referenceLink: row.reference_link || null,
+        remarks: row.remarks || null,
+        priorityLevel: row.priority_level,
+        requestImages: [],
+        isDraft: true,
+      });
+      successCount++;
+    } catch {
+      failedRows.push(i + 1);
+    }
+  }
+  return { successCount, failedRows };
+}
+
+export async function submitDraftRequest(requestId: string, imageUrls: string[]): Promise<void> {
+  if (imageUrls.length === 0 || imageUrls.length > 5) {
+    throw new Error("Please attach between 1 and 5 photos before submitting");
+  }
+
+  const { error } = await supabase
+    .from("product_availability_requests")
+    .update({
+      request_images: imageUrls,
+      is_draft: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", requestId);
+
+  if (error) throw new Error(error.message || "Failed to submit draft request");
+}
+
+export async function getPendingProductAvailabilityCount(
+  userRole: string,
+  userFriendlyId: string
+): Promise<number> {
+  const role = userRole.toLowerCase();
+
+  if (role === "manager") {
+    const { data: mgrProfile } = await supabase
+      .from("profiles")
+      .select("country")
+      .eq("email", userFriendlyId)
+      .single();
+    const mgrCountry = String((mgrProfile as { country?: string } | null)?.country || "").trim().toUpperCase();
+    const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
+      keywords.some((k) => mgrCountry.includes(k))
+    )?.[0];
+    let q = supabase
+      .from("product_availability_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("is_draft", false);
+    if (mgrMarket) q = q.eq("market", mgrMarket);
+    const { count } = await q;
+    return count ?? 0;
+  }
+
+  let q = supabase
+    .from("product_availability_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("is_draft", false);
+
+  if (role === "agent") {
+    q = q.eq("requested_by_user_id", userFriendlyId);
+  } else if (role === "purchaser") {
+    q = q.eq("assigned_purchaser_user_id", userFriendlyId);
+  }
+
+  const { count, error } = await q;
+  if (error) return 0;
+  return count ?? 0;
+}
