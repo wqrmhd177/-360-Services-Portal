@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import { isLogisticsService, isSourcingService, isZambeelLikeService } from "@/lib/serviceTypes";
+import { isLogisticsService, isMovementsService, isSourcingService } from "@/lib/serviceTypes";
 import type { MovementType, ShippingType } from "@/types/workflows";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
+import {
+  enrichPurchaseDetailForStorage,
+  getPurchaseDetailLabel,
+  normalizeCountryDetailRow,
+} from "@/lib/qrPurchaseDetails";
 
 export async function POST(request: Request) {
   const session = getPortalSession();
@@ -53,10 +58,11 @@ export async function POST(request: Request) {
     }
 
     const isLogistics = isLogisticsService(serviceNeeded);
+    const isMovements = isMovementsService(serviceNeeded);
     const isSourcing = isSourcingService(serviceNeeded);
 
     // Normalize and validate purchase details
-    const normalizedDetails = purchaseDetails.map((detail: any) => {
+    const normalizedDetails = purchaseDetails.map((detail: Record<string, unknown>) => {
       if (isLogistics) {
         const shipTo = String(detail.shipTo ?? "").trim();
         return {
@@ -71,27 +77,61 @@ export async function POST(request: Request) {
         Array.isArray(detail.destinationCountries) && detail.destinationCountries.length > 0;
       const hasCountry =
         detail.destinationCountry && String(detail.destinationCountry).trim() !== "";
-      const destinationCountries = hasCountries
-        ? detail.destinationCountries
+      const destinationCountries: string[] = hasCountries
+        ? (detail.destinationCountries as string[])
         : hasCountry
-          ? [detail.destinationCountry]
+          ? [String(detail.destinationCountry)]
           : [];
+
+      if (isMovements) {
+        const countryDetails =
+          Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
+            ? detail.countryDetails.map((cd) => {
+                const row = normalizeCountryDetailRow(cd as Record<string, unknown>);
+                return { ...row, targetPrice: row.unitPrice };
+              })
+            : undefined;
+
+        return enrichPurchaseDetailForStorage({
+          ...detail,
+          destinationCountries: destinationCountries.length > 0 ? destinationCountries : undefined,
+          destinationCountry:
+            destinationCountries.length === 1 ? destinationCountries[0] : detail.destinationCountry,
+          countryDetails: countryDetails?.length ? countryDetails : undefined,
+        });
+      }
+
       const countryDetails =
         Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
-          ? detail.countryDetails.map((cd: any) => ({
-              country: String(cd?.country ?? ""),
-              quantity: Number(cd?.quantity ?? 0),
-              targetPrice: Number(cd?.targetPrice ?? 0),
+          ? detail.countryDetails.map((cd) => ({
+              country: String((cd as Record<string, unknown>)?.country ?? ""),
+              quantity: Number((cd as Record<string, unknown>)?.quantity ?? 0),
+              targetPrice: Number(
+                (cd as Record<string, unknown>)?.targetPrice ??
+                  (cd as Record<string, unknown>)?.unitPrice ??
+                  0
+              ),
+              remarks:
+                (cd as Record<string, unknown>)?.remarks != null
+                  ? String((cd as Record<string, unknown>).remarks)
+                  : undefined,
+              currency:
+                (cd as Record<string, unknown>)?.currency === "SAR" ||
+                (cd as Record<string, unknown>)?.currency === "PKR" ||
+                (cd as Record<string, unknown>)?.currency === "AED"
+                  ? ((cd as Record<string, unknown>).currency as "AED" | "SAR" | "PKR")
+                  : undefined,
             }))
           : undefined;
       const quantity =
         detail.quantity != null && detail.quantity !== ""
           ? Number(detail.quantity)
-          : (countryDetails?.reduce((s: number, cd: any) => s + (cd.quantity || 0), 0) ?? 0);
+          : (countryDetails?.reduce((s, cd) => s + (cd.quantity || 0), 0) ?? 0);
       const targetPrice =
         detail.targetPrice != null && detail.targetPrice !== ""
           ? Number(detail.targetPrice)
           : (countryDetails?.[0]?.targetPrice ?? undefined);
+
       return {
         ...detail,
         destinationCountries: destinationCountries.length > 0 ? destinationCountries : undefined,
@@ -104,7 +144,16 @@ export async function POST(request: Request) {
     });
 
     for (const detail of normalizedDetails) {
-      if (!detail.productName) {
+      if (isMovements) {
+        const fromSku = String(detail.fromSku ?? "").trim();
+        const toSku = String(detail.toSku ?? "").trim();
+        if (!fromSku || !toSku) {
+          return NextResponse.json(
+            { error: "Each purchase detail must have From (SKU) and To (SKU)" },
+            { status: 400 }
+          );
+        }
+      } else if (!detail.productName) {
         return NextResponse.json(
           { error: "Each purchase detail must have a product name" },
           { status: 400 }
@@ -178,16 +227,29 @@ export async function POST(request: Request) {
         );
         if (missing.length > 0) {
           return NextResponse.json(
-            { error: "Each destination country must have quantity and target price" },
+            {
+              error: isMovements
+                ? "Each destination country must have quantity and unit price"
+                : "Each destination country must have quantity and target price",
+            },
             { status: 400 }
           );
         }
         const invalid = detail.countryDetails.find(
-          (cd: any) => (cd.quantity ?? 0) < 0 || (cd.targetPrice ?? 0) < 0
+          (cd: { quantity?: number; unitPrice?: number; targetPrice?: number }) => {
+            const price = isMovements
+              ? (cd.unitPrice ?? cd.targetPrice ?? 0)
+              : (cd.targetPrice ?? cd.unitPrice ?? 0);
+            return (cd.quantity ?? 0) < 0 || price < 0;
+          }
         );
         if (invalid) {
           return NextResponse.json(
-            { error: "Per-country quantity and target price must be >= 0" },
+            {
+              error: isMovements
+                ? "Per-country quantity and unit price must be >= 0"
+                : "Per-country quantity and target price must be >= 0",
+            },
             { status: 400 }
           );
         }
@@ -270,7 +332,11 @@ export async function POST(request: Request) {
     }
 
     try {
-      const productNames = purchaseDetails.map((d: any) => d.productName).join(", ");
+      const productNames = normalizedDetails
+        .map((d: Record<string, unknown>) =>
+          getPurchaseDetailLabel(d as { productName?: string; fromSku?: string; toSku?: string })
+        )
+        .join(", ");
       await notifyStandardUsers(
         { creatorEmail: email, roles: ["admin", "approver", "procurement"] },
         "qr_created",

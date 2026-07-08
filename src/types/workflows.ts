@@ -46,19 +46,24 @@ export interface Qr {
   shipping_type_by_country?: Record<string, ShippingType>;
   movement_type_by_country: Record<string, MovementType>;
   purchase_details?: Array<{
-    productName: string;
+    productName?: string;
+    fromSku?: string;
+    toSku?: string;
     /** Legacy: single country. New: use destinationCountries. */
     destinationCountry?: string;
     /** New: multiple destination countries per product (Growth does not set P/S/M). */
     destinationCountries?: string[];
     /**
-     * Per-country quantity, target price, and optional remarks.
+     * Per-country quantity, unit price, and optional remarks.
      * Currency is explicitly selected (AED/SAR/PKR) at QR creation time.
      */
     countryDetails?: {
       country: string;
       quantity: number;
-      targetPrice: number;
+      unitPrice?: number;
+      totalPrice?: number;
+      /** @deprecated Use unitPrice */
+      targetPrice?: number;
       remarks?: string;
       currency?: "SAR" | "PKR" | "AED";
     }[];
@@ -66,6 +71,9 @@ export interface Qr {
     shippingType?: ShippingType;
     movementType?: MovementType;
     quantity: number;
+    unitPrice?: number;
+    totalPrice?: number;
+    /** @deprecated Use unitPrice */
     targetPrice?: number;
     imagePaths?: string[];
   }>;

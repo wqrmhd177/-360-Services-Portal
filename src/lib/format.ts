@@ -1,4 +1,4 @@
-/** Display label for QR status (e.g. in badges and tables). */
+import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 export function formatQrStatusLabel(status: string | null | undefined): string {
   const s = (status ?? "").trim();
   if (s === "converted_to_pr") return "Converted to PR";
@@ -86,10 +86,10 @@ export function summarizeDestinations(purchaseDetails: Array<{
 
 /** First product name with optional count suffix */
 export function summarizeProducts(
-  purchaseDetails: Array<{ productName?: string }> | null | undefined
+  purchaseDetails: Array<{ productName?: string; fromSku?: string; toSku?: string }> | null | undefined
 ): string {
   if (!purchaseDetails?.length) return "—";
-  const first = purchaseDetails[0]?.productName || "—";
+  const first = getPurchaseDetailLabel(purchaseDetails[0] ?? {});
   if (purchaseDetails.length === 1) return first;
   return `${first} (+${purchaseDetails.length - 1} more)`;
 }

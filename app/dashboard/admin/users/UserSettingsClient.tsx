@@ -12,13 +12,14 @@ import {
   type ZambeelDepartment,
   type ProductAvailabilityRole,
 } from "@/lib/permissions";
-import { ASSIGNABLE_ROLE_OPTIONS, type UserRole } from "@/lib/simpleAuth";
+import { ASSIGNABLE_ROLE_OPTIONS, formatSignupTeamLabel, type UserRole } from "@/lib/simpleAuth";
 
 type ProfileRow = {
   id: string;
   email: string;
   full_name: string | null;
-  role: string;
+  role: string | null;
+  team: string | null;
   permissions: unknown;
 };
 
@@ -36,7 +37,7 @@ function userToEditState(user: ProfileRow): EditState {
   const isPortalAdmin = user.role === "admin";
   const departmentRole: UserRole = isPortalAdmin
     ? "growth"
-    : ASSIGNABLE_ROLE_OPTIONS.some((o) => o.value === user.role)
+    : user.role && ASSIGNABLE_ROLE_OPTIONS.some((o) => o.value === user.role)
       ? (user.role as UserRole)
       : "growth";
 
@@ -183,6 +184,7 @@ export default function UserSettingsClient() {
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Email</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">Team</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Role</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Zambeel 360</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Product Availability</th>
@@ -194,7 +196,7 @@ export default function UserSettingsClient() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     No users found.
                   </td>
                 </tr>
@@ -212,7 +214,14 @@ export default function UserSettingsClient() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{user.email}</td>
                       <td className="px-4 py-3 text-gray-600">
-                        {user.role === "admin" ? "Portal Admin" : user.role}
+                        {formatSignupTeamLabel(user.team)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {!user.role
+                          ? "None"
+                          : user.role === "admin"
+                            ? "Portal Admin"
+                            : user.role}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {formatZambeelPerms(effective.zambeelPerms)}
@@ -261,6 +270,7 @@ export default function UserSettingsClient() {
             </h2>
             <p className="mt-1 text-sm text-gray-500">
               {editingUser.full_name || editingUser.email} ({editingUser.email})
+              {editingUser.team ? ` · Team: ${formatSignupTeamLabel(editingUser.team)}` : ""}
             </p>
 
             <div className="mt-6 space-y-5">

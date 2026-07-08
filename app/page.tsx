@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SIGNUP_ROLE_OPTIONS } from "@/lib/simpleAuth";
-import type { UserRole } from "@/lib/simpleAuth";
+import { SIGNUP_TEAM_OPTIONS } from "@/lib/simpleAuth";
+import type { SignupTeam } from "@/lib/simpleAuth";
+import ZyncAuthHero from "@/components/ZyncAuthHero";
 
 export default function HomePage() {
   const router = useRouter();
@@ -12,33 +13,51 @@ export default function HomePage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("growth");
+  const [team, setTeam] = useState<SignupTeam>("growth");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && sessionStorage.getItem("signup_pending") === "1") {
+      sessionStorage.removeItem("signup_pending");
+      setSuccess(
+        "Account created. An admin will assign your portal access — you can sign in once that is done."
+      );
+      setIsSignUp(false);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
     try {
-      const payload = isSignUp 
-        ? { email, password, role, fullName: name, isSignUp: true }
+      const payload = isSignUp
+        ? { email, password, team, fullName: name, isSignUp: true }
         : { email, password, isSignUp: false };
 
       const res = await fetch("/api/simple-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(data.error ?? (isSignUp ? "Sign up failed" : "Login failed"));
+        setLoading(false);
+        return;
+      }
+      if (isSignUp) {
+        setIsSignUp(false);
+        setSuccess(data.message ?? "Account created. An admin will assign your portal access.");
         setLoading(false);
         return;
       }
       router.refresh();
       router.push("/dashboard");
-    } catch (err) {
+    } catch {
       setError("Unexpected error, please try again.");
       setLoading(false);
     }
@@ -60,14 +79,13 @@ export default function HomePage() {
             <div className="bg-white p-8 md:p-12 flex flex-col justify-center">
               {/* Logo */}
               <div className="mb-6 text-center">
-                <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-portal-400 via-portal-300 to-portal-600 tracking-tight">
-                  360 Procurement
+                <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-portal-500 via-portal-400 to-sky-600 tracking-tight">
+                  Zync
                 </h1>
               </div>
 
-              {/* Heading */}
               <h2 className="text-base font-medium text-gray-700 mb-8 text-center">
-                {isSignUp ? "Sign up to 360 Procurement" : "Sign in to 360 Procurement"}
+                {isSignUp ? "Sign up to Zync" : "Sign in to Zync"}
               </h2>
 
               {/* Form */}
@@ -122,18 +140,24 @@ export default function HomePage() {
 
                 {isSignUp && (
                   <div className="space-y-1">
-                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                    <label className="block text-sm font-medium text-gray-700">Team</label>
                     <select
                       className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
+                      value={team}
+                      onChange={(e) => setTeam(e.target.value as SignupTeam)}
                     >
-                      {SIGNUP_ROLE_OPTIONS.map((opt) => (
+                      {SIGNUP_TEAM_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {success && (
+                  <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                    {success}
                   </div>
                 )}
 
@@ -162,6 +186,7 @@ export default function HomePage() {
                       onClick={() => {
                         setIsSignUp(false);
                         setError(null);
+                        setSuccess(null);
                       }}
                       className="text-portal-600 hover:text-portal-700 font-medium"
                     >
@@ -176,6 +201,7 @@ export default function HomePage() {
                       onClick={() => {
                         setIsSignUp(true);
                         setError(null);
+                        setSuccess(null);
                       }}
                       className="text-portal-600 hover:text-portal-700 font-medium"
                     >
@@ -186,59 +212,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right Section - Promotional Content */}
-            <div className="bg-white p-8 md:p-12 flex flex-col justify-center items-center text-center">
-              {/* Headline */}
-              <div className="mb-8">
-                <h3 className="text-4xl md:text-5xl font-bold mb-2">
-                  <span className="text-blue-900">Number 1</span>
-                </h3>
-                <h3 className="text-4xl md:text-5xl font-bold mb-2">
-                  <span className="text-orange-500">Cross-Border</span>
-                </h3>
-                <h3 className="text-4xl md:text-5xl font-bold mb-2">
-                  <span className="text-orange-500">Procurement</span>
-                </h3>
-                <h3 className="text-4xl md:text-5xl font-bold">
-                  <span className="text-blue-900">Partner!</span>
-                </h3>
-              </div>
-
-              {/* Composite Image Placeholder - Using CSS to create a visual representation */}
-              <div className="relative w-full max-w-md h-64 mb-4">
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center">
-                  {/* Laptop */}
-                  <div className="absolute z-20 w-32 h-20 bg-gray-300 rounded-lg shadow-lg">
-                    <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-36 h-1 bg-gray-400 rounded"></div>
-                    <div className="absolute inset-2 bg-white rounded"></div>
-                  </div>
-                  {/* Airplane */}
-                  <div className="absolute top-8 right-8 z-30">
-                    <svg className="w-16 h-16 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
-                    </svg>
-                  </div>
-                  {/* Ship */}
-                  <div className="absolute bottom-8 left-8 z-10">
-                    <svg className="w-20 h-20 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-                    </svg>
-                  </div>
-                  {/* Truck */}
-                  <div className="absolute bottom-4 right-12 z-10">
-                    <svg className="w-16 h-16 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-                    </svg>
-                  </div>
-                  {/* Boxes */}
-                  <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1 z-10">
-                    <div className="w-6 h-6 bg-amber-600 rounded shadow"></div>
-                    <div className="w-6 h-6 bg-amber-700 rounded shadow"></div>
-                    <div className="w-6 h-6 bg-amber-800 rounded shadow"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ZyncAuthHero />
           </div>
         </div>
       </div>

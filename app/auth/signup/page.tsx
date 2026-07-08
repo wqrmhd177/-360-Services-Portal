@@ -3,15 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SIGNUP_ROLE_OPTIONS } from "@/lib/simpleAuth";
-import type { UserRole } from "@/lib/simpleAuth";
+import { SIGNUP_TEAM_OPTIONS } from "@/lib/simpleAuth";
+import type { SignupTeam } from "@/lib/simpleAuth";
 
 export default function SignupPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("growth");
+  const [team, setTeam] = useState<SignupTeam>("growth");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +23,7 @@ export default function SignupPage() {
       const res = await fetch("/api/simple-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role, fullName, isSignUp: true })
+        body: JSON.stringify({ email, password, team, fullName, isSignUp: true }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -31,8 +31,10 @@ export default function SignupPage() {
         setLoading(false);
         return;
       }
-      router.refresh();
-      router.push("/dashboard");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("signup_pending", "1");
+      }
+      router.push("/");
     } catch {
       setError("Unexpected error, please try again.");
       setLoading(false);
@@ -42,11 +44,15 @@ export default function SignupPage() {
   return (
     <div className="flex flex-1 items-center justify-center">
       <div className="card max-w-md">
+        <p className="mb-1 text-center text-xs font-semibold uppercase tracking-[0.2em] text-portal-600">
+          Zync
+        </p>
         <h2 className="mb-2 text-2xl font-semibold tracking-tight text-center text-gray-900">
-          Create an account
+          Create a Zync account
         </h2>
         <p className="mb-6 text-sm text-gray-500 text-center">
-          Simple internal signup: choose your name, email, password, and role. No Google login required.
+          Sign up with your name, email, password, and team. Portal access will be assigned by an
+          admin.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1 text-left">
@@ -80,20 +86,24 @@ export default function SignupPage() {
             />
           </div>
           <div className="space-y-1 text-left">
-            <label className="block text-xs font-medium text-gray-700">Role</label>
+            <label className="block text-xs font-medium text-gray-700">Team</label>
             <select
               className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
+              value={team}
+              onChange={(e) => setTeam(e.target.value as SignupTeam)}
             >
-              {SIGNUP_ROLE_OPTIONS.map((opt) => (
+              {SIGNUP_TEAM_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </select>
           </div>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}
@@ -116,4 +126,3 @@ export default function SignupPage() {
     </div>
   );
 }
-

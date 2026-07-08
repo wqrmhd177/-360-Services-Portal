@@ -6,37 +6,42 @@ import type { MovementType, ShippingType } from "@/types/workflows";
 import { TOP_COUNTRIES } from "@/lib/countries";
 import { isZambeelLikeService, isLogisticsService, isMovementsService, isSourcingService } from "@/lib/serviceTypes";
 import { createSupabaseClient } from "@/lib/supabaseClient";
+import { countryDetailTotal, enrichPurchaseDetailForStorage } from "@/lib/qrPurchaseDetails";
 import SuccessModal from "@/components/SuccessModal";
 import CountrySelectInput from "@/components/CountrySelectInput";
 import ServiceTypeSelect from "@/components/ServiceTypeSelect";
 
-/** Per-country quantity, target price, and optional remarks. Currency is explicitly selected (AED/SAR/PKR). */
+/** Per-country row; Movements uses unitPrice/totalPrice, other services use targetPrice. */
 export type CountryDetail = {
   country: string;
   quantity: number;
-  targetPrice: number;
+  unitPrice?: number;
+  targetPrice?: number;
+  totalPrice?: number;
   remarks?: string;
   currency?: "AED" | "SAR" | "PKR";
 };
 
 interface PurchaseDetail {
-  // Common fields for Zambeel 360, Sourcing & Logistics, Sourcing only
   productName: string;
+  fromSku: string;
+  toSku: string;
   /** Legacy single country (Logistics). New flow uses destinationCountries. */
   destinationCountry: string;
-  /** Multiple destination countries per product (Zambeel 360, Sourcing & Logistics, Sourcing only). */
+  /** Multiple destination countries per product (Zambeel 360, Sourcing & Logistics, Sourcing only, Movements). */
   destinationCountries?: string[];
-  /** Per-country quantity and target price; one entry per destination country. */
+  /** Per-country quantity and price; one entry per destination country. */
   countryDetails?: CountryDetail[];
   countryOfPurchase: "China" | "Local Market";
   shippingType: ShippingType;
   movementType: MovementType;
   quantity: number;
   targetPrice: number;
+  unitPrice: number;
   images: File[];
   imagePreviews: string[];
   remarks: string;
-  shipToAddress?: string; // For Sourcing & Logistics and Sourcing only
+  shipToAddress?: string;
 
   // Fields for Logistics Only and 3PL & Logistics
   shipFrom?: string;
@@ -48,6 +53,55 @@ interface PurchaseDetail {
   cartonLength?: number;
   cartonWidth?: number;
   cartonHeight?: number;
+}
+
+function createEmptyPurchaseDetail(service: string): PurchaseDetail {
+  const useMultiCountry =
+    isZambeelLikeService(service) ||
+    service === "Sourcing & Logistics" ||
+    service === "Sourcing only" ||
+    isMovementsService(service);
+
+  const base: PurchaseDetail = {
+    productName: "",
+    fromSku: "",
+    toSku: "",
+    destinationCountry: "",
+    destinationCountries: useMultiCountry ? [] : undefined,
+    countryDetails: [],
+    countryOfPurchase: "China",
+    shippingType: "sea",
+    movementType: "normal",
+    quantity: 0,
+    targetPrice: 0,
+    unitPrice: 0,
+    images: [],
+    imagePreviews: [],
+    remarks: "",
+  };
+
+  if (service === "Sourcing & Logistics" || service === "Sourcing only") {
+    base.shipToAddress = "";
+  } else if (service === "Logistics Only" || service === "3PL & Logistics") {
+    base.shipFrom = "";
+    base.shipTo = "";
+    base.productType = "";
+    base.hasBrand = "No";
+    base.noOfCartons = 0;
+    base.weightPerCarton = 0;
+    base.cartonLength = 0;
+    base.cartonWidth = 0;
+    base.cartonHeight = 0;
+  }
+
+  return base;
+}
+
+function newCountryDetailRow(country: string, service: string): CountryDetail {
+  if (isMovementsService(service)) {
+    return { country, quantity: 0, unitPrice: 0, totalPrice: 0, remarks: "" };
+  }
+  return { country, quantity: 0, targetPrice: 0, remarks: "" };
 }
 
 export default function GrowthQrFormPage() {
@@ -65,19 +119,7 @@ export default function GrowthQrFormPage() {
   const imageFilesRef = useRef<Map<number, File[]>>(new Map());
   
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetail[]>([
-    {
-      productName: "",
-      destinationCountry: "",
-      destinationCountries: [],
-      countryOfPurchase: "China",
-      shippingType: "sea",
-      movementType: "normal",
-      quantity: 0,
-      targetPrice: 0,
-      images: [],
-      imagePreviews: [],
-      remarks: ""
-    }
+    createEmptyPurchaseDetail(""),
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,36 +142,7 @@ export default function GrowthQrFormPage() {
   // Reset purchase details when service changes
   useEffect(() => {
     if (serviceNeeded) {
-      const baseDetail: PurchaseDetail = {
-        productName: "",
-        destinationCountry: "",
-        destinationCountries: isZambeelLikeService(serviceNeeded) || serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only" ? [] : undefined,
-        countryDetails: [],
-        countryOfPurchase: "China",
-        shippingType: "sea",
-        movementType: "normal",
-        quantity: 0,
-        targetPrice: 0,
-        images: [],
-        imagePreviews: [],
-        remarks: ""
-      };
-
-      if (serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only") {
-        baseDetail.shipToAddress = "";
-      } else if (serviceNeeded === "Logistics Only" || serviceNeeded === "3PL & Logistics") {
-        baseDetail.shipFrom = "";
-        baseDetail.shipTo = "";
-        baseDetail.productType = "";
-        baseDetail.hasBrand = "No";
-        baseDetail.noOfCartons = 0;
-        baseDetail.weightPerCarton = 0;
-        baseDetail.cartonLength = 0;
-        baseDetail.cartonWidth = 0;
-        baseDetail.cartonHeight = 0;
-      }
-
-      setPurchaseDetails([baseDetail]);
+      setPurchaseDetails([createEmptyPurchaseDetail(serviceNeeded)]);
       setCountrySearch([""]);
       setShowDropdown([false]);
       imageFilesRef.current = new Map();
@@ -154,35 +167,7 @@ export default function GrowthQrFormPage() {
   }
 
   function addPurchaseDetail() {
-    const baseDetail: PurchaseDetail = {
-      productName: "",
-      destinationCountry: "",
-      destinationCountries: isSourcingService(serviceNeeded) ? [] : undefined,
-      countryDetails: [],
-      countryOfPurchase: "China",
-      shippingType: "sea",
-      movementType: "normal",
-      quantity: 0,
-      targetPrice: 0,
-      images: [],
-      imagePreviews: [],
-      remarks: ""
-    };
-
-    if (serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only") {
-      baseDetail.shipToAddress = "";
-    } else if (serviceNeeded === "Logistics Only" || serviceNeeded === "3PL & Logistics") {
-      baseDetail.shipFrom = "";
-      baseDetail.shipTo = "";
-      baseDetail.productType = "";
-      baseDetail.hasBrand = "No";
-      baseDetail.noOfCartons = 0;
-      baseDetail.weightPerCarton = 0;
-      baseDetail.cartonLength = 0;
-      baseDetail.cartonWidth = 0;
-      baseDetail.cartonHeight = 0;
-    }
-
+    const baseDetail = createEmptyPurchaseDetail(serviceNeeded);
     shiftImageFilesRefOnPrepend();
     setPurchaseDetails([baseDetail, ...purchaseDetails]);
     setCountrySearch(["", ...countrySearch]);
@@ -242,7 +227,6 @@ export default function GrowthQrFormPage() {
     const filesFromRef = imageFilesRef.current.get(detailIndex) || [];
     const newImages = filesFromRef.filter((_, i) => i !== imageIndex);
     const newPreviews = detail.imagePreviews.filter((_, i) => i !== imageIndex);
-    // Revoke object URL to prevent memory leak
     URL.revokeObjectURL(detail.imagePreviews[imageIndex]);
     // Update ref
     imageFilesRef.current.set(detailIndex, newImages);
@@ -259,7 +243,11 @@ export default function GrowthQrFormPage() {
 
   function selectCountry(index: number, country: string) {
     const detail = purchaseDetails[index];
-    const useMultiCountry = isZambeelLikeService(serviceNeeded) || serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only";
+    const useMultiCountry =
+      isZambeelLikeService(serviceNeeded) ||
+      serviceNeeded === "Sourcing & Logistics" ||
+      serviceNeeded === "Sourcing only" ||
+      isMovementsService(serviceNeeded);
     if (useMultiCountry) {
       const current = detail.destinationCountries || [];
       if (current.includes(country)) return;
@@ -267,7 +255,7 @@ export default function GrowthQrFormPage() {
       const existingDetails = detail.countryDetails || [];
       const countryDetails = existingDetails.some((cd) => cd.country === country)
         ? existingDetails
-        : [...existingDetails, { country, quantity: 0, targetPrice: 0, remarks: "" }];
+        : [...existingDetails, newCountryDetailRow(country, serviceNeeded)];
       const updated = [...purchaseDetails];
       updated[index] = { ...detail, destinationCountries: newCountries, countryDetails };
       setPurchaseDetails(updated);
@@ -304,32 +292,39 @@ export default function GrowthQrFormPage() {
   function getCountryDetail(detail: PurchaseDetail, country: string): CountryDetail {
     const found = (detail.countryDetails || []).find((cd) => cd.country === country);
     if (found) return found;
-    // Default currency based on country, but user can override via dropdown
     const defaultCurrency = getCurrencyForCountry(country) as "AED" | "SAR" | "PKR";
-    return { country, quantity: 0, targetPrice: 0, remarks: "", currency: defaultCurrency };
+    const row = newCountryDetailRow(country, serviceNeeded);
+    return { ...row, currency: defaultCurrency };
   }
 
   function updateCountryDetail(
     detailIndex: number,
     country: string,
-    field: "quantity" | "targetPrice" | "remarks" | "currency",
+    field: "quantity" | "targetPrice" | "unitPrice" | "remarks" | "currency",
     value: number | string
   ) {
     const detail = purchaseDetails[detailIndex];
     const list = detail.countryDetails || [];
     const existing = list.find((cd) => cd.country === country);
-    const entry = existing
+    const baseEntry = existing
       ? { ...existing, [field]: value }
       : {
-          country,
-          quantity: field === "quantity" ? (value as number) : 0,
-          targetPrice: field === "targetPrice" ? (value as number) : 0,
-          remarks: field === "remarks" ? (value as string) : "",
+          ...newCountryDetailRow(country, serviceNeeded),
+          [field]: value,
           currency:
             field === "currency"
               ? (value as "AED" | "SAR" | "PKR")
               : (getCurrencyForCountry(country) as "AED" | "SAR" | "PKR"),
         };
+    const entry = isMovementsService(serviceNeeded)
+      ? {
+          ...baseEntry,
+          totalPrice: countryDetailTotal(
+            baseEntry.quantity ?? 0,
+            baseEntry.unitPrice ?? 0
+          ),
+        }
+      : baseEntry;
     const countryDetails = existing
       ? list.map((cd) => (cd.country === country ? entry : cd))
       : [...list, entry];
@@ -349,7 +344,7 @@ export default function GrowthQrFormPage() {
       const found = existing.find((cd) => cd.country === c);
       if (found) return found;
       const defaultCurrency = getCurrencyForCountry(c) as "AED" | "SAR" | "PKR";
-      return { country: c, quantity: 0, targetPrice: 0, remarks: "", currency: defaultCurrency };
+      return { ...newCountryDetailRow(c, serviceNeeded), currency: defaultCurrency };
     });
   }
 
@@ -364,6 +359,10 @@ export default function GrowthQrFormPage() {
       return "PKR";
     }
     return "AED";
+  }
+
+  function hasValidSkus(d: PurchaseDetail): boolean {
+    return !!(d.fromSku?.trim() && d.toSku?.trim());
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -406,11 +405,7 @@ export default function GrowthQrFormPage() {
           const hasValidCountryDetails = rows.length > 0 && rows.every((r) => r.quantity > 0);
           return !!(d.productName && hasCountry && hasValidCountryDetails);
         });
-    } else if (
-      serviceNeeded === "Sourcing & Logistics" ||
-      serviceNeeded === "Sourcing only" ||
-      isMovementsService(serviceNeeded)
-    ) {
+    } else if (serviceNeeded === "Sourcing & Logistics" || serviceNeeded === "Sourcing only") {
       validDetailEntries = purchaseDetails
         .map((d, originalIndex) => ({ detail: d, originalIndex }))
         .filter(({ detail: d }) => {
@@ -425,6 +420,17 @@ export default function GrowthQrFormPage() {
             hasValidCountryDetails &&
             (serviceNeeded === "Sourcing & Logistics" ? d.shipToAddress : true)
           );
+        });
+    } else if (isMovementsService(serviceNeeded)) {
+      validDetailEntries = purchaseDetails
+        .map((d, originalIndex) => ({ detail: d, originalIndex }))
+        .filter(({ detail: d }) => {
+          const hasCountry =
+            (d.destinationCountries && d.destinationCountries.length > 0) ||
+            (d.destinationCountry && d.destinationCountry.trim() !== "");
+          const rows = ensureCountryDetailsSynced(d);
+          const hasValidCountryDetails = rows.length > 0 && rows.every((r) => r.quantity > 0);
+          return !!(hasValidSkus(d) && hasCountry && hasValidCountryDetails);
         });
     } else if (isLogisticsService(serviceNeeded)) {
       validDetailEntries = purchaseDetails
@@ -458,73 +464,68 @@ export default function GrowthQrFormPage() {
       return;
     }
 
-    console.log("=== CHECKING STATE BEFORE PROCESSING ===");
-    console.log("purchaseDetails from state:", purchaseDetails.map((d, i) => ({
-      index: i,
-      productName: d.productName,
-      imagesCount: d.images?.length || 0,
-      hasImages: !!d.images && d.images.length > 0
-    })));
     const validDetails = validDetailEntries.map((e) => e.detail);
 
     try {
-      console.log("=== PROCESSING IMAGES ===");
-      console.log("Number of purchase details:", validDetailEntries.length);
-      
-      // Process images for each purchase detail - Upload to Supabase Storage
       const processedDetails = await Promise.all(
         validDetailEntries.map(async ({ detail: d, originalIndex }) => {
-          console.log(`Processing detail ${originalIndex}`);
-          
-          // Get files from ref using original purchaseDetails index
           const filesFromRef = imageFilesRef.current.get(originalIndex) || [];
-          console.log(`  - images from ref:`, filesFromRef.length);
-          console.log(`  - images from state:`, d.images?.length || 0);
-          
-          const imagesToUpload = filesFromRef.length > 0 ? filesFromRef : (d.images || []);
-          console.log(`  - final images to upload:`, imagesToUpload.length);
-          
+          const imagesToUpload = filesFromRef.length > 0 ? filesFromRef : d.images || [];
           const imagePaths: string[] = [];
-          
-          if (imagesToUpload.length > 0) {
-            console.log(`Uploading ${imagesToUpload.length} images for detail ${originalIndex}...`);
-            
-                for (const image of imagesToUpload) {
-              try {
-                console.log(`Uploading image: ${image.name}, size: ${image.size} bytes`);
 
-                    // Upload to Supabase Storage with safe filename
-                    const safeName = sanitizeFileName(image.name || "image.png");
-                    const fileName = `qr-images/${Date.now()}-${Math.random()
-                      .toString(36)
-                      .substring(7)}-${safeName}`;
+          if (imagesToUpload.length > 0) {
+            for (const image of imagesToUpload) {
+              try {
+                const safeName = sanitizeFileName(image.name || "image.png");
+                const fileName = `qr-images/${Date.now()}-${Math.random()
+                  .toString(36)
+                  .substring(7)}-${safeName}`;
                 const { data, error } = await supabase.storage
                   .from("qr-attachments")
                   .upload(fileName, image, {
                     cacheControl: "3600",
-                    upsert: false
+                    upsert: false,
                   });
 
-                if (error) {
-                  console.error("Image upload error:", error);
-                  // Continue with other images even if one fails
-                } else if (data) {
-                  console.log("Image uploaded successfully:", data.path);
+                if (!error && data) {
                   imagePaths.push(data.path);
                 }
               } catch (uploadError) {
                 console.error("Failed to upload image:", uploadError);
               }
             }
-          } else {
-            console.log(`No images for detail ${originalIndex}`);
           }
-          
-          console.log(`Detail ${originalIndex} final imagePaths:`, imagePaths);
-          
+
+          if (isLogisticsService(serviceNeeded)) {
+            return {
+              ...d,
+              images: undefined,
+              imagePreviews: undefined,
+              imagePaths,
+              quantity: d.noOfCartons ? Number(d.noOfCartons) : 0,
+            };
+          }
+
           const countryDetails = ensureCountryDetailsSynced(d);
+
+          if (isMovementsService(serviceNeeded)) {
+            const movementCountryDetails = countryDetails.map((cd) => ({
+              ...cd,
+              totalPrice: countryDetailTotal(cd.quantity ?? 0, cd.unitPrice ?? 0),
+              targetPrice: cd.unitPrice ?? 0,
+            }));
+            return enrichPurchaseDetailForStorage({
+              ...d,
+              images: undefined,
+              imagePreviews: undefined,
+              imagePaths: [],
+              countryDetails:
+                movementCountryDetails.length > 0 ? movementCountryDetails : undefined,
+            });
+          }
+
           const quantity = countryDetails.reduce((sum, cd) => sum + (cd.quantity || 0), 0);
-          const firstTarget = countryDetails[0]?.targetPrice ?? 0;
+          const firstTarget = countryDetails[0]?.targetPrice ?? d.targetPrice;
           return {
             ...d,
             images: undefined,
@@ -532,12 +533,10 @@ export default function GrowthQrFormPage() {
             imagePaths,
             countryDetails: countryDetails.length > 0 ? countryDetails : undefined,
             quantity: countryDetails.length > 0 ? quantity : d.quantity,
-            targetPrice: countryDetails.length > 0 ? firstTarget : d.targetPrice
+            targetPrice: countryDetails.length > 0 ? firstTarget : d.targetPrice,
           };
         })
       );
-      
-      console.log("=== IMAGE PROCESSING COMPLETE ===");
 
       // Prepare data - store purchase details as JSON
       let countries: string[] = [];
@@ -775,29 +774,70 @@ export default function GrowthQrFormPage() {
                   key={index}
                     className="rounded-2xl border border-gray-200 bg-white p-4 shadow-soft"
                 >
-                  {/* Zambeel-like, Sourcing & Logistics, Sourcing only fields */}
+                  {/* Zambeel-like, Sourcing & Logistics, Sourcing only, Movements fields */}
                   {(isZambeelLikeService(serviceNeeded) ||
                     serviceNeeded === "Sourcing & Logistics" ||
                     serviceNeeded === "Sourcing only" ||
                     isMovementsService(serviceNeeded)) && (
                     <>
                       <div className="space-y-3">
-                        <div className="grid gap-2 text-xs md:grid-cols-[1fr,1.5fr,auto]">
-                          <div className="flex flex-col space-y-1">
-                            <label className="block text-xs font-medium text-gray-700 whitespace-nowrap">
-                              Product Name <span className="text-red-400">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={detail.productName}
-                              onChange={(e) =>
-                                updatePurchaseDetail(index, "productName", e.target.value)
-                              }
-                              className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                              placeholder="Product name"
-                            />
-                          </div>
+                        <div
+                          className={`grid gap-2 text-xs ${
+                            isMovementsService(serviceNeeded)
+                              ? "md:grid-cols-[1fr,1fr,1.5fr,auto]"
+                              : "md:grid-cols-[1fr,1.5fr,auto]"
+                          }`}
+                        >
+                          {isMovementsService(serviceNeeded) ? (
+                            <>
+                              <div className="flex flex-col space-y-1">
+                                <label className="block text-xs font-medium text-gray-700 whitespace-nowrap">
+                                  From (SKU) <span className="text-red-400">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  value={detail.fromSku}
+                                  onChange={(e) =>
+                                    updatePurchaseDetail(index, "fromSku", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                                  placeholder="Source SKU"
+                                />
+                              </div>
+                              <div className="flex flex-col space-y-1">
+                                <label className="block text-xs font-medium text-gray-700 whitespace-nowrap">
+                                  To (SKU) <span className="text-red-400">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  required
+                                  value={detail.toSku}
+                                  onChange={(e) =>
+                                    updatePurchaseDetail(index, "toSku", e.target.value)
+                                  }
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                                  placeholder="Destination SKU"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex flex-col space-y-1">
+                              <label className="block text-xs font-medium text-gray-700 whitespace-nowrap">
+                                Product Name <span className="text-red-400">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={detail.productName}
+                                onChange={(e) =>
+                                  updatePurchaseDetail(index, "productName", e.target.value)
+                                }
+                                className="w-full rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                                placeholder="Product name"
+                              />
+                            </div>
+                          )}
                           <div className="relative flex flex-col space-y-1">
                             <label className="block text-xs font-medium text-gray-700 whitespace-nowrap">
                               Destination Countries <span className="text-red-400">*</span>
@@ -889,14 +929,18 @@ export default function GrowthQrFormPage() {
                           </div>
                         </div>
 
-                        {/* Per country: one row each – Quantity, Target Price, Ref Images, Remarks */}
+                        {/* Per country table */}
                         {(() => {
                           const rows = ensureCountryDetailsSynced(detail);
                           if (rows.length === 0) return null;
+                          const isMovements = isMovementsService(serviceNeeded);
                           return (
                             <div className="space-y-2">
                               <label className="block text-xs font-medium text-gray-700">
-                                Per country: Qty · Currency · Target Price · Images · Remarks <span className="text-red-400">*</span>
+                                {isMovements
+                                  ? "Per country: Qty · Currency · Unit Price · Total Price · Remarks"
+                                  : "Per country: Qty · Currency · Target Price · Images · Remarks"}{" "}
+                                <span className="text-red-400">*</span>
                               </label>
                               <div className="rounded-xl border border-gray-200 overflow-hidden">
                                 <table className="w-full text-xs table-fixed">
@@ -905,14 +949,29 @@ export default function GrowthQrFormPage() {
                                       <th className="text-left py-2 px-2 font-medium text-gray-700 w-32">Country</th>
                                       <th className="text-left py-2 px-2 font-medium text-gray-700 w-20">Qty</th>
                                       <th className="text-left py-2 px-2 font-medium text-gray-700 w-20">Currency</th>
-                                      <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Target Price</th>
+                                      {isMovements ? (
+                                        <>
+                                          <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Unit Price</th>
+                                          <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Total Price</th>
+                                        </>
+                                      ) : (
+                                        <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Target Price</th>
+                                      )}
                                       <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Remarks</th>
-                                      <th className="text-left py-2 px-2 font-medium text-gray-700 w-44">Ref Images</th>
+                                      {!isMovements && (
+                                        <th className="text-left py-2 px-2 font-medium text-gray-700 w-44">Ref Images</th>
+                                      )}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {rows.map((row, rowIdx) => {
-                                      const currency = (row.currency as "AED" | "SAR" | "PKR") ?? (getCurrencyForCountry(row.country) as "AED" | "SAR" | "PKR");
+                                      const currency =
+                                        (row.currency as "AED" | "SAR" | "PKR") ??
+                                        (getCurrencyForCountry(row.country) as "AED" | "SAR" | "PKR");
+                                      const totalPrice = countryDetailTotal(
+                                        row.quantity ?? 0,
+                                        row.unitPrice ?? 0
+                                      );
                                       return (
                                         <tr key={row.country} className="border-b border-gray-100 last:border-0">
                                           <td className="py-2 px-2 align-top font-medium text-gray-900">{row.country}</td>
@@ -922,7 +981,12 @@ export default function GrowthQrFormPage() {
                                               min={0}
                                               value={row.quantity || ""}
                                               onChange={(e) =>
-                                                updateCountryDetail(index, row.country, "quantity", Number(e.target.value) || 0)
+                                                updateCountryDetail(
+                                                  index,
+                                                  row.country,
+                                                  "quantity",
+                                                  Number(e.target.value) || 0
+                                                )
                                               }
                                               className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
                                               placeholder="0"
@@ -932,7 +996,12 @@ export default function GrowthQrFormPage() {
                                             <select
                                               value={currency}
                                               onChange={(e) =>
-                                                updateCountryDetail(index, row.country, "currency", e.target.value as "AED" | "SAR" | "PKR")
+                                                updateCountryDetail(
+                                                  index,
+                                                  row.country,
+                                                  "currency",
+                                                  e.target.value as "AED" | "SAR" | "PKR"
+                                                )
                                               }
                                               className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
                                             >
@@ -941,20 +1010,56 @@ export default function GrowthQrFormPage() {
                                               <option value="PKR">PKR</option>
                                             </select>
                                           </td>
-                                          <td className="py-2 px-2 align-top">
-                                            <input
-                                              type="number"
-                                              step="0.01"
-                                              min={0}
-                                              value={row.targetPrice || ""}
-                                              onChange={(e) =>
-                                                updateCountryDetail(index, row.country, "targetPrice", Number(e.target.value) || 0)
-                                              }
-                                              className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
-                                              placeholder="Enter price"
-                                              title={currency}
-                                            />
-                                          </td>
+                                          {isMovements ? (
+                                            <>
+                                              <td className="py-2 px-2 align-top">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min={0}
+                                                  value={row.unitPrice || ""}
+                                                  onChange={(e) =>
+                                                    updateCountryDetail(
+                                                      index,
+                                                      row.country,
+                                                      "unitPrice",
+                                                      Number(e.target.value) || 0
+                                                    )
+                                                  }
+                                                  className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
+                                                  placeholder="Enter price"
+                                                  title={currency}
+                                                />
+                                              </td>
+                                              <td className="py-2 px-2 align-top">
+                                                <div className="rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-xs text-gray-900">
+                                                  {totalPrice > 0
+                                                    ? `${totalPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
+                                                    : "—"}
+                                                </div>
+                                              </td>
+                                            </>
+                                          ) : (
+                                            <td className="py-2 px-2 align-top">
+                                              <input
+                                                type="number"
+                                                step="0.01"
+                                                min={0}
+                                                value={row.targetPrice || ""}
+                                                onChange={(e) =>
+                                                  updateCountryDetail(
+                                                    index,
+                                                    row.country,
+                                                    "targetPrice",
+                                                    Number(e.target.value) || 0
+                                                  )
+                                                }
+                                                className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
+                                                placeholder="Enter price"
+                                                title={currency}
+                                              />
+                                            </td>
+                                          )}
                                           <td className="py-2 px-2 align-top border-l border-gray-100">
                                             <input
                                               type="text"
@@ -966,7 +1071,7 @@ export default function GrowthQrFormPage() {
                                               placeholder="Notes..."
                                             />
                                           </td>
-                                          {rowIdx === 0 ? (
+                                          {!isMovements && rowIdx === 0 ? (
                                             <td rowSpan={rows.length} className="py-2 px-2 align-top border-l border-gray-100">
                                               <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-1.5">
                                                 <input
@@ -979,7 +1084,10 @@ export default function GrowthQrFormPage() {
                                                 {detail.imagePreviews.length > 0 && (
                                                   <div className="mt-1 flex flex-wrap gap-0.5">
                                                     {detail.imagePreviews.slice(0, 3).map((preview, imgIdx) => (
-                                                      <div key={imgIdx} className="relative h-8 w-8 shrink-0 overflow-hidden rounded border border-gray-200">
+                                                      <div
+                                                        key={imgIdx}
+                                                        className="relative h-8 w-8 shrink-0 overflow-hidden rounded border border-gray-200"
+                                                      >
                                                         <img src={preview} alt="" className="h-full w-full object-cover" />
                                                         <button
                                                           type="button"
@@ -991,7 +1099,9 @@ export default function GrowthQrFormPage() {
                                                       </div>
                                                     ))}
                                                     {detail.imagePreviews.length > 3 && (
-                                                      <span className="text-[9px] text-gray-500">+{detail.imagePreviews.length - 3}</span>
+                                                      <span className="text-[9px] text-gray-500">
+                                                        +{detail.imagePreviews.length - 3}
+                                                      </span>
                                                     )}
                                                   </div>
                                                 )}

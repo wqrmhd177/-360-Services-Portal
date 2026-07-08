@@ -3,14 +3,13 @@ import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
 import { buildPortalSession } from "@/lib/buildPortalSession";
-import { isSignupRole } from "@/lib/simpleAuth";
-import type { UserRole } from "@/lib/simpleAuth";
+import { isSignupTeam, type SignupTeam } from "@/lib/simpleAuth";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     email?: string;
     password?: string;
-    role?: UserRole;
+    team?: SignupTeam;
     fullName?: string;
     isSignUp?: boolean;
   } | null;
@@ -27,57 +26,55 @@ export async function POST(request: Request) {
     const supabase = createSupabaseClient();
 
     if (isSignUp) {
-      const role = body?.role;
+      const team = body?.team;
       const fullName = body?.fullName?.trim();
 
-      if (!role || !fullName) {
-        return NextResponse.json({ error: "Missing name or role for signup" }, { status: 400 });
+      if (!team || !fullName) {
+        return NextResponse.json({ error: "Missing name or team for signup" }, { status: 400 });
       }
 
-      if (role === "admin" || !isSignupRole(role)) {
+      if (!isSignupTeam(team)) {
+        return NextResponse.json({ error: "Invalid team for signup" }, { status: 403 });
+      }
+
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (existing) {
         return NextResponse.json(
-          { error: "Invalid role for signup. Admin access cannot be self-assigned." },
-          { status: 403 }
+          { error: "An account with this email already exists. Please sign in." },
+          { status: 409 }
         );
       }
 
       const fields = await passwordFields(password);
 
-      const { error: upsertError } = await supabase.from("profiles").upsert(
-        {
-          email,
-          full_name: fullName,
-          role,
-          password: fields.password,
-          password_hash: fields.password_hash,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "email" }
-      );
+      const { error: insertError } = await supabase.from("profiles").insert({
+        email,
+        full_name: fullName,
+        team,
+        role: null,
+        permissions: null,
+        password: fields.password,
+        password_hash: fields.password_hash,
+        updated_at: new Date().toISOString(),
+      });
 
-      if (upsertError) {
-        console.error("Failed to create profile:", upsertError);
+      if (insertError) {
+        console.error("Failed to create profile:", insertError);
         return NextResponse.json(
-          { error: "Failed to create user profile", details: upsertError.message },
+          { error: "Failed to create user profile", details: insertError.message },
           { status: 500 }
         );
       }
 
-      const session = buildPortalSession({
-        email,
-        full_name: fullName,
-        role,
+      return NextResponse.json({
+        ok: true,
+        message: "Account created. An admin will assign your portal access.",
       });
-
-      cookies().set("portal_session", JSON.stringify(session), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7,
-      });
-
-      return NextResponse.json({ ok: true });
     }
 
     const { data: profile, error } = await supabase

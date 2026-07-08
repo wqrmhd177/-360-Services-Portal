@@ -219,29 +219,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (pathname.includes("/dashboard/growth")) {
-      setZambeelOpen(true);
-      setGrowthOpen(true);
-    }
-    if (pathname.includes("/dashboard/approver")) {
-      setZambeelOpen(true);
-      setApproverOpen(true);
-    }
-    if (pathname.includes("/dashboard/procurement")) {
-      setZambeelOpen(true);
-      setProcurementOpen(true);
-    }
-    if (pathname.includes("/dashboard/finance")) {
-      setZambeelOpen(true);
-      setFinanceOpen(true);
-    }
-    if (pathname.includes("/dashboard/product-availability")) setPaOpen(true);
-    if (pathname.includes("/dashboard/product-listing")) setPlOpen(true);
-    if (pathname.includes("/dashboard/operations")) setOpsOpen(true);
-    if (pathname.includes("/finance/purchase-orders")) setPurchaseOrdersOpen(true);
-    if (pathname.includes("/finance/po-payments")) setPoPaymentsOpen(true);
-  }, [pathname]);
 
   const handleSignOut = async () => {
     try {
@@ -376,13 +353,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const effectivePurchaseOrdersOpen = purchaseOrdersOpen;
   const effectivePoPaymentsOpen = poPaymentsOpen;
 
-  const initials = session.fullName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
   const iconClass = collapsed ? "h-5 w-5 shrink-0" : "h-4 w-4 shrink-0";
   const iconClassLg = "h-5 w-5 shrink-0";
 
@@ -410,19 +380,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </button>
           )}
           {!collapsed && (
-            <>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-portal-700 font-semibold text-white">
-                {initials}
+            <div className="min-w-0 flex-1">
+              <div className="break-words font-semibold leading-snug text-white">
+                {session.fullName}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-white">{session.fullName}</div>
-                <div className="truncate text-xs text-portal-200">{session.email}</div>
+              <div className="mt-0.5 break-all text-xs leading-snug text-portal-200">
+                {session.email}
               </div>
-            </>
-          )}
-          {collapsed && (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-portal-700 font-semibold text-white">
-              {initials}
             </div>
           )}
         </div>

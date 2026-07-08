@@ -23,7 +23,7 @@ function SidebarFallback({ collapsed }: { collapsed: boolean }) {
 }
 
 export default function DashboardChrome({ children }: DashboardChromeProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   const toggle = () => setIsCollapsed((v) => !v);
 
