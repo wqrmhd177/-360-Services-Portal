@@ -2,18 +2,8 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
+import { buildPortalSession } from "@/lib/buildPortalSession";
 import type { UserRole } from "@/lib/simpleAuth";
-
-const DEFAULT_VIEW_ROLE: UserRole = "growth";
-
-function sessionForAdmin(email: string, fullName: string) {
-  return {
-    email,
-    fullName,
-    role: DEFAULT_VIEW_ROLE,
-    isAdmin: true as const,
-  };
-}
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -65,8 +55,11 @@ export async function POST(request: Request) {
         );
       }
 
-      const session =
-        role === "admin" ? sessionForAdmin(email, fullName) : { email, role, fullName };
+      const session = buildPortalSession({
+        email,
+        full_name: fullName,
+        role,
+      });
 
       cookies().set("portal_session", JSON.stringify(session), {
         httpOnly: true,
@@ -81,7 +74,7 @@ export async function POST(request: Request) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("email, full_name, role, password, password_hash")
+      .select("email, full_name, role, password, password_hash, permissions")
       .eq("email", email)
       .maybeSingle();
 
@@ -126,12 +119,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const fullName =
-      (profile.full_name || body?.fullName?.trim() || email.split("@")[0]) ?? "User";
-    const session =
-      profile.role === "admin"
-        ? sessionForAdmin(profile.email, fullName)
-        : { email: profile.email, role: profile.role, fullName };
+    const session = buildPortalSession({
+      email: profile.email,
+      full_name: profile.full_name,
+      role: profile.role,
+      permissions: profile.permissions,
+    });
 
     cookies().set("portal_session", JSON.stringify(session), {
       httpOnly: true,

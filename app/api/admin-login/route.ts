@@ -2,9 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
-import type { UserRole } from "@/lib/simpleAuth";
-
-const DEFAULT_ROLE: UserRole = "growth";
+import { buildPortalSession } from "@/lib/buildPortalSession";
 
 export async function POST(request: Request) {
   const adminEmail = process.env.PORTAL_ADMIN_EMAIL?.toLowerCase().trim();
@@ -60,7 +58,7 @@ export async function POST(request: Request) {
     const supabase = createSupabaseClient();
     const { data: profile } = await supabase
       .from("profiles")
-      .select("password")
+      .select("email, full_name, role, password, permissions")
       .eq("email", adminEmail)
       .maybeSingle();
 
@@ -77,24 +75,25 @@ export async function POST(request: Request) {
         { onConflict: "email" }
       );
     }
+
+    const session = buildPortalSession({
+      email: adminEmail,
+      full_name: profile?.full_name ?? "Admin",
+      role: "admin",
+      permissions: profile?.permissions,
+    });
+
+    cookies().set("portal_session", JSON.stringify(session), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Admin password sync error:", error);
+    console.error("Admin login error:", error);
+    return NextResponse.json({ error: "Admin login failed" }, { status: 500 });
   }
-
-  const session = {
-    email: adminEmail,
-    fullName: "Admin",
-    role: DEFAULT_ROLE,
-    isAdmin: true,
-  };
-
-  cookies().set("portal_session", JSON.stringify(session), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-
-  return NextResponse.json({ ok: true });
 }

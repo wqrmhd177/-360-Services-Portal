@@ -1,12 +1,14 @@
 import { cookies } from "next/headers";
+import type { UserPermissions } from "./permissions";
 import type { UserRole } from "./simpleAuth";
 
 export interface PortalSession {
   email: string;
   fullName?: string;
   role?: UserRole;
-  /** When true, user can switch roles and access all dashboards. */
+  /** When true, user can access all modules and User Settings. */
   isAdmin?: boolean;
+  permissions?: UserPermissions;
 }
 
 export function getPortalSession(): PortalSession | null {
