@@ -158,7 +158,7 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
   }
 
   const canProgress = po.status !== "canceled";
-  const canEditPo = session.role === "procurement" && !session.isAdmin;
+  const canEditPo = session.role === "procurement" || !!session.isAdmin;
 
   return (
     <div className="space-y-4">

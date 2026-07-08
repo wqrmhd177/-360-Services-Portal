@@ -107,8 +107,10 @@ async function uploadFilesToStorage(ownerId: string, files: File[]): Promise<str
 
 export default function ProductAvailabilityPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId } =
+  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId, isAdmin: portalIsAdmin } =
     useProductAvailabilityAuth();
+
+  const effectivePaRole = portalIsAdmin ? "admin" : userRole;
 
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("normal_requests");
@@ -148,11 +150,11 @@ export default function ProductAvailabilityPage() {
   const [selectedFeedbackRequest, setSelectedFeedbackRequest] =
     useState<ProductAvailabilityRequestWithDetails | null>(null);
 
-  const isAgent = userRole === "agent";
-  const isAdmin = userRole === "admin";
-  const isManager = userRole === "manager";
+  const isAgent = effectivePaRole === "agent" || portalIsAdmin;
+  const isAdmin = effectivePaRole === "admin" || portalIsAdmin;
+  const isManager = effectivePaRole === "manager" || portalIsAdmin;
   const canCreate = isAgent || isAdmin;
-  const isPurchaser = userRole === "purchaser";
+  const isPurchaser = effectivePaRole === "purchaser" || portalIsAdmin;
   const canAccess = isAgent || isAdmin || isPurchaser || isManager;
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
@@ -210,11 +212,11 @@ export default function ProductAvailabilityPage() {
   };
 
   const refreshData = useCallback(async () => {
-    if (!userFriendlyId || !userRole) return;
+    if (!userFriendlyId || !effectivePaRole) return;
     setIsLoading(true);
     try {
       await maybeSyncDelayedRequests();
-      const allRows = await fetchAllProductAvailabilityData({ userRole, userFriendlyId });
+      const allRows = await fetchAllProductAvailabilityData({ userRole: effectivePaRole, userFriendlyId });
       setAllRawRequests(allRows);
     } catch (err) {
       console.error(err);
@@ -222,7 +224,7 @@ export default function ProductAvailabilityPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [userFriendlyId, userRole]);
+  }, [userFriendlyId, effectivePaRole]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -274,7 +276,7 @@ export default function ProductAvailabilityPage() {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userFriendlyId || !userRole) return;
+    if (!userFriendlyId || !effectivePaRole) return;
     setError("");
     setSuccess("");
 
@@ -297,7 +299,7 @@ export default function ProductAvailabilityPage() {
       const imageUrls = await uploadFilesToStorage(userFriendlyId, createForm.images);
       await createProductAvailabilityRequest({
         requestedByUserId: userFriendlyId,
-        requestedByRole: userRole,
+        requestedByRole: effectivePaRole,
         productStatus: createForm.productStatus,
         market: createForm.market,
         resellerName: createForm.resellerName,
@@ -457,13 +459,13 @@ export default function ProductAvailabilityPage() {
   };
 
   const handleBulkImport = async () => {
-    if (!userFriendlyId || !userRole) return;
+    if (!userFriendlyId || !effectivePaRole) return;
     const validRows = bulkCsvRows.filter((r) => r.errors.length === 0);
     if (validRows.length === 0) return;
     setBulkImporting(true);
     setError("");
     try {
-      const result = await createBulkDraftRequests(validRows, userFriendlyId, userRole);
+      const result = await createBulkDraftRequests(validRows, userFriendlyId, effectivePaRole);
       setBulkImportResult(result);
       setBulkCsvRows([]);
       await refreshData();

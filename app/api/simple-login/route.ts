@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
 import { buildPortalSession } from "@/lib/buildPortalSession";
+import { isSignupRole } from "@/lib/simpleAuth";
 import type { UserRole } from "@/lib/simpleAuth";
 
 export async function POST(request: Request) {
@@ -31,6 +32,13 @@ export async function POST(request: Request) {
 
       if (!role || !fullName) {
         return NextResponse.json({ error: "Missing name or role for signup" }, { status: 400 });
+      }
+
+      if (role === "admin" || !isSignupRole(role)) {
+        return NextResponse.json(
+          { error: "Invalid role for signup. Admin access cannot be self-assigned." },
+          { status: 403 }
+        );
       }
 
       const fields = await passwordFields(password);

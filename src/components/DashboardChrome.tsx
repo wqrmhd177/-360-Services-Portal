@@ -3,7 +3,6 @@
 import { Suspense, useState, type ReactNode } from "react";
 import Sidebar from "@/components/Sidebar";
 import DashboardHeader from "@/components/DashboardHeader";
-import AdminReadOnlyBanner from "@/components/AdminReadOnlyBanner";
 
 interface DashboardChromeProps {
   children: ReactNode;
@@ -36,7 +35,6 @@ export default function DashboardChrome({ children }: DashboardChromeProps) {
       <main className="flex-1 overflow-y-auto">
         <DashboardHeader collapsed={isCollapsed} onToggleSidebar={toggle} />
         <div className="p-8">
-          <AdminReadOnlyBanner />
           {children}
         </div>
       </main>

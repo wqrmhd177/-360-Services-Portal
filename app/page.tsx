@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { SIGNUP_ROLE_OPTIONS } from "@/lib/simpleAuth";
 import type { UserRole } from "@/lib/simpleAuth";
 
 export default function HomePage() {
@@ -127,11 +128,11 @@ export default function HomePage() {
                       value={role}
                       onChange={(e) => setRole(e.target.value as UserRole)}
                     >
-                      <option value="growth">Growth</option>
-                      <option value="approver">Approver</option>
-                      <option value="procurement">Procurement</option>
-                      <option value="finance">Finance</option>
-                      <option value="admin">Admin (access all roles)</option>
+                      {SIGNUP_ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -182,16 +183,6 @@ export default function HomePage() {
                     </button>
                   </>
                 )}
-              </div>
-
-              {/* Admin Login */}
-              <div className="mt-4 pt-4 border-t border-gray-200 text-center">
-                <Link
-                  href="/auth/admin"
-                  className="text-sm text-amber-600 hover:text-amber-700 font-medium"
-                >
-                  Admin Login — access all roles
-                </Link>
               </div>
             </div>
 

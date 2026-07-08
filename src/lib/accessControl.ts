@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { PortalSession } from "./session";
 import type { UserRole } from "./simpleAuth";
 
-export function isReadOnlyAdmin(session: PortalSession | null | undefined): boolean {
+export function isPortalAdmin(session: PortalSession | null | undefined): boolean {
   return !!session?.isAdmin;
 }
 
@@ -11,15 +11,8 @@ export function canWrite(
   allowedRoles: UserRole[]
 ): boolean {
   if (!session?.email) return false;
-  if (session.isAdmin) return false;
+  if (session.isAdmin) return true;
   return !!session.role && allowedRoles.includes(session.role);
-}
-
-export function adminReadOnlyResponse(): NextResponse {
-  return NextResponse.json(
-    { error: "Admin accounts are read-only. Switch to a role account to make changes." },
-    { status: 403 }
-  );
 }
 
 export function unauthorizedResponse(): NextResponse {
@@ -37,7 +30,7 @@ export function requireWriteAccess(
   forbiddenMessage?: string
 ): NextResponse | null {
   if (!session?.email) return unauthorizedResponse();
-  if (isReadOnlyAdmin(session)) return adminReadOnlyResponse();
+  if (session.isAdmin) return null;
   if (!session.role || !allowedRoles.includes(session.role)) {
     return forbiddenResponse(forbiddenMessage);
   }

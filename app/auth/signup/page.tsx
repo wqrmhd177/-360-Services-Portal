@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { SIGNUP_ROLE_OPTIONS } from "@/lib/simpleAuth";
 import type { UserRole } from "@/lib/simpleAuth";
 
 export default function SignupPage() {
@@ -85,11 +86,11 @@ export default function SignupPage() {
               value={role}
               onChange={(e) => setRole(e.target.value as UserRole)}
             >
-              <option value="growth">Growth</option>
-              <option value="approver">Approver</option>
-              <option value="procurement">Procurement</option>
-              <option value="finance">Finance</option>
-              <option value="admin">Admin (access all roles)</option>
+              {SIGNUP_ROLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{error}</p>}

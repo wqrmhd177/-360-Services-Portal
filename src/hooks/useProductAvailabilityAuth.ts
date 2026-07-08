@@ -6,6 +6,7 @@ export interface ProductAvailabilityAuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   userRole: string | null;
+  isAdmin: boolean;
   /** Email address — used as the user identifier across all PA tables */
   userFriendlyId: string | null;
   email: string | null;
@@ -15,6 +16,7 @@ export function useProductAvailabilityAuth(): ProductAvailabilityAuthState {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export function useProductAvailabilityAuth(): ProductAvailabilityAuthState {
         if (data.session) {
           setIsAuthenticated(true);
           setUserRole(data.session.role ?? null);
+          setIsAdmin(!!data.session.isAdmin);
           setEmail(data.session.email ?? null);
         } else {
           setIsAuthenticated(false);
@@ -39,6 +42,7 @@ export function useProductAvailabilityAuth(): ProductAvailabilityAuthState {
     isAuthenticated,
     isLoading,
     userRole,
+    isAdmin,
     userFriendlyId: email,
     email,
   };
