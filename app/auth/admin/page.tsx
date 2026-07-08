@@ -45,7 +45,7 @@ export default function AdminLoginPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Admin Login</h1>
-            <p className="text-sm text-slate-400">Access all roles from one account</p>
+            <p className="text-sm text-slate-400">Portal admin accounts only (assigned in User Settings)</p>
           </div>
         </div>
 

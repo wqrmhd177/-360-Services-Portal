@@ -12,6 +12,7 @@ import {
   type ZambeelDepartment,
   type ProductAvailabilityRole,
 } from "@/lib/permissions";
+import { ASSIGNABLE_ROLE_OPTIONS, type UserRole } from "@/lib/simpleAuth";
 
 type ProfileRow = {
   id: string;
@@ -22,23 +23,30 @@ type ProfileRow = {
 };
 
 type EditState = {
+  isPortalAdmin: boolean;
+  departmentRole: UserRole;
   zambeel360: ZambeelDepartment[];
   product_availability: ProductAvailabilityRole | "";
   product_listing: boolean;
   operations: boolean;
 };
 
-function permissionsToEditState(user: ProfileRow): EditState {
-  const effective = deriveEffectivePermissions({
-    role: user.role,
-    isAdmin: user.role === "admin",
-    permissions: parsePermissions(user.permissions),
-  });
+function userToEditState(user: ProfileRow): EditState {
+  const parsed = parsePermissions(user.permissions);
+  const isPortalAdmin = user.role === "admin";
+  const departmentRole: UserRole = isPortalAdmin
+    ? "growth"
+    : ASSIGNABLE_ROLE_OPTIONS.some((o) => o.value === user.role)
+      ? (user.role as UserRole)
+      : "growth";
+
   return {
-    zambeel360: effective.zambeelPerms,
-    product_availability: effective.paRole ?? "",
-    product_listing: effective.productListing,
-    operations: effective.operations,
+    isPortalAdmin,
+    departmentRole,
+    zambeel360: parsed?.zambeel360 ?? [],
+    product_availability: parsed?.product_availability ?? "",
+    product_listing: parsed?.product_listing ?? false,
+    operations: parsed?.operations ?? false,
   };
 }
 
@@ -86,7 +94,7 @@ export default function UserSettingsClient() {
 
   const openEdit = (user: ProfileRow) => {
     setEditingUser(user);
-    setEditState(permissionsToEditState(user));
+    setEditState(userToEditState(user));
     setSaveError(null);
   };
 
@@ -118,14 +126,21 @@ export default function UserSettingsClient() {
       const res = await fetch(`/api/admin/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions: editStateToPermissions(editState) }),
+        body: JSON.stringify({
+          permissions: editStateToPermissions(editState),
+          role: editState.isPortalAdmin ? "admin" : editState.departmentRole,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || "Failed to save permissions");
       }
       setUsers((prev) =>
-        prev.map((u) => (u.id === editingUser.id ? { ...u, permissions: data.user.permissions } : u))
+        prev.map((u) =>
+          u.id === editingUser.id
+            ? { ...u, permissions: data.user.permissions, role: data.user.role }
+            : u
+        )
       );
       closeEdit();
     } catch (err) {
@@ -196,7 +211,9 @@ export default function UserSettingsClient() {
                         {user.full_name || "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{user.email}</td>
-                      <td className="px-4 py-3 capitalize text-gray-600">{user.role}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {user.role === "admin" ? "Portal Admin" : user.role}
+                      </td>
                       <td className="px-4 py-3 text-gray-600">
                         {formatZambeelPerms(effective.zambeelPerms)}
                       </td>
@@ -247,6 +264,56 @@ export default function UserSettingsClient() {
             </p>
 
             <div className="mt-6 space-y-5">
+              <div className="rounded-lg border border-portal-200 bg-portal-50 p-4">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={editState.isPortalAdmin}
+                    onChange={(e) =>
+                      setEditState((prev) =>
+                        prev ? { ...prev, isPortalAdmin: e.target.checked } : prev
+                      )
+                    }
+                    className="mt-0.5 rounded border-gray-300 text-portal-700 focus:ring-portal-500"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900">Portal Admin</span>
+                    <span className="mt-0.5 block text-xs text-gray-600">
+                      Full access to all modules, User Settings, and edit rights across the portal.
+                      Only existing admins can grant this.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {!editState.isPortalAdmin && (
+                <div>
+                  <label htmlFor="department-role" className="text-sm font-medium text-gray-900">
+                    Primary role
+                  </label>
+                  <select
+                    id="department-role"
+                    value={editState.departmentRole}
+                    onChange={(e) =>
+                      setEditState((prev) =>
+                        prev
+                          ? { ...prev, departmentRole: e.target.value as UserRole }
+                          : prev
+                      )
+                    }
+                    className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
+                  >
+                    {ASSIGNABLE_ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {!editState.isPortalAdmin && (
+                <>
               <div>
                 <p className="text-sm font-medium text-gray-900">Zambeel 360</p>
                 <div className="mt-2 flex flex-wrap gap-3">
@@ -319,6 +386,8 @@ export default function UserSettingsClient() {
                   Operations access
                 </label>
               </div>
+                </>
+              )}
             </div>
 
             {saveError && (

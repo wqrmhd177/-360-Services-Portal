@@ -4,15 +4,6 @@ import { passwordFields, validatePasswordReset } from "@/lib/passwordAuth";
 import { generateOtp, storeOtp, sendOtpEmail, verifyOtp } from "@/lib/emailOtp";
 
 export async function POST(request: Request) {
-  const adminEmail = process.env.PORTAL_ADMIN_EMAIL?.toLowerCase().trim();
-
-  if (!adminEmail) {
-    return NextResponse.json(
-      { error: "Admin login is not configured. Set PORTAL_ADMIN_EMAIL." },
-      { status: 503 }
-    );
-  }
-
   const body = (await request.json().catch(() => null)) as {
     step?: "request" | "reset";
     email?: string;
@@ -28,14 +19,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email is required." }, { status: 400 });
   }
 
-  if (email !== adminEmail) {
-    return NextResponse.json(
-      { error: "This reset is only for the configured admin account." },
-      { status: 403 }
-    );
+  try {
+    const supabase = createSupabaseClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, role")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!profile || profile.role !== "admin") {
+      return NextResponse.json(
+        { error: "Password reset is only available for portal admin accounts." },
+        { status: 403 }
+      );
+    }
+  } catch (err) {
+    console.error("Admin forgot-password lookup error:", err);
+    return NextResponse.json({ error: "Unable to process request." }, { status: 500 });
   }
 
-  // ── Step 1: Send OTP ─────────────────────────────────────────────────────
   if (step === "request") {
     try {
       const otp = generateOtp();
@@ -48,11 +50,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "A reset code has been sent to the admin email.",
+      message: "A reset code has been sent to your email.",
     });
   }
 
-  // ── Step 2: Verify OTP and Reset Password ────────────────────────────────
   if (step === "reset") {
     const otp = body?.otp?.trim() ?? "";
     const newPassword = body?.newPassword ?? "";
@@ -79,28 +80,26 @@ export async function POST(request: Request) {
       const supabase = createSupabaseClient();
       const fields = await passwordFields(newPassword);
 
-      const { error: upsertError } = await supabase.from("profiles").upsert(
-        {
-          email: adminEmail,
-          full_name: "Admin",
-          role: "admin",
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
           ...fields,
           updated_at: new Date().toISOString(),
-        },
-        { onConflict: "email" }
-      );
+        })
+        .eq("email", email)
+        .eq("role", "admin");
 
-      if (upsertError) {
-        console.error("Admin password update error:", upsertError);
-        return NextResponse.json({ error: "Unable to reset admin password." }, { status: 500 });
+      if (updateError) {
+        console.error("Admin password update error:", updateError);
+        return NextResponse.json({ error: "Unable to reset password." }, { status: 500 });
       }
 
       return NextResponse.json({ ok: true });
     } catch (err) {
       console.error("Admin forgot password error:", err);
-      return NextResponse.json({ error: "Unable to reset admin password." }, { status: 500 });
+      return NextResponse.json({ error: "Unable to reset password." }, { status: 500 });
     }
   }
 
-  return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  return NextResponse.json({ error: "Invalid step." }, { status: 400 });
 }

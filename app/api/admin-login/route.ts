@@ -1,20 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
-import { passwordFields, passwordMatches } from "@/lib/passwordAuth";
+import { passwordMatches } from "@/lib/passwordAuth";
 import { buildPortalSession } from "@/lib/buildPortalSession";
 
+/** Admin login uses the same profiles table — only users with role=admin may sign in here. */
 export async function POST(request: Request) {
-  const adminEmail = process.env.PORTAL_ADMIN_EMAIL?.toLowerCase().trim();
-  const adminPassword = process.env.PORTAL_ADMIN_PASSWORD;
-
-  if (!adminEmail || !adminPassword) {
-    return NextResponse.json(
-      { error: "Admin login is not configured. Set PORTAL_ADMIN_EMAIL and PORTAL_ADMIN_PASSWORD." },
-      { status: 503 }
-    );
-  }
-
   const body = (await request.json().catch(() => null)) as {
     email?: string;
     password?: string;
@@ -27,60 +18,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
   }
 
-  if (email !== adminEmail) {
-    return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
-  }
-
-  let authenticated = email === adminEmail && password === adminPassword;
-
-  if (!authenticated) {
-    try {
-      const supabase = createSupabaseClient();
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("email, password, password_hash")
-        .eq("email", adminEmail)
-        .maybeSingle();
-
-      if (!error && profile && (await passwordMatches(password, profile))) {
-        authenticated = true;
-      }
-    } catch (error) {
-      console.error("Admin login profile check error:", error);
-    }
-  }
-
-  if (!authenticated) {
-    return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
-  }
-
   try {
     const supabase = createSupabaseClient();
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
-      .select("email, full_name, role, password, permissions")
-      .eq("email", adminEmail)
+      .select("email, full_name, role, password, password_hash, permissions")
+      .eq("email", email)
       .maybeSingle();
 
-    if (!profile?.password) {
-      const fields = await passwordFields(password);
-      await supabase.from("profiles").upsert(
-        {
-          email: adminEmail,
-          full_name: "Admin",
-          role: "admin",
-          ...fields,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "email" }
+    if (error) {
+      console.error("Admin login lookup error:", error);
+      return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    }
+
+    if (!profile) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json(
+        { error: "This account is not a portal admin. Sign in on the main page or ask an admin to grant access." },
+        { status: 403 }
       );
     }
 
+    if (!(await passwordMatches(password, profile))) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
     const session = buildPortalSession({
-      email: adminEmail,
-      full_name: profile?.full_name ?? "Admin",
-      role: "admin",
-      permissions: profile?.permissions,
+      email: profile.email,
+      full_name: profile.full_name,
+      role: profile.role,
+      permissions: profile.permissions,
     });
 
     cookies().set("portal_session", JSON.stringify(session), {

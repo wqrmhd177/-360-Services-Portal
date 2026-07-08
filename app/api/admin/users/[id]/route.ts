@@ -7,6 +7,7 @@ import {
   type UserPermissions,
   type ZambeelDepartment,
 } from "@/lib/permissions";
+import { isAssignableRole, type UserRole } from "@/lib/simpleAuth";
 
 function validatePermissions(body: unknown): UserPermissions | null {
   if (!body || typeof body !== "object") return null;
@@ -35,6 +36,13 @@ function validatePermissions(body: unknown): UserPermissions | null {
   };
 }
 
+function validateRole(role: unknown): UserRole | null {
+  if (typeof role !== "string") return null;
+  if (role === "admin") return "admin";
+  if (isAssignableRole(role)) return role;
+  return null;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
@@ -46,6 +54,7 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => null)) as {
     permissions?: unknown;
+    role?: unknown;
   } | null;
 
   const permissions = validatePermissions(body?.permissions);
@@ -53,14 +62,33 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid permissions payload" }, { status: 400 });
   }
 
+  let roleToSave: UserRole | undefined;
+  if (body?.role !== undefined) {
+    const validated = validateRole(body.role);
+    if (validated === null) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    roleToSave = validated;
+  }
+
+  const update: {
+    permissions: UserPermissions;
+    updated_at: string;
+    role?: UserRole;
+  } = {
+    permissions,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (roleToSave !== undefined) {
+    update.role = roleToSave;
+  }
+
   try {
     const supabase = createSupabaseClient();
     const { data, error } = await supabase
       .from("profiles")
-      .update({
-        permissions,
-        updated_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq("id", params.id)
       .select("id, email, full_name, role, permissions")
       .single();
