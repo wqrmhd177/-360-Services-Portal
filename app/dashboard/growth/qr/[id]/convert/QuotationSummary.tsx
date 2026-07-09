@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
+import { isMovementsService } from "@/lib/serviceTypes";
+import { getPurchaseDetailLabel, getRequestedQuantity } from "@/lib/qrPurchaseDetails";
 import ImageGallery from "@/components/ImageGallery";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -73,6 +75,8 @@ export default function QuotationSummary({ qr }: QuotationSummaryProps) {
   const toggleDetail = (index: number) => {
     setExpandedDetail(expandedDetail === index ? null : index);
   };
+
+  const isMovements = isMovementsService(qr.service_needed ?? "");
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden sticky top-6">
@@ -178,7 +182,7 @@ export default function QuotationSummary({ qr }: QuotationSummaryProps) {
                           {index + 1}
                         </span>
                         <span className="font-medium text-gray-900 text-left">
-                          {detail.productName || "Product"}
+                          {isMovements ? getPurchaseDetailLabel(detail) : (detail.productName || "Product")}
                         </span>
                       </div>
                       <svg
@@ -210,7 +214,7 @@ export default function QuotationSummary({ qr }: QuotationSummaryProps) {
                             </p>
                           </div>
                           <div className="col-span-2">
-                            <p className="text-gray-600">Quantity & Target Price</p>
+                            <p className="text-gray-600">{isMovements ? "Quantity & Unit Price" : "Quantity & Target Price"}</p>
                             <p className="font-medium text-gray-900 mt-0.5">
                               {detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
                                 ? detail.countryDetails.map((cd: { country: string; quantity: number; targetPrice: number }) => (
@@ -352,6 +356,17 @@ export default function QuotationSummary({ qr }: QuotationSummaryProps) {
                                   <div className="col-span-2">
                                     <p className="text-gray-600">Remarks</p>
                                     <p className="font-medium text-green-900">{procResponse.remarks}</p>
+                                  </div>
+                                )}
+                                {isMovements && procResponse.inventoryAvailable != null && (
+                                  <div className="col-span-2">
+                                    <p className="text-gray-600">Inventory Available</p>
+                                    <p className={`font-semibold ${procResponse.inventoryAvailable !== getRequestedQuantity(detail) ? "text-amber-700" : "text-green-900"}`}>
+                                      {procResponse.inventoryAvailable} units
+                                      {procResponse.inventoryAvailable !== getRequestedQuantity(detail) && (
+                                        <span className="ml-1 font-normal text-amber-700">(requested: {getRequestedQuantity(detail)})</span>
+                                      )}
+                                    </p>
                                   </div>
                                 )}
                                 {procResponse.submittedAt && (

@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
+import { isMovementsService } from "@/lib/serviceTypes";
+import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
+import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -130,6 +133,8 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
     : null;
   const metadata = procurementResponse ? (procurementResponse as any)._metadata : null;
   const isReEdited = metadata && metadata.editCount > 0;
+  const isMovements = isMovementsService(qr.service_needed ?? "");
+  const canEditMovements = isMovements && qr.status === "responded";
 
   return (
     <div className="space-y-6">
@@ -218,7 +223,9 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
                     className={`border-b border-gray-100 ${isItemReEdited ? "bg-yellow-50/50" : ""}`}
                   >
                     <td className="py-2 px-3 align-top">
-                      <div className="font-medium text-gray-900">{detail.productName || "-"}</div>
+                      <div className="font-medium text-gray-900">
+                        {isMovements ? getPurchaseDetailLabel(detail) : (detail.productName || "-")}
+                      </div>
                       {(detail.shipToAddress || detail.remarks) && (
                         <div className="mt-0.5 text-[10px] text-gray-500">
                           {detail.shipToAddress && <span>Ship to: {detail.shipToAddress}</span>}
@@ -280,7 +287,9 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
                       key={index}
                       className={`rounded border px-3 py-2 text-xs ${isItemReEdited ? "border-yellow-300 bg-yellow-50/50" : "border-gray-200 bg-gray-50/50"}`}
                     >
-                      <span className="font-medium text-gray-800">{detail.productName}:</span>{" "}
+                      <span className="font-medium text-gray-800">
+                        {isMovements ? getPurchaseDetailLabel(detail) : detail.productName}:
+                      </span>{" "}
                       {response.combinations?.length > 0
                         ? response.combinations.map((c: any) => {
                             const currency = c.currency ?? "AED";
@@ -289,6 +298,11 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
                             return `${c.destinationCountry}${ship && move ? ` (${ship.trim()}/${move.trim()})` : ""} Cost ${c.costPerUnit != null ? `${Number(c.costPerUnit).toFixed(2)} ${currency}` : "-"} / Freight ${c.freightCostPerUnit != null ? `${Number(c.freightCostPerUnit).toFixed(2)} ${currency}` : "-"} / Landed ${c.landedCostPerUnit != null ? `${Number(c.landedCostPerUnit).toFixed(2)} ${currency}` : "-"}`;
                           }).join(" · ")
                         : `Cost ${response.costPerUnit?.toFixed(2) ?? "-"} / Freight ${response.freightCostPerUnit?.toFixed(2) ?? "-"} / Landed ${response.landedCostPerUnit?.toFixed(2) ?? "-"}`}
+                      {isMovements && response.inventoryAvailable != null && (
+                        <span className="ml-2 text-gray-700">
+                          · Inventory Available: {response.inventoryAvailable} units
+                        </span>
+                      )}
                       {isItemReEdited && <span className="ml-2 text-[10px] text-yellow-700">(Updated)</span>}
                       {response.combinations?.length > 0 && response.combinations.some((c: any) => c.procurementImagePaths?.length > 0) && (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -323,6 +337,20 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
                             ))}
                           </div>
                         </div>
+                      )}
+                      {isMovements && (
+                        <MovementsPostResponsePanel
+                          qrId={params.id}
+                          detailIndex={index}
+                          detail={detail}
+                          inventoryAvailable={response.inventoryAvailable}
+                          editable={canEditMovements}
+                          onUpdated={(purchaseDetails) =>
+                            setQr((prev) =>
+                              prev ? { ...prev, purchase_details: purchaseDetails as Qr["purchase_details"] } : prev
+                            )
+                          }
+                        />
                       )}
                     </div>
                   );

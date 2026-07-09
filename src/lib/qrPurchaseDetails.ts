@@ -44,6 +44,24 @@ export function normalizeCountryDetailRow(raw: Record<string, unknown>): QrCount
   };
 }
 
+export type MovementSplit = {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  status: "ready" | "pending";
+};
+
+export function getRequestedQuantity(detail: {
+  countryDetails?: Array<{ quantity?: number }>;
+  quantity?: number;
+}): number {
+  if (detail.countryDetails?.length) {
+    return detail.countryDetails.reduce((s, cd) => s + (Number(cd.quantity) || 0), 0);
+  }
+  return Number(detail.quantity) || 0;
+}
+
 export function enrichPurchaseDetailForStorage(detail: Record<string, unknown>): Record<string, unknown> {
   const fromSku = String(detail.fromSku ?? "").trim();
   const toSku = String(detail.toSku ?? "").trim();

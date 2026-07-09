@@ -76,6 +76,15 @@ export interface Qr {
     /** @deprecated Use unitPrice */
     targetPrice?: number;
     imagePaths?: string[];
+    movementSplits?: Array<{
+      id: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      status: "ready" | "pending";
+    }>;
+    priceUpdatedAt?: string;
+    priceUpdatedBy?: string;
   }>;
   procurement_response: string | Record<number, any> | null;
   status: "open" | "responded" | "converted_to_pr" | "canceled";

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import type { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
+import { isMovementsService } from "@/lib/serviceTypes";
+import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
+import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -122,6 +125,8 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
     : null;
   const metadata = procurementResponse ? (procurementResponse as any)._metadata : null;
   const isReEdited = metadata && metadata.editCount > 0;
+  const isMovements = isMovementsService(qr.service_needed ?? "");
+  const canEditMovements = isMovements && qr.status === "responded";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -189,7 +194,11 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
                         : "border-gray-200 bg-white"
                     }`}
                   >
-                    <div className="font-semibold text-gray-900 mb-2">{detail.productName || "-"}</div>
+                    <div className="font-semibold text-gray-900 mb-2">
+                      {isMovements
+                        ? getPurchaseDetailLabel(detail)
+                        : (detail.productName || "-")}
+                    </div>
                     <div className="grid grid-cols-2 gap-1 text-[10px]">
                       {(detail.destinationCountries?.length ? detail.destinationCountries.join(", ") : detail.destinationCountry) && (
                         <div>
@@ -206,12 +215,13 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
                         </div>
                       )}
                       <div className="col-span-2">
-                        <span className="text-gray-500">Qty & Target Price:</span>
+                        <span className="text-gray-500">{isMovements ? "Qty & Unit Price:" : "Qty & Target Price:"}</span>
                         <div className="mt-0.5 text-gray-900">
                           {detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
-                            ? detail.countryDetails.map((cd: { country: string; quantity: number; targetPrice: number }) => (
+                            ? detail.countryDetails.map((cd: { country: string; quantity: number; targetPrice: number; unitPrice?: number }) => (
                                 <div key={cd.country} className="text-xs">
-                                  {cd.country}: {cd.quantity} units · Target {formatTargetPrice(cd.targetPrice, cd.country)}
+                                  {cd.country}: {cd.quantity} units · {isMovements ? "Unit" : "Target"}{" "}
+                                  {formatTargetPrice(cd.unitPrice ?? cd.targetPrice, cd.country)}
                                 </div>
                               ))
                             : (() => {
@@ -371,6 +381,12 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
                                 <span className="ml-1 text-gray-900">{response.remarks}</span>
                               </div>
                             )}
+                            {isMovements && response.inventoryAvailable != null && (
+                              <div className="col-span-3">
+                                <span className="text-gray-500">Inventory Available:</span>
+                                <span className="ml-1 font-medium text-gray-900">{response.inventoryAvailable} units</span>
+                              </div>
+                            )}
                             {isItemReEdited && (
                               <div className="col-span-3 text-[8px] text-yellow-700 font-medium">
                                 ✏️ Updated {new Date(response.lastEditedAt).toLocaleDateString()}
@@ -408,6 +424,21 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
                             </div>
                           )}
                       </div>
+                    )}
+
+                    {isMovements && response && (
+                      <MovementsPostResponsePanel
+                        qrId={qrId}
+                        detailIndex={index}
+                        detail={detail}
+                        inventoryAvailable={response.inventoryAvailable}
+                        editable={canEditMovements}
+                        onUpdated={(purchaseDetails) =>
+                          setQr((prev) =>
+                            prev ? { ...prev, purchase_details: purchaseDetails as Qr["purchase_details"] } : prev
+                          )
+                        }
+                      />
                     )}
 
                   </div>

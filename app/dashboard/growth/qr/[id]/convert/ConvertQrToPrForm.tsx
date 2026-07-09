@@ -7,6 +7,8 @@ import MultiProductForm, { type ComboLookupEntry } from "@/components/MultiProdu
 import PaymentEntriesInput, { PaymentEntryInput } from "@/components/PaymentEntriesInput";
 import ServiceTypeSelect from "@/components/ServiceTypeSelect";
 import { getCurrencyByCountry } from "@/lib/currency";
+import { isMovementsService } from "@/lib/serviceTypes";
+import { getRequestedQuantity } from "@/lib/qrPurchaseDetails";
 
 interface ConvertQrToPrFormProps {
   qr: Qr;
@@ -41,7 +43,32 @@ export default function ConvertQrToPrForm({
     }
 
     const result: PrProduct[] = [];
-    const getQuantityForCountry = (detail: any, destinationCountry: string): number => {
+    const isMovements = isMovementsService(qr.service_needed ?? "");
+    const getQuantityForCountry = (detail: any, destinationCountry: string, detailIndex: number): number => {
+      const procResponse =
+        qr.procurement_response && typeof qr.procurement_response === "object"
+          ? (qr.procurement_response as any)[detailIndex]
+          : null;
+      const inventoryAvailable = procResponse?.inventoryAvailable;
+      const requested = getRequestedQuantity(detail);
+
+      const readyQty = detail.movementSplits
+        ?.filter((s: { status: string }) => s.status === "ready")
+        .reduce((sum: number, s: { quantity: number }) => sum + (s.quantity || 0), 0);
+
+      if (readyQty != null && readyQty > 0) {
+        return readyQty;
+      }
+
+      if (
+        isMovements &&
+        inventoryAvailable != null &&
+        inventoryAvailable !== requested &&
+        (!detail.movementSplits || detail.movementSplits.length === 0)
+      ) {
+        return 0;
+      }
+
       if (detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0) {
         const cd = detail.countryDetails.find((c: { country: string }) => c.country === destinationCountry);
         return cd ? (cd.quantity ?? 0) : detail.quantity || 0;
@@ -58,7 +85,7 @@ export default function ConvertQrToPrForm({
       if (procResponse?.combinations && Array.isArray(procResponse.combinations) && procResponse.combinations.length > 0) {
         procResponse.combinations.forEach((combo: any) => {
           const destinationCountry = combo.destinationCountry || "";
-          const quantity = getQuantityForCountry(detail, destinationCountry);
+          const quantity = getQuantityForCountry(detail, destinationCountry, index);
           const currency = getCurrencyByCountry(destinationCountry);
           const landedCost = combo.landedCostPerUnit ?? 0;
           result.push({
@@ -77,7 +104,7 @@ export default function ConvertQrToPrForm({
         });
       } else {
         const destinationCountry = detail.destinationCountries?.[0] || detail.destinationCountry || "";
-        const quantity = getQuantityForCountry(detail, destinationCountry);
+        const quantity = getQuantityForCountry(detail, destinationCountry, index);
         const currency = getCurrencyByCountry(destinationCountry);
         const landedCost = procResponse?.landedCostPerUnit || 0;
         result.push({

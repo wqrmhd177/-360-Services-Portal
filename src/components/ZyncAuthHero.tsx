@@ -1,19 +1,17 @@
 import {
   ArrowRight,
   Banknote,
-  CheckSquare,
+  ClipboardList,
   FileText,
-  Package,
-  ShoppingCart,
+  Truck,
   Users,
 } from "lucide-react";
 
 const flowSteps = [
-  { label: "QR", icon: FileText, tone: "bg-sky-100 text-sky-700" },
-  { label: "PR", icon: ShoppingCart, tone: "bg-violet-100 text-violet-700" },
-  { label: "Approve", icon: CheckSquare, tone: "bg-emerald-100 text-emerald-700" },
-  { label: "Finance", icon: Banknote, tone: "bg-amber-100 text-amber-700" },
-  { label: "PO", icon: Package, tone: "bg-rose-100 text-rose-700" },
+  { label: "Sourcing", icon: FileText, tone: "bg-sky-100 text-sky-700" },
+  { label: "Logistics", icon: Truck, tone: "bg-violet-100 text-violet-700" },
+  { label: "Payments", icon: Banknote, tone: "bg-emerald-100 text-emerald-700" },
+  { label: "Inventory", icon: ClipboardList, tone: "bg-amber-100 text-amber-700" },
 ];
 
 export default function ZyncAuthHero() {

@@ -1,57 +1,36 @@
 import {
   Banknote,
-  CheckSquare,
   ClipboardList,
   FileText,
   Layers,
-  Package,
-  ShoppingCart,
   Truck,
   Users,
 } from "lucide-react";
 
 const workflowTiles = [
   {
-    label: "Quotation Requests",
+    label: "Sourcing",
     icon: FileText,
     color: "from-sky-500/20 to-blue-600/10",
     iconColor: "text-sky-600",
   },
   {
-    label: "Purchase Requests",
-    icon: ShoppingCart,
+    label: "Logistics",
+    icon: Truck,
     color: "from-violet-500/20 to-purple-600/10",
     iconColor: "text-violet-600",
   },
   {
-    label: "Purchase Orders",
-    icon: Package,
-    color: "from-amber-500/20 to-orange-600/10",
-    iconColor: "text-amber-600",
-  },
-  {
-    label: "Approvals",
-    icon: CheckSquare,
+    label: "Payments",
+    icon: Banknote,
     color: "from-emerald-500/20 to-green-600/10",
     iconColor: "text-emerald-600",
   },
   {
-    label: "Finance",
-    icon: Banknote,
-    color: "from-rose-500/20 to-pink-600/10",
-    iconColor: "text-rose-600",
-  },
-  {
-    label: "Product Availability",
+    label: "Inventory",
     icon: ClipboardList,
-    color: "from-teal-500/20 to-cyan-600/10",
-    iconColor: "text-teal-600",
-  },
-  {
-    label: "Logistics",
-    icon: Truck,
-    color: "from-indigo-500/20 to-indigo-600/10",
-    iconColor: "text-indigo-600",
+    color: "from-amber-500/20 to-orange-600/10",
+    iconColor: "text-amber-600",
   },
   {
     label: "Teams",
@@ -104,8 +83,7 @@ export default function ZyncWelcome({ userName }: { userName?: string }) {
         </p>
 
         <p className="mt-3 max-w-2xl text-sm text-gray-500">
-          Your workspace for quotations, purchase requests, orders, finance, product availability,
-          and operations — all in one place.
+          Your workspace for sourcing, logistics, payments, and inventory — all in one place.
         </p>
 
         <div className="mt-12 grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">

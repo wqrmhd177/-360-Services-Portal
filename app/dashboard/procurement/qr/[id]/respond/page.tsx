@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Qr } from "@/types/workflows";
-import { isZambeelLikeService } from "@/lib/serviceTypes";
+import { isZambeelLikeService, isMovementsService } from "@/lib/serviceTypes";
+import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SkuSearchInput from "@/components/SkuSearchInput";
 import type { InventorySku } from "@/lib/metabaseInventory";
@@ -93,6 +94,10 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
   const [creatorName, setCreatorName] = useState<string | null>(null);
   /** Per combination row image previews (key: `${detailIndex}-${rowIndex}`). */
   const [combinationImagePreviews, setCombinationImagePreviews] = useState<Record<string, string[]>>({});
+  /** Per-detail inventory available (Movements only). */
+  const [inventoryAvailableByDetail, setInventoryAvailableByDetail] = useState<
+    Record<number, number | "">
+  >({});
 
   const procurementImageFilesRef = useRef<Map<number, File[]>>(new Map());
   const combinationImageFilesRef = useRef<Map<string, File[]>>(new Map());
@@ -251,6 +256,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
             ws[index] = arr;
           });
           setWarehouseStockByDetail(ws);
+
+          const invMap: Record<number, number | ""> = {};
+          data.purchase_details.forEach((_: unknown, index: number) => {
+            const saved = procurementResponse[index];
+            if (saved?.inventoryAvailable != null) {
+              invMap[index] = Number(saved.inventoryAvailable);
+            }
+          });
+          setInventoryAvailableByDetail(invMap);
         }
       }
     } catch (error) {
@@ -433,6 +447,16 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
       countries.length > 1 ||
       (combinationRows[index] && combinationRows[index].length > 0);
 
+    const isMovements = isMovementsService(qr?.service_needed ?? "");
+
+    if (isMovements) {
+      const inv = inventoryAvailableByDetail[index];
+      if (inv === "" || inv === undefined || Number(inv) < 0) {
+        setError("Inventory Available is required for Movements.");
+        return;
+      }
+    }
+
     if (useCombinations) {
       const rows = combinationRows[index] || [];
       const valid = rows.filter(
@@ -573,6 +597,9 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
           })
         );
         body = { purchaseDetailIndex: index, combinations: rowsWithImages, warehouseStock: warehouseStockPayload };
+        if (isMovements) {
+          body.inventoryAvailable = Number(inventoryAvailableByDetail[index]);
+        }
         combinationImageFilesRef.current.forEach((_, key) => { if (key.startsWith(`${index}-`) && !key.startsWith(`${index}-wh-`)) combinationImageFilesRef.current.delete(key); });
         warehouseImageFilesRef.current.forEach((_, key) => { if (key.startsWith(`${index}-wh-`)) warehouseImageFilesRef.current.delete(key); });
         setCombinationImagePreviews((prev) => {
@@ -595,6 +622,9 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
           remarks: detail.remarks || "",
           warehouseStock: warehouseStockPayload
         };
+        if (isMovements) {
+          body.inventoryAvailable = Number(inventoryAvailableByDetail[index]);
+        }
       }
 
       const res = await fetch(`/api/procurement/qr/${params.id}/respond`, {
@@ -821,6 +851,11 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
             const currentLandedCostPerUnit = detail.landedCostPerUnit ?? savedResponse?.landedCostPerUnit ?? "";
             const currentEtaDays = detail.etaDays ?? savedResponse?.etaDays ?? "";
             const currentRemarks = detail.remarks || savedResponse?.remarks || "";
+            const isMovements = isMovementsService(qr?.service_needed ?? "");
+            const productLabel = isMovements
+              ? getPurchaseDetailLabel(detail as { productName?: string; fromSku?: string; toSku?: string })
+              : (detail.productName || "-");
+            const priceLabel = isMovements ? "Unit Price" : "Target Price";
 
             return (
               <div
@@ -835,8 +870,8 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
               >
                 <div className="mb-3 grid gap-3 text-xs md:grid-cols-8">
                   <div>
-                    <span className="text-gray-500">Product:</span>
-                    <div className="font-medium text-gray-900">{detail.productName || "-"}</div>
+                    <span className="text-gray-500">{isMovements ? "SKU:" : "Product:"}</span>
+                    <div className="font-medium text-gray-900">{productLabel}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Destination(s):</span>
@@ -851,23 +886,23 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                     </div>
                   )}
                   <div className="md:col-span-2">
-                    <span className="text-gray-500">Quantity & Target Price:</span>
+                    <span className="text-gray-500">Quantity & {priceLabel}:</span>
                     <div className="font-medium text-gray-900 mt-0.5">
                       {(detail as any).countryDetails && Array.isArray((detail as any).countryDetails) && (detail as any).countryDetails.length > 0
                         ? (detail as any).countryDetails.map((cd: { country: string; quantity: number; targetPrice: number }) => (
                             <div key={cd.country} className="text-xs">
-                              {cd.country}: {cd.quantity} units, Target {Number(cd.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {getCurrencyForCountry(cd.country)}
+                              {cd.country}: {cd.quantity} units, {priceLabel} {Number(cd.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {getCurrencyForCountry(cd.country)}
                             </div>
                           ))
                         : countries.length > 0
                           ? countries.map((c) => (
                               <div key={c} className="text-xs">
-                                {c}: {detail.quantity} units, Target {detail.targetPrice !== undefined && detail.targetPrice !== null ? `${Number(detail.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${getCurrencyForCountry(c)}` : "-"}
+                                {c}: {detail.quantity} units, {priceLabel} {detail.targetPrice !== undefined && detail.targetPrice !== null ? `${Number(detail.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${getCurrencyForCountry(c)}` : "-"}
                               </div>
                             ))
                           : (
                               <span>
-                                {detail.quantity} units{detail.targetPrice !== undefined && detail.targetPrice !== null ? `, Target ${Number(detail.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${getCurrencyForCountry(detail.destinationCountry || "")}` : ""}
+                                {detail.quantity} units{detail.targetPrice !== undefined && detail.targetPrice !== null ? `, ${priceLabel} ${Number(detail.targetPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${getCurrencyForCountry(detail.destinationCountry || "")}` : ""}
                               </span>
                             )}
                     </div>
@@ -1145,6 +1180,26 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                       </div>
                     </div>
                     <div className="mt-3 grid gap-3 md:grid-cols-[0.5fr,1.5fr]">
+                      {isMovements && (
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="block text-xs font-medium text-gray-700">
+                            Inventory Available <span className="text-red-600">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={inventoryAvailableByDetail[index] ?? ""}
+                            onChange={(e) =>
+                              setInventoryAvailableByDetail((prev) => ({
+                                ...prev,
+                                [index]: e.target.value === "" ? "" : Number(e.target.value),
+                              }))
+                            }
+                            className="w-full max-w-xs rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                            placeholder="Qty available to move"
+                          />
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <label className="block text-xs font-medium text-gray-700">ETA (Days)</label>
                         <input
@@ -1166,6 +1221,55 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                           placeholder="Add any remarks or notes..."
                         />
                       </div>
+                    </div>
+                    {/* Procurement Images - simple mode */}
+                    <div className="mt-3 space-y-1">
+                      <div className="text-xs font-medium text-gray-700">
+                        Procurement Images <span className="text-red-600">*</span>
+                      </div>
+                      <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        Choose Files
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleProcurementImageChange(index, e)}
+                        />
+                      </label>
+                      {(detail.procurementImagePreviews?.length ?? 0) > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mt-1">
+                          {detail.procurementImagePreviews?.map((src, imgIdx) => (
+                            <div key={`preview-${index}-${imgIdx}`} className="h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                              <img src={src} alt={`New ${imgIdx + 1}`} className="h-full w-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {detail.procurementImagePaths && detail.procurementImagePaths.length > 0 && (
+                        <div className="space-y-1 mt-1">
+                          <div className="text-[10px] font-medium text-gray-500">Previously uploaded:</div>
+                          <div className="grid grid-cols-4 gap-2">
+                            {detail.procurementImagePaths.map((imagePath: string, imgIdx: number) => {
+                              const imageUrl = imagePath.startsWith("http") ? imagePath : `${SUPABASE_URL}/storage/v1/object/public/qr-attachments/${imagePath}`;
+                              return (
+                                <div key={`saved-${index}-${imgIdx}`} className="relative h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                                  <img
+                                    src={imageUrl}
+                                    alt={`Saved ${imgIdx + 1}`}
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3C/svg%3E";
+                                      target.onerror = null;
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

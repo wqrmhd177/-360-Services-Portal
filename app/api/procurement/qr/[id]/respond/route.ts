@@ -3,6 +3,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
+import { isMovementsService } from "@/lib/serviceTypes";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = getPortalSession();
@@ -62,7 +63,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       etaDays,
       procurementImagePaths,
       remarks,
-      warehouseStock: bodyWarehouseStock
+      warehouseStock: bodyWarehouseStock,
+      inventoryAvailable,
     } = body;
 
     const warehouseStock = normalizeWarehouseStock(bodyWarehouseStock);
@@ -108,6 +110,21 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const existingResponse = procurementResponse[purchaseDetailIndex];
+    const isMovements = isMovementsService(qr.service_needed ?? "");
+    if (isMovements) {
+      const inv =
+        inventoryAvailable != null
+          ? Number(inventoryAvailable)
+          : existingResponse?.inventoryAvailable != null
+            ? Number(existingResponse.inventoryAvailable)
+            : null;
+      if (inv == null || Number.isNaN(inv) || inv < 0) {
+        return NextResponse.json(
+          { error: "Inventory Available is required for Movements" },
+          { status: 400 }
+        );
+      }
+    }
     const warehouseStockToSave =
       bodyWarehouseStock !== undefined ? warehouseStock : (existingResponse?.warehouseStock ?? []);
     const hasCombinations = Array.isArray(combinations) && combinations.length > 0;
@@ -170,7 +187,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
         combinations: validCombinations,
         submittedAt: existingResponse?.submittedAt || new Date().toISOString(),
         lastEditedAt: isReEdit ? new Date().toISOString() : undefined,
-        warehouseStock: warehouseStockToSave
+        warehouseStock: warehouseStockToSave,
+        ...(isMovements && inventoryAvailable != null
+          ? { inventoryAvailable: Number(inventoryAvailable) }
+          : existingResponse?.inventoryAvailable != null
+            ? { inventoryAvailable: Number(existingResponse.inventoryAvailable) }
+            : {}),
       };
     } else {
       const isReEdit = existingResponse && existingResponse.costPerUnit !== undefined;
@@ -218,7 +240,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
         procurementImagePaths: mergedImagePaths,
         submittedAt: existingResponse?.submittedAt || new Date().toISOString(),
         lastEditedAt: isReEdit ? new Date().toISOString() : undefined,
-        warehouseStock: warehouseStockToSave
+        warehouseStock: warehouseStockToSave,
+        ...(isMovements && inventoryAvailable != null
+          ? { inventoryAvailable: Number(inventoryAvailable) }
+          : existingResponse?.inventoryAvailable != null
+            ? { inventoryAvailable: Number(existingResponse.inventoryAvailable) }
+            : {}),
       };
     }
 

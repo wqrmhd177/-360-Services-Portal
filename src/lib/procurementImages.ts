@@ -11,6 +11,7 @@ type PurchaseDetail = {
 };
 
 export type ProcurementResponseEntry = {
+  inventoryAvailable?: number;
   combinations?: Array<{
     destinationCountry?: string;
     countryOfPurchase?: string;
