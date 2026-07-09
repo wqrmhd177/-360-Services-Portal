@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Qr } from "@/types/workflows";
 import QrDetailModal from "@/components/QrDetailModal";
@@ -125,9 +126,14 @@ export default function GrowthQuotationRequestsPage() {
       <ListPageHeader
         title="Quotation Request History"
         actions={
-          <button type="button" onClick={downloadCSV} className="btn-secondary">
-            Download CSV ({selectedIds.size} selected)
-          </button>
+          <>
+            <Link href="/dashboard/growth/qr" className="btn-primary">
+              Create QR
+            </Link>
+            <button type="button" onClick={downloadCSV} className="btn-secondary">
+              Download CSV ({selectedIds.size} selected)
+            </button>
+          </>
         }
         filters={
           <>

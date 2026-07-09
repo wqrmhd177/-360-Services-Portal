@@ -68,13 +68,6 @@ function buildProductsFromQr(qr: Qr): PrProduct[] {
     return detail.quantity || 0;
   };
 
-  const unitPriceFromDetail = (detail: any) =>
-    detail.countryDetails?.[0]?.unitPrice ??
-    detail.countryDetails?.[0]?.targetPrice ??
-    detail.unitPrice ??
-    detail.targetPrice ??
-    0;
-
   qr.purchase_details.forEach((detail: any, index: number) => {
     const procResponse =
       qr.procurement_response && typeof qr.procurement_response === "object"
@@ -85,7 +78,6 @@ function buildProductsFromQr(qr: Qr): PrProduct[] {
     const productName = isMovements
       ? getPurchaseDetailLabel(detail)
       : (detail.productName || "");
-    const defaultSelling = unitPriceFromDetail(detail);
 
     if (procResponse?.combinations && Array.isArray(procResponse.combinations) && procResponse.combinations.length > 0) {
       procResponse.combinations.forEach((combo: any) => {
@@ -101,9 +93,9 @@ function buildProductsFromQr(qr: Qr): PrProduct[] {
           destinationCountry,
           quantity,
           landedCostPrice: landedCost,
-          sellingPricePerUnit: defaultSelling,
+          sellingPricePerUnit: 0,
           currency,
-          totalAmount: quantity * defaultSelling,
+          totalAmount: 0,
           shippingType: combo.shippingType || "sea",
           movementType: combo.movementType || "normal",
           remarks: detail.remarks || "",
@@ -122,9 +114,9 @@ function buildProductsFromQr(qr: Qr): PrProduct[] {
         destinationCountry,
         quantity,
         landedCostPrice: landedCost,
-        sellingPricePerUnit: defaultSelling,
+        sellingPricePerUnit: 0,
         currency,
-        totalAmount: quantity * defaultSelling,
+        totalAmount: 0,
         shippingType: detail.shippingType || "sea",
         movementType: detail.movementType || "normal",
         remarks: detail.remarks || "",
