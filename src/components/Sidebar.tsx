@@ -53,6 +53,7 @@ function NavLink({
   label,
   indent = false,
   matchPrefix,
+  badge,
 }: {
   href: string;
   pathname: string;
@@ -61,6 +62,7 @@ function NavLink({
   label: string;
   indent?: boolean;
   matchPrefix?: string;
+  badge?: number;
 }) {
   const active = matchPrefix ? pathname.includes(matchPrefix) : pathname === href;
   return (
@@ -80,7 +82,16 @@ function NavLink({
       title={label}
     >
       {icon}
-      {!collapsed && <span>{label}</span>}
+      {!collapsed && (
+        <span className="flex flex-1 items-center justify-between gap-2">
+          <span>{label}</span>
+          {badge != null && badge > 0 && (
+            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
+        </span>
+      )}
     </Link>
   );
 }
@@ -196,6 +207,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const [paOpen, setPaOpen] = useState(false);
   const [plOpen, setPlOpen] = useState(false);
   const [opsOpen, setOpsOpen] = useState(false);
+  const [plPendingCount, setPlPendingCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -347,6 +359,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const showPa = isAdmin || !!paRole;
   const showPl = isAdmin || productListing;
   const showOps = isAdmin || operations;
+
+  useEffect(() => {
+    if (!showPl) return;
+    const load = async () => {
+      try {
+        const supabase = (await import("@/lib/supabaseClient")).createSupabaseClient();
+        const [ph, vs] = await Promise.all([
+          supabase.from("pl_price_history").select("id", { count: "exact", head: true }).eq("status", "pending"),
+          supabase.from("pl_variant_status_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        ]);
+        setPlPendingCount((ph.count ?? 0) + (vs.count ?? 0));
+      } catch {
+        // silently ignore
+      }
+    };
+    load();
+  }, [showPl]);
 
   const isOnSellerPayments = pathname.includes("/finance/seller-payments");
   const effectiveSellerPaymentsOpen = sellerPaymentsOpen || isOnSellerPayments;
@@ -830,7 +859,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
                   <NavLink href="/dashboard/product-listing/suppliers" pathname={pathname} collapsed={collapsed} icon={<Truck className={iconClass} />} label="Suppliers" indent matchPrefix="/product-listing/suppliers" />
                   <NavLink href="/dashboard/product-listing/products" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Products" indent matchPrefix="/product-listing/products" />
-                  <NavLink href="/dashboard/product-listing/product-updates" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Product Updates" indent matchPrefix="/product-listing/product-updates" />
+                  <NavLink href="/dashboard/product-listing/product-updates" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Product Updates" indent matchPrefix="/product-listing/product-updates" badge={plPendingCount} />
                 </div>
               )}
             </div>
