@@ -58,7 +58,7 @@ export interface PlProductRow {
   bar_code: string | null
   has_variants: boolean
   options: Array<{ name: string; values: string[] }> | null
-  status: 'pending' | 'active' | 'inactive' | 'rejected'
+  status: 'pending' | 'approved' | 'active' | 'inactive' | 'rejected'
   created_at: string
   updated_at: string
 }
@@ -97,7 +97,7 @@ export interface PlGroupedProduct {
   bar_code: string | null
   has_variants: boolean
   options: Array<{ name: string; values: string[] }> | null
-  status: 'pending' | 'active' | 'inactive' | 'rejected'
+  status: 'pending' | 'approved' | 'active' | 'inactive' | 'rejected'
   created_at: string
   updated_at: string
   variants: PlVariantInfo[]

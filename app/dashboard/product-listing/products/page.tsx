@@ -39,11 +39,12 @@ import type { PlGroupedProduct, PlVariantInfo, PlSupplier } from "@/lib/productL
 
 const ITEMS_PER_PAGE = 25;
 
-type StatusFilter = "all" | "pending" | "active" | "inactive" | "rejected";
+type StatusFilter = "all" | "pending" | "approved" | "active" | "inactive" | "rejected";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     active: "bg-green-100 text-green-800",
+    approved: "bg-blue-100 text-blue-800",
     pending: "bg-yellow-100 text-yellow-800",
     inactive: "bg-gray-100 text-gray-600",
     rejected: "bg-red-100 text-red-800",
@@ -279,6 +280,7 @@ export default function ProductsPage() {
         >
           <option value="all">All statuses</option>
           <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="rejected">Rejected</option>
