@@ -7,32 +7,17 @@ import {
   Plus,
   Search,
   Package,
-  Mail,
   Phone,
   Loader2,
 } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import {
-  fetchAllSuppliers,
+  fetchApprovedSuppliers,
   getProductCountForSupplier,
 } from "@/lib/productListing/supplierHelpers";
 import type { PlSupplierWithCount } from "@/lib/productListing/types";
 
 const ITEMS_PER_PAGE = 25;
-
-function StatusBadge({ status }: { status: string }) {
-  const cls =
-    status === "approved"
-      ? "bg-green-100 text-green-800"
-      : status === "rejected"
-      ? "bg-red-100 text-red-800"
-      : "bg-yellow-100 text-yellow-800";
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${cls}`}>
-      {status}
-    </span>
-  );
-}
 
 export default function SuppliersPage() {
   const router = useRouter();
@@ -54,7 +39,7 @@ export default function SuppliersPage() {
     setLoading(true);
     setError("");
     try {
-      const list = await fetchAllSuppliers();
+      const list = await fetchApprovedSuppliers();
       const withCounts = await Promise.all(
         list.map(async (s) => ({
           ...s,
@@ -73,7 +58,6 @@ export default function SuppliersPage() {
     const q = search.toLowerCase();
     return (
       s.shop_name?.toLowerCase().includes(q) ||
-      s.email?.toLowerCase().includes(q) ||
       s.phone?.toLowerCase().includes(q) ||
       s.supplier_code?.toLowerCase().includes(q)
     );
@@ -89,7 +73,7 @@ export default function SuppliersPage() {
     <div className="space-y-6 p-4 sm:p-6">
       <ListPageHeader
         title="Suppliers"
-        subtitle="Manage supplier records for Product Listing"
+        subtitle="Approved supplier records for Product Listing"
         actions={
           <button
             type="button"
@@ -105,10 +89,10 @@ export default function SuppliersPage() {
       {/* Search */}
       <div className="card p-4">
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name, email, phone or code…"
+            placeholder="Search by name, phone or code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input w-full pl-10"
@@ -130,11 +114,11 @@ export default function SuppliersPage() {
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Users className="mb-4 h-14 w-14 text-gray-300" />
           <p className="text-base font-medium text-gray-600">
-            {suppliers.length === 0 ? "No suppliers yet" : "No suppliers found"}
+            {suppliers.length === 0 ? "No approved suppliers yet" : "No suppliers found"}
           </p>
           <p className="mt-1 text-sm text-gray-400">
             {suppliers.length === 0
-              ? "Add your first supplier to get started"
+              ? "Add a supplier — they will appear here once approved"
               : "Try a different search term"}
           </p>
           {suppliers.length === 0 && (
@@ -166,16 +150,9 @@ export default function SuppliersPage() {
                     </h3>
                     <span className="text-xs text-gray-400">{s.supplier_code}</span>
                   </div>
-                  <StatusBadge status={s.status} />
                 </div>
 
                 <div className="mb-4 space-y-1.5">
-                  {s.email && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Mail className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{s.email}</span>
-                    </div>
-                  )}
                   {s.phone && (
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Phone className="h-3.5 w-3.5 shrink-0" />

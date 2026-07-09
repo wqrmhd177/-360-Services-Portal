@@ -39,6 +39,23 @@ export async function fetchAllSuppliers(): Promise<PlSupplier[]> {
   return (data || []) as PlSupplier[]
 }
 
+/** Fetch only approved (non-archived) suppliers, ordered by most recent. */
+export async function fetchApprovedSuppliers(): Promise<PlSupplier[]> {
+  const supabase = getClient()
+  const { data, error } = await supabase
+    .from('pl_suppliers')
+    .select('*')
+    .eq('archived', false)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching approved suppliers:', error)
+    return []
+  }
+  return (data || []) as PlSupplier[]
+}
+
 /** Fetch a single supplier by code. */
 export async function fetchSupplierByCode(code: string): Promise<PlSupplier | null> {
   const supabase = getClient()
