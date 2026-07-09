@@ -6,6 +6,8 @@ import { formatQrStatusLabel } from "@/lib/format";
 import { isMovementsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
+import PendingMovementSummary from "@/components/PendingMovementSummary";
+import { qrHasPendingMovement } from "@/lib/qrPurchaseDetails";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -150,6 +152,12 @@ export default function QrDetailModal({ qrId, onClose, apiPath }: QrDetailModalP
             <span className="badge border-yellow-500 bg-yellow-50 text-yellow-700 text-xs font-semibold">
               Re-edited by Procurement
             </span>
+          </div>
+        )}
+
+        {qrHasPendingMovement(qr) && (
+          <div className="mb-4">
+            <PendingMovementSummary qr={qr} />
           </div>
         )}
 

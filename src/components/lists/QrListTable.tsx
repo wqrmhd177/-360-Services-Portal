@@ -8,6 +8,8 @@ import {
   summarizeDestinations,
   summarizeProducts,
 } from "@/lib/format";
+import { qrHasPendingMovement } from "@/lib/qrPurchaseDetails";
+import PendingMovementSummary from "@/components/PendingMovementSummary";
 
 function addWorkingDays(fromDate: Date, workingDays: number): Date {
   const d = new Date(fromDate);
@@ -90,12 +92,13 @@ export default function QrListTable({
       <tbody>
         {qrs.map((qr) => {
           const reEdited = isQrReEdited(qr);
+          const hasPendingMovement = qrHasPendingMovement(qr);
           const link = respondLink?.(qr);
           return (
             <tr
               key={qr.id}
               className={`border-b border-gray-100 last:border-0 transition-colors hover:bg-gray-50 ${
-                reEdited ? "bg-yellow-50/40" : ""
+                reEdited ? "bg-yellow-50/40" : hasPendingMovement ? "bg-amber-50/30" : ""
               }`}
             >
               {showCheckbox && (
@@ -126,6 +129,7 @@ export default function QrListTable({
               <td className="px-4 py-3 align-middle text-center">
                 <div className="flex flex-wrap items-center justify-center gap-1.5">
                   <span className="badge">{formatQrStatusLabel(qr.status)}</span>
+                  {hasPendingMovement && <PendingMovementSummary qr={qr} compact />}
                   {reEdited && (
                     <span className="badge border-yellow-500 bg-yellow-50 text-yellow-700 text-[10px]">
                       Re-edited

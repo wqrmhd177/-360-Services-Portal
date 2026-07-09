@@ -2,6 +2,7 @@ import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 export function formatQrStatusLabel(status: string | null | undefined): string {
   const s = (status ?? "").trim();
   if (s === "converted_to_pr") return "Converted to PR";
+  if (s === "pending_movement") return "Pending Movement";
   const withSpaces = s.replace(/_/g, " ");
   if (!withSpaces) return "—";
   return withSpaces

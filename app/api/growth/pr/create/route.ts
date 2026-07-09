@@ -5,6 +5,7 @@ import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
 import { validateProductsAgainstQr } from "@/lib/qrQuantityValidation";
 import { isMovementsService } from "@/lib/serviceTypes";
+import { getPendingMovementQuantity, type MovementSplit } from "@/lib/qrPurchaseDetails";
 
 /** Add N working days (Mon–Fri) to a date. */
 function addWorkingDays(fromDate: Date, workingDays: number): Date {
@@ -235,6 +236,57 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 }
       );
+    }
+
+    if (from_qr_id) {
+      const { data: sourceQr } = await supabase
+        .from("qr")
+        .select("*")
+        .eq("id", from_qr_id)
+        .maybeSingle();
+
+      if (sourceQr) {
+        const isMovements = isMovementsService(sourceQr.service_needed ?? "");
+        let purchaseDetails = Array.isArray(sourceQr.purchase_details)
+          ? [...sourceQr.purchase_details]
+          : [];
+        let hasPendingMovement = false;
+
+        if (isMovements && purchaseDetails.length > 0) {
+          purchaseDetails = purchaseDetails.map((detail: Record<string, unknown>) => {
+            const splits = detail.movementSplits as Array<Record<string, unknown>> | undefined;
+            if (!Array.isArray(splits) || splits.length === 0) return detail;
+
+            const updatedSplits = splits.map((s) => {
+              if (s.status === "ready") {
+                return {
+                  ...s,
+                  status: "converted",
+                  convertedToPrId: newPr.id,
+                  convertedAt: new Date().toISOString(),
+                };
+              }
+              return s;
+            });
+
+            const updatedDetail = { ...detail, movementSplits: updatedSplits };
+            if (getPendingMovementQuantity({ movementSplits: updatedSplits as MovementSplit[] }) > 0) {
+              hasPendingMovement = true;
+            }
+            return updatedDetail;
+          });
+        }
+
+        const nextStatus = hasPendingMovement ? "pending_movement" : "converted_to_pr";
+        await supabase
+          .from("qr")
+          .update({
+            purchase_details: purchaseDetails,
+            status: nextStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", from_qr_id);
+      }
     }
 
     try {

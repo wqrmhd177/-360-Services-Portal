@@ -7,6 +7,8 @@ import { formatQrStatusLabel } from "@/lib/format";
 import { isMovementsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
+import PendingMovementSummary from "@/components/PendingMovementSummary";
+import { qrHasPendingMovement } from "@/lib/qrPurchaseDetails";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -186,6 +188,12 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
           </div>
         </div>
       </div>
+
+      {qrHasPendingMovement(qr) && (
+        <div className="card">
+          <PendingMovementSummary qr={qr} />
+        </div>
+      )}
 
       {/* Purchase Details - compact table: one row per product */}
       {qr.purchase_details && Array.isArray(qr.purchase_details) && qr.purchase_details.length > 0 && (

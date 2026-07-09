@@ -49,8 +49,44 @@ export type MovementSplit = {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  status: "ready" | "pending";
+  status: "ready" | "pending" | "converted";
+  convertedToPrId?: string;
+  convertedAt?: string;
 };
+
+export function getPendingMovementQuantity(detail: {
+  movementSplits?: MovementSplit[];
+}): number {
+  return (detail.movementSplits ?? [])
+    .filter((s) => s.status === "pending")
+    .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+}
+
+export function getConvertedMovementQuantity(detail: {
+  movementSplits?: MovementSplit[];
+}): number {
+  return (detail.movementSplits ?? [])
+    .filter((s) => s.status === "converted")
+    .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+}
+
+export function getTotalPendingMovementUnits(qr: {
+  service_needed?: string;
+  purchase_details?: Array<{ movementSplits?: MovementSplit[] }>;
+}): number {
+  if (qr.service_needed !== "Movements") return 0;
+  return (qr.purchase_details ?? []).reduce(
+    (sum, d) => sum + getPendingMovementQuantity(d),
+    0
+  );
+}
+
+export function qrHasPendingMovement(qr: {
+  service_needed?: string;
+  purchase_details?: Array<{ movementSplits?: MovementSplit[] }>;
+}): boolean {
+  return getTotalPendingMovementUnits(qr) > 0;
+}
 
 export function getRequestedQuantity(detail: {
   countryDetails?: Array<{ quantity?: number }>;

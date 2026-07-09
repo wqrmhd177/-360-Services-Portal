@@ -6,6 +6,8 @@ import { formatQrStatusLabel } from "@/lib/format";
 import { isMovementsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel, getRequestedQuantity } from "@/lib/qrPurchaseDetails";
 import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
+import PendingMovementSummary from "@/components/PendingMovementSummary";
+import { qrHasPendingMovement } from "@/lib/qrPurchaseDetails";
 import ImageGallery from "@/components/ImageGallery";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -91,6 +93,12 @@ export default function QuotationSummary({ qr, showMovementsActions = false, onQ
           Complete QR details with procurement responses
         </p>
       </div>
+
+      {qrHasPendingMovement(qr) && (
+        <div className="px-6 pt-4">
+          <PendingMovementSummary qr={qr} />
+        </div>
+      )}
 
       <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto space-y-6">
         {/* Customer Information */}

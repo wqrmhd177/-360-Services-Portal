@@ -81,13 +81,15 @@ export interface Qr {
       quantity: number;
       unitPrice: number;
       totalPrice: number;
-      status: "ready" | "pending";
+      status: "ready" | "pending" | "converted";
+      convertedToPrId?: string;
+      convertedAt?: string;
     }>;
     priceUpdatedAt?: string;
     priceUpdatedBy?: string;
   }>;
   procurement_response: string | Record<number, any> | null;
-  status: "open" | "responded" | "converted_to_pr" | "canceled";
+  status: "open" | "responded" | "converted_to_pr" | "pending_movement" | "canceled";
   remarks: string | null;
   created_at?: string;
   updated_at?: string;

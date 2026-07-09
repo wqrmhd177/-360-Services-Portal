@@ -84,6 +84,7 @@ export default function ApproverQuotationRequestsPage() {
     open: safeQrs.filter((q) => q.status === "open").length,
     responded: safeQrs.filter((q) => q.status === "responded").length,
     converted_to_pr: safeQrs.filter((q) => q.status === "converted_to_pr").length,
+    pending_movement: safeQrs.filter((q) => q.status === "pending_movement").length,
     canceled: safeQrs.filter((q) => q.status === "canceled").length,
   };
 
@@ -91,6 +92,7 @@ export default function ApproverQuotationRequestsPage() {
     { key: "all", label: "All", count: statusCounts.all },
     { key: "open", label: "Open", count: statusCounts.open },
     { key: "responded", label: "Responded", count: statusCounts.responded },
+    { key: "pending_movement", label: "Pending Movement", count: statusCounts.pending_movement },
     { key: "converted_to_pr", label: "Converted to PR", count: statusCounts.converted_to_pr },
     { key: "canceled", label: "Canceled", count: statusCounts.canceled },
   ];

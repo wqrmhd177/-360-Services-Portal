@@ -353,16 +353,6 @@ export default function ConvertQrToPrForm({
       const data = await response.json();
 
       if (response.ok && data.pr_id) {
-        // Update QR status to converted_to_pr
-        await fetch(`/api/growth/qr/${qr.id}/status`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ status: "converted_to_pr" }),
-        });
-
-        // Redirect to dashboard with success message
         router.push(
           `/dashboard/growth?pr_created=${data.pr_number || data.pr_id}`
         );

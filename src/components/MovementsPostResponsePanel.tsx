@@ -186,12 +186,18 @@ export default function MovementsPostResponsePanel({
             <div key={split.id} className="flex items-center gap-2">
               <span
                 className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${
-                  split.status === "ready"
+                  split.status === "converted"
                     ? "bg-green-100 text-green-800"
-                    : "bg-amber-100 text-amber-800"
+                    : split.status === "ready"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-amber-100 text-amber-800"
                 }`}
               >
-                {split.status === "ready" ? "Ready" : "Pending"}
+                {split.status === "converted"
+                  ? "Converted"
+                  : split.status === "ready"
+                    ? "Ready"
+                    : "Pending"}
               </span>
               <span>
                 {split.quantity} units · {Number(split.unitPrice).toFixed(2)} / unit · Total{" "}
