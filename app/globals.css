@@ -8,6 +8,22 @@
   body {
     @apply bg-portal-50 text-portal-900 font-sans;
   }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    @apply w-full rounded-xl border border-portal-200 bg-white px-3 py-2 text-sm text-portal-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20;
+  }
+
+  input[type="text"]:disabled,
+  input[type="number"]:disabled,
+  textarea:disabled,
+  select:disabled {
+    @apply bg-portal-50 text-portal-400 cursor-not-allowed;
+  }
 }
 
 @layer utilities {
@@ -40,23 +56,6 @@
 
 .badge-active {
   @apply inline-flex items-center rounded-full border border-portal-400 bg-portal-400/20 px-3 py-1 text-xs font-medium text-portal-900;
-}
-
-/* Form Input Styles */
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="password"],
-textarea,
-select {
-  @apply w-full rounded-xl border border-portal-200 bg-white px-3 py-2 text-sm text-portal-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20;
-}
-
-input[type="text"]:disabled,
-input[type="number"]:disabled,
-textarea:disabled,
-select:disabled {
-  @apply bg-portal-50 text-portal-400 cursor-not-allowed;
 }
 
 /* Dark text on light backgrounds */

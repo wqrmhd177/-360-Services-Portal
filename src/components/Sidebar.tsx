@@ -99,6 +99,7 @@ function NavLink({
 function SectionToggle({
   open,
   onToggle,
+  onSidebarExpand,
   collapsed,
   label,
   icon,
@@ -106,6 +107,7 @@ function SectionToggle({
 }: {
   open: boolean;
   onToggle: () => void;
+  onSidebarExpand?: () => void;
   collapsed: boolean;
   label: string;
   icon: ReactNode;
@@ -115,7 +117,7 @@ function SectionToggle({
     return (
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => (onSidebarExpand ? onSidebarExpand() : onToggle())}
         className={`flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
           active ? "bg-portal-700 text-white" : "text-portal-100 hover:bg-portal-800"
         }`}
@@ -578,11 +580,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <nav className="flex-1 overflow-y-auto p-4">
         <div className="space-y-1">
+          <NavLink
+            href="/dashboard"
+            pathname={pathname}
+            collapsed={collapsed}
+            icon={<Home className={iconClassLg} />}
+            label="Home"
+          />
+
           {showZambeel && (
             <div>
               <SectionToggle
                 open={zambeelOpen}
                 onToggle={() => setZambeelOpen((p) => !p)}
+                onSidebarExpand={() => {
+                  onToggle?.();
+                  setZambeelOpen(true);
+                }}
                 collapsed={collapsed}
                 label="Zambeel 360"
                 icon={<Layers className={iconClassLg} />}
@@ -832,6 +846,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               <SectionToggle
                 open={paOpen}
                 onToggle={() => setPaOpen((p) => !p)}
+                onSidebarExpand={() => {
+                  onToggle?.();
+                  setPaOpen(true);
+                }}
                 collapsed={collapsed}
                 label="Product Availability"
                 icon={<ClipboardList className={iconClassLg} />}
@@ -857,6 +875,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               <SectionToggle
                 open={plOpen}
                 onToggle={() => setPlOpen((p) => !p)}
+                onSidebarExpand={() => {
+                  onToggle?.();
+                  setPlOpen(true);
+                }}
                 collapsed={collapsed}
                 label="Product Listing"
                 icon={<List className={iconClassLg} />}
@@ -877,6 +899,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               <SectionToggle
                 open={opsOpen}
                 onToggle={() => setOpsOpen((p) => !p)}
+                onSidebarExpand={() => {
+                  onToggle?.();
+                  setOpsOpen(true);
+                }}
                 collapsed={collapsed}
                 label="Operations"
                 icon={<BarChart3 className={iconClassLg} />}

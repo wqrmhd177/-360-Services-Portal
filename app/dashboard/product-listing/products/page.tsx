@@ -225,6 +225,14 @@ export default function ProductsPage() {
     [suppliers]
   );
 
+  const supplierCurrency = useCallback(
+    (code: string) => suppliers.find((s) => s.supplier_code === code)?.currency ?? "USD",
+    [suppliers]
+  );
+
+  const canEditVariantStatus = (status: string) =>
+    status === "approved" || status === "active";
+
   // ─── Stats cards ───────────────────────────────────────────────────────────
   const statCards = [
     { label: "Total", value: stats.total, color: "text-gray-700" },
@@ -367,7 +375,10 @@ export default function ProductsPage() {
                             if (prices.length === 0) return <span className="text-gray-400">—</span>;
                             const min = Math.min(...prices);
                             const max = Math.max(...prices);
-                            return min === max ? `$${min.toFixed(2)}` : `$${min.toFixed(2)} – $${max.toFixed(2)}`;
+                            const cur = supplierCurrency(product.fk_owned_by);
+                            return min === max
+                              ? `${cur} ${min.toFixed(2)}`
+                              : `${cur} ${min.toFixed(2)} – ${cur} ${max.toFixed(2)}`;
                           })()}
                         </td>
                         <td className="px-4 py-3 text-center text-gray-600">
@@ -491,12 +502,15 @@ export default function ProductsPage() {
             {viewProduct.variants.length > 0 && (
               <div className="mb-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-700">Variants</h3>
-                {viewProduct.status !== "approved" && (
-                  <p className="text-xs text-yellow-600 bg-yellow-50 rounded-lg px-3 py-1.5 border border-yellow-100">
-                    Variant active status can only be changed once the product is approved.
-                  </p>
-                )}
-                {viewProduct.variants.map((v) => (
+                {viewProduct.variants.map((v) => {
+                  const editable = canEditVariantStatus(viewProduct.status);
+                  const variantStatus = editable
+                    ? (editActive.get(v.variant_id) ?? v.active)
+                      ? "active"
+                      : "inactive"
+                    : "pending";
+
+                  return (
                   <div key={v.variant_id} className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium text-gray-800">
@@ -504,25 +518,25 @@ export default function ProductsPage() {
                           ? formatVariantLabel(v.option_values)
                           : `Variant #${v.variant_id}`}
                       </div>
-                      {viewProduct.status === "approved" ? (
-                        <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
-                          Active
-                          <input
-                            type="checkbox"
-                            checked={editActive.get(v.variant_id) ?? v.active}
-                            onChange={(e) => {
-                              const next = new Map(editActive);
-                              next.set(v.variant_id, e.target.checked);
-                              setEditActive(next);
-                            }}
-                            className="h-4 w-4 rounded"
-                          />
-                        </label>
-                      ) : (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${v.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                          {v.active ? "Active" : "Inactive"}
-                        </span>
-                      )}
+                      <select
+                        disabled={!editable}
+                        value={variantStatus}
+                        onChange={(e) => {
+                          if (!editable) return;
+                          const next = new Map(editActive);
+                          next.set(v.variant_id, e.target.value === "active");
+                          setEditActive(next);
+                        }}
+                        className="input w-40 py-1 text-xs disabled:cursor-not-allowed disabled:bg-gray-100"
+                      >
+                        {!editable && <option value="pending">Pending Approval</option>}
+                        {editable && (
+                          <>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                          </>
+                        )}
+                      </select>
                     </div>
                     {v.option_values && (
                       <div className="flex flex-wrap gap-1">
@@ -553,7 +567,8 @@ export default function ProductsPage() {
                       {v.sku && <div>SKU: <span className="font-medium">{v.sku}</span></div>}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -567,7 +582,7 @@ export default function ProductsPage() {
               <button type="button" onClick={closeView} className="btn-secondary">
                 Close
               </button>
-              {viewProduct.status === "approved" && (
+              {canEditVariantStatus(viewProduct.status) && (
                 <button
                   type="button"
                   onClick={saveVariantChanges}

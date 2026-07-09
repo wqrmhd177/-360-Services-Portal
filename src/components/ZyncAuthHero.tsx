@@ -14,7 +14,22 @@ const flowSteps = [
   { label: "Inventory", icon: ClipboardList, tone: "bg-amber-100 text-amber-700" },
 ];
 
+function FlowPill({ step }: { step: (typeof flowSteps)[number] }) {
+  const Icon = step.icon;
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold shadow-sm ${step.tone}`}
+    >
+      <Icon className="h-4 w-4" />
+      {step.label}
+    </div>
+  );
+}
+
 export default function ZyncAuthHero() {
+  const topRow = flowSteps.slice(0, 3);
+  const inventoryStep = flowSteps[3];
+
   return (
     <div className="relative flex h-full flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-portal-900 via-portal-800 to-slate-900 p-8 md:p-12 text-center">
       <div className="pointer-events-none absolute inset-0">
@@ -45,23 +60,19 @@ export default function ZyncAuthHero() {
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {flowSteps.map((step, index) => {
-              const Icon = step.icon;
-              return (
-                <div key={step.label} className="flex items-center gap-2">
-                  <div
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold shadow-sm ${step.tone}`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {step.label}
-                  </div>
-                  {index < flowSteps.length - 1 && (
-                    <ArrowRight className="h-4 w-4 text-portal-300/70" />
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-center gap-2">
+            {topRow.map((step, index) => (
+              <div key={step.label} className="flex items-center gap-2">
+                <FlowPill step={step} />
+                {index < topRow.length - 1 && (
+                  <ArrowRight className="h-4 w-4 shrink-0 text-portal-300/70" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-2 flex justify-center">
+            <FlowPill step={inventoryStep} />
           </div>
 
           <div className="mt-6 grid grid-cols-3 gap-3">

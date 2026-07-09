@@ -86,18 +86,18 @@ export default function ZyncWelcome({ userName }: { userName?: string }) {
           Your workspace for sourcing, logistics, payments, and inventory — all in one place.
         </p>
 
-        <div className="mt-12 grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4 md:gap-4">
+        <div className="mt-12 flex w-full max-w-5xl flex-wrap justify-center gap-4">
           {workflowTiles.map((tile) => {
             const Icon = tile.icon;
             return (
               <div
                 key={tile.label}
-                className={`rounded-2xl border border-white/80 bg-gradient-to-br ${tile.color} p-4 shadow-sm backdrop-blur-sm transition-transform hover:-translate-y-0.5`}
+                className={`w-36 rounded-2xl border border-white/80 bg-gradient-to-br md:w-40 ${tile.color} p-4 shadow-sm backdrop-blur-sm transition-transform hover:-translate-y-0.5`}
               >
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white/80 shadow-sm">
                   <Icon className={`h-5 w-5 ${tile.iconColor}`} />
                 </div>
-                <p className="text-xs font-medium text-gray-700">{tile.label}</p>
+                <p className="text-center text-xs font-medium text-gray-700">{tile.label}</p>
               </div>
             );
           })}

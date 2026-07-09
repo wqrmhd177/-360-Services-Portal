@@ -23,6 +23,25 @@ const COUNTRIES = [
   "France", "Canada", "Australia", "Turkey", "China", "India",
 ] as const;
 
+const COUNTRY_CURRENCY: Record<string, string> = {
+  Pakistan: "PKR",
+  "United Arab Emirates": "AED",
+  "Saudi Arabia": "SAR",
+  "United Kingdom": "GBP",
+  "United States": "USD",
+  Kuwait: "KWD",
+  Qatar: "QAR",
+  Bahrain: "BHD",
+  Oman: "OMR",
+  Germany: "EUR",
+  France: "EUR",
+  Canada: "CAD",
+  Australia: "AUD",
+  Turkey: "TRY",
+  China: "CNY",
+  India: "INR",
+};
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FormData {
   shopName: string;
@@ -31,13 +50,14 @@ interface FormData {
   whatsapp: string;
   country: string;
   city: string;
+  currency: string;
   supplierType: string;
   category: string[];
 }
 
 const INIT: FormData = {
   shopName: "", ownerName: "", phone: "", whatsapp: "",
-  country: "", city: "", supplierType: "", category: [],
+  country: "", city: "", currency: "USD", supplierType: "", category: [],
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -52,6 +72,12 @@ export default function NewSupplierPage() {
   function set(field: keyof FormData, value: string | string[]) {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => ({ ...e, [field]: "" }));
+  }
+
+  function handleCountryChange(country: string) {
+    const currency = COUNTRY_CURRENCY[country] ?? "USD";
+    setForm((f) => ({ ...f, country, currency }));
+    setErrors((e) => ({ ...e, country: "" }));
   }
 
   function handlePhoneChange(value: string) {
@@ -105,7 +131,7 @@ export default function NewSupplierPage() {
         whatsapp: form.whatsapp,
         country: form.country,
         city: form.city || null,
-        currency: "USD",
+        currency: form.currency,
         supplier_type: form.supplierType || null,
         category: form.category.length > 0 ? form.category : null,
         pickup_address: null,
@@ -221,7 +247,7 @@ export default function NewSupplierPage() {
             <select
               className={`input ${errors.country ? "border-red-400" : ""}`}
               value={form.country}
-              onChange={(e) => set("country", e.target.value)}
+              onChange={(e) => handleCountryChange(e.target.value)}
             >
               <option value="">Select country</option>
               {COUNTRIES.map((c) => (
@@ -238,6 +264,15 @@ export default function NewSupplierPage() {
             />
           </Field>
         </div>
+
+        <Field label="Currency">
+          <input
+            className="input bg-gray-50 text-gray-600"
+            value={form.currency}
+            readOnly
+            placeholder="Auto-set from country"
+          />
+        </Field>
 
         <Field label="Supplier Type">
           <select
