@@ -231,6 +231,30 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!session) return;
+    const { isAdmin, permissions } = session as { isAdmin?: boolean; permissions?: UserPermissions };
+    const { productListing } = deriveEffectivePermissions({
+      role: session.role ?? null,
+      isAdmin: !!isAdmin,
+      permissions,
+    });
+    if (!isAdmin && !productListing) return;
+    const load = async () => {
+      try {
+        const supabase = (await import("@/lib/supabaseClient")).createSupabaseClient();
+        const [ph, vs] = await Promise.all([
+          supabase.from("pl_price_history").select("id", { count: "exact", head: true }).eq("status", "pending"),
+          supabase.from("pl_variant_status_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        ]);
+        setPlPendingCount((ph.count ?? 0) + (vs.count ?? 0));
+      } catch {
+        // silently ignore
+      }
+    };
+    load();
+  }, [session]);
+
 
   const handleSignOut = async () => {
     try {
@@ -359,23 +383,6 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const showPa = isAdmin || !!paRole;
   const showPl = isAdmin || productListing;
   const showOps = isAdmin || operations;
-
-  useEffect(() => {
-    if (!showPl) return;
-    const load = async () => {
-      try {
-        const supabase = (await import("@/lib/supabaseClient")).createSupabaseClient();
-        const [ph, vs] = await Promise.all([
-          supabase.from("pl_price_history").select("id", { count: "exact", head: true }).eq("status", "pending"),
-          supabase.from("pl_variant_status_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        ]);
-        setPlPendingCount((ph.count ?? 0) + (vs.count ?? 0));
-      } catch {
-        // silently ignore
-      }
-    };
-    load();
-  }, [showPl]);
 
   const isOnSellerPayments = pathname.includes("/finance/seller-payments");
   const effectiveSellerPaymentsOpen = sellerPaymentsOpen || isOnSellerPayments;
