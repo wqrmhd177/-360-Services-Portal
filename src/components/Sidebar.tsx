@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Tag,
+  Radio,
   Megaphone,
   ClipboardList,
   Layers,
@@ -914,6 +915,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                   <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Orders" indent matchPrefix="/operations/orders" />
                   <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
                   <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
+                  <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
                 </div>
               )}
             </div>
