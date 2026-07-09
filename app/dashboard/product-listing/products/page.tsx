@@ -263,7 +263,7 @@ export default function ProductsPage() {
       {/* Filters */}
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search products…"
@@ -323,7 +323,8 @@ export default function ProductsPage() {
                 <thead>
                   <tr className="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
                     <th className="px-4 py-3 text-left">Product</th>
-                    <th className="px-4 py-3 text-left">Supplier</th>
+                    <th className="px-4 py-3 text-center">Supplier</th>
+                    <th className="px-4 py-3 text-center">Price</th>
                     <th className="px-4 py-3 text-center">Variants</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-center">Actions</th>
@@ -355,8 +356,17 @@ export default function ProductsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">
+                        <td className="px-4 py-3 text-center text-gray-600">
                           {supplierName(product.fk_owned_by)}
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-700 font-medium text-xs">
+                          {(() => {
+                            const prices = product.variants.map((v) => v.price).filter((p) => p > 0);
+                            if (prices.length === 0) return <span className="text-gray-400">—</span>;
+                            const min = Math.min(...prices);
+                            const max = Math.max(...prices);
+                            return min === max ? `$${min.toFixed(2)}` : `$${min.toFixed(2)} – $${max.toFixed(2)}`;
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-center text-gray-600">
                           {product.variants.length}
@@ -479,6 +489,11 @@ export default function ProductsPage() {
             {viewProduct.variants.length > 0 && (
               <div className="mb-4 space-y-3">
                 <h3 className="text-sm font-semibold text-gray-700">Variants</h3>
+                {viewProduct.status !== "approved" && (
+                  <p className="text-xs text-yellow-600 bg-yellow-50 rounded-lg px-3 py-1.5 border border-yellow-100">
+                    Variant active status can only be changed once the product is approved.
+                  </p>
+                )}
                 {viewProduct.variants.map((v) => (
                   <div key={v.variant_id} className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -487,19 +502,25 @@ export default function ProductsPage() {
                           ? formatVariantLabel(v.option_values)
                           : `Variant #${v.variant_id}`}
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-gray-500">
-                        Active
-                        <input
-                          type="checkbox"
-                          checked={editActive.get(v.variant_id) ?? v.active}
-                          onChange={(e) => {
-                            const next = new Map(editActive);
-                            next.set(v.variant_id, e.target.checked);
-                            setEditActive(next);
-                          }}
-                          className="h-4 w-4 rounded"
-                        />
-                      </label>
+                      {viewProduct.status === "approved" ? (
+                        <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+                          Active
+                          <input
+                            type="checkbox"
+                            checked={editActive.get(v.variant_id) ?? v.active}
+                            onChange={(e) => {
+                              const next = new Map(editActive);
+                              next.set(v.variant_id, e.target.checked);
+                              setEditActive(next);
+                            }}
+                            className="h-4 w-4 rounded"
+                          />
+                        </label>
+                      ) : (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${v.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                          {v.active ? "Active" : "Inactive"}
+                        </span>
+                      )}
                     </div>
                     {v.option_values && (
                       <div className="flex flex-wrap gap-1">
@@ -544,15 +565,17 @@ export default function ProductsPage() {
               <button type="button" onClick={closeView} className="btn-secondary">
                 Close
               </button>
-              <button
-                type="button"
-                onClick={saveVariantChanges}
-                disabled={savingEdit}
-                className="btn-primary inline-flex items-center gap-2 disabled:opacity-60"
-              >
-                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Submit Changes
-              </button>
+              {viewProduct.status === "approved" && (
+                <button
+                  type="button"
+                  onClick={saveVariantChanges}
+                  disabled={savingEdit}
+                  className="btn-primary inline-flex items-center gap-2 disabled:opacity-60"
+                >
+                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Submit Changes
+                </button>
+              )}
             </div>
           </div>
         </div>
