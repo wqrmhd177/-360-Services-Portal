@@ -107,10 +107,10 @@ async function uploadFilesToStorage(ownerId: string, files: File[]): Promise<str
 
 export default function ProductAvailabilityPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, userRole, userFriendlyId, isAdmin: portalIsAdmin } =
+  const { isAuthenticated, isLoading: authLoading, paRole, userFriendlyId, isAdmin: portalIsAdmin } =
     useProductAvailabilityAuth();
 
-  const effectivePaRole = portalIsAdmin ? "admin" : userRole;
+  const effectivePaRole = portalIsAdmin ? "admin" : paRole;
 
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("normal_requests");
@@ -155,7 +155,7 @@ export default function ProductAvailabilityPage() {
   const isManager = effectivePaRole === "manager" || portalIsAdmin;
   const canCreate = isAgent || isAdmin;
   const isPurchaser = effectivePaRole === "purchaser" || portalIsAdmin;
-  const canAccess = isAgent || isAdmin || isPurchaser || isManager;
+  const canAccess = portalIsAdmin || !!paRole;
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
     if (filter === "new") return "all";
