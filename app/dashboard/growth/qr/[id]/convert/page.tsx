@@ -3,8 +3,7 @@ import Link from "next/link";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import type { Qr } from "@/types/workflows";
-import ConvertQrToPrForm from "./ConvertQrToPrForm";
-import QuotationSummary from "./QuotationSummary";
+import ConvertQrPageContent from "./ConvertQrPageContent";
 
 /** Add N working days (Mon–Fri) to a date. */
 function addWorkingDays(fromDate: Date, workingDays: number): Date {
@@ -131,17 +130,7 @@ export default async function ConvertQrToPrPage({ params }: PageProps) {
         </div>
 
         {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Enhanced Quotation Summary */}
-          <div className="lg:col-span-1">
-            <QuotationSummary qr={typedQr} />
-          </div>
-
-          {/* Right Column: PR Form */}
-          <div className="lg:col-span-1">
-            <ConvertQrToPrForm qr={typedQr} userEmail={session.email} />
-          </div>
-        </div>
+        <ConvertQrPageContent qr={typedQr} userEmail={session.email} />
       </div>
     </div>
   );

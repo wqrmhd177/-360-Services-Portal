@@ -5,6 +5,7 @@ import { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
 import { isMovementsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel, getRequestedQuantity } from "@/lib/qrPurchaseDetails";
+import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
 import ImageGallery from "@/components/ImageGallery";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -18,9 +19,12 @@ function toPublicUrl(path: string): string {
 
 interface QuotationSummaryProps {
   qr: Qr;
+  /** Show split/price actions on the convert page */
+  showMovementsActions?: boolean;
+  onQrUpdated?: (purchaseDetails: unknown[]) => void;
 }
 
-export default function QuotationSummary({ qr }: QuotationSummaryProps) {
+export default function QuotationSummary({ qr, showMovementsActions = false, onQrUpdated }: QuotationSummaryProps) {
   const [expandedDetail, setExpandedDetail] = useState<number | null>(0);
   const [creatorName, setCreatorName] = useState<string | null>(null);
 
@@ -420,6 +424,17 @@ export default function QuotationSummary({ qr }: QuotationSummaryProps) {
                                 </div>
                               )}
                           </div>
+                        )}
+
+                        {isMovements && showMovementsActions && procResponse && (
+                          <MovementsPostResponsePanel
+                            qrId={qr.id}
+                            detailIndex={index}
+                            detail={detail}
+                            inventoryAvailable={procResponse.inventoryAvailable}
+                            editable
+                            onUpdated={onQrUpdated}
+                          />
                         )}
                       </div>
                     )}

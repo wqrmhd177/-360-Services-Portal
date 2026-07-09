@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Qr, PrProduct } from "@/types/workflows";
 import MultiProductForm, { type ComboLookupEntry } from "@/components/MultiProductForm";
@@ -8,25 +8,133 @@ import PaymentEntriesInput, { PaymentEntryInput } from "@/components/PaymentEntr
 import ServiceTypeSelect from "@/components/ServiceTypeSelect";
 import { getCurrencyByCountry } from "@/lib/currency";
 import { isMovementsService } from "@/lib/serviceTypes";
-import { getRequestedQuantity } from "@/lib/qrPurchaseDetails";
+import { getPurchaseDetailLabel, getRequestedQuantity } from "@/lib/qrPurchaseDetails";
 
 interface ConvertQrToPrFormProps {
   qr: Qr;
   userEmail: string;
 }
 
-export default function ConvertQrToPrForm({
-  qr,
-  userEmail,
-}: ConvertQrToPrFormProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function buildProductsFromQr(qr: Qr): PrProduct[] {
+  if (!qr.purchase_details || qr.purchase_details.length === 0) {
+    return [
+      {
+        productName: "",
+        skuCode: "",
+        destinationCountry: "",
+        quantity: 0,
+        landedCostPrice: 0,
+        sellingPricePerUnit: 0,
+        currency: "AED",
+        totalAmount: 0,
+        shippingType: "sea",
+        movementType: "normal",
+      },
+    ];
+  }
 
-  // Initialize products from QR purchase details (one PR product per procurement combination or per detail for legacy)
-  const initializeProducts = (): PrProduct[] => {
-    if (!qr.purchase_details || qr.purchase_details.length === 0) {
-      return [
+  const result: PrProduct[] = [];
+  const isMovements = isMovementsService(qr.service_needed ?? "");
+
+  const getQuantityForCountry = (detail: any, destinationCountry: string, detailIndex: number): number => {
+    const procResponse =
+      qr.procurement_response && typeof qr.procurement_response === "object"
+        ? (qr.procurement_response as any)[detailIndex]
+        : null;
+    const inventoryAvailable = procResponse?.inventoryAvailable;
+    const requested = getRequestedQuantity(detail);
+
+    const readyQty = detail.movementSplits
+      ?.filter((s: { status: string }) => s.status === "ready")
+      .reduce((sum: number, s: { quantity: number }) => sum + (s.quantity || 0), 0);
+
+    if (readyQty != null && readyQty > 0) {
+      return readyQty;
+    }
+
+    if (
+      isMovements &&
+      inventoryAvailable != null &&
+      inventoryAvailable !== requested &&
+      (!detail.movementSplits || detail.movementSplits.length === 0)
+    ) {
+      return 0;
+    }
+
+    if (detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0) {
+      const cd = detail.countryDetails.find((c: { country: string }) => c.country === destinationCountry);
+      return cd ? (cd.quantity ?? 0) : detail.quantity || 0;
+    }
+    return detail.quantity || 0;
+  };
+
+  const unitPriceFromDetail = (detail: any) =>
+    detail.countryDetails?.[0]?.unitPrice ??
+    detail.countryDetails?.[0]?.targetPrice ??
+    detail.unitPrice ??
+    detail.targetPrice ??
+    0;
+
+  qr.purchase_details.forEach((detail: any, index: number) => {
+    const procResponse =
+      qr.procurement_response && typeof qr.procurement_response === "object"
+        ? (qr.procurement_response as any)[index]
+        : null;
+    const fromSku = String(detail.fromSku ?? "").trim();
+    const toSku = String(detail.toSku ?? "").trim();
+    const productName = isMovements
+      ? getPurchaseDetailLabel(detail)
+      : (detail.productName || "");
+    const defaultSelling = unitPriceFromDetail(detail);
+
+    if (procResponse?.combinations && Array.isArray(procResponse.combinations) && procResponse.combinations.length > 0) {
+      procResponse.combinations.forEach((combo: any) => {
+        const destinationCountry = combo.destinationCountry || "";
+        const quantity = getQuantityForCountry(detail, destinationCountry, index);
+        const currency = getCurrencyByCountry(destinationCountry);
+        const landedCost = combo.landedCostPerUnit ?? 0;
+        result.push({
+          productName,
+          skuCode: "",
+          fromSku: isMovements ? fromSku : undefined,
+          toSku: isMovements ? toSku : undefined,
+          destinationCountry,
+          quantity,
+          landedCostPrice: landedCost,
+          sellingPricePerUnit: defaultSelling,
+          currency,
+          totalAmount: quantity * defaultSelling,
+          shippingType: combo.shippingType || "sea",
+          movementType: combo.movementType || "normal",
+          remarks: detail.remarks || "",
+        });
+      });
+    } else {
+      const destinationCountry = detail.destinationCountries?.[0] || detail.destinationCountry || "";
+      const quantity = getQuantityForCountry(detail, destinationCountry, index);
+      const currency = getCurrencyByCountry(destinationCountry);
+      const landedCost = procResponse?.landedCostPerUnit || 0;
+      result.push({
+        productName,
+        skuCode: "",
+        fromSku: isMovements ? fromSku : undefined,
+        toSku: isMovements ? toSku : undefined,
+        destinationCountry,
+        quantity,
+        landedCostPrice: landedCost,
+        sellingPricePerUnit: defaultSelling,
+        currency,
+        totalAmount: quantity * defaultSelling,
+        shippingType: detail.shippingType || "sea",
+        movementType: detail.movementType || "normal",
+        remarks: detail.remarks || "",
+      });
+    }
+  });
+
+  return result.length > 0
+    ? result
+    : [
         {
           productName: "",
           skuCode: "",
@@ -40,103 +148,22 @@ export default function ConvertQrToPrForm({
           movementType: "normal",
         },
       ];
-    }
+}
 
-    const result: PrProduct[] = [];
-    const isMovements = isMovementsService(qr.service_needed ?? "");
-    const getQuantityForCountry = (detail: any, destinationCountry: string, detailIndex: number): number => {
-      const procResponse =
-        qr.procurement_response && typeof qr.procurement_response === "object"
-          ? (qr.procurement_response as any)[detailIndex]
-          : null;
-      const inventoryAvailable = procResponse?.inventoryAvailable;
-      const requested = getRequestedQuantity(detail);
+export default function ConvertQrToPrForm({
+  qr,
+  userEmail,
+}: ConvertQrToPrFormProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isMovements = isMovementsService(qr.service_needed ?? "");
 
-      const readyQty = detail.movementSplits
-        ?.filter((s: { status: string }) => s.status === "ready")
-        .reduce((sum: number, s: { quantity: number }) => sum + (s.quantity || 0), 0);
+  const [products, setProducts] = useState<PrProduct[]>(() => buildProductsFromQr(qr));
 
-      if (readyQty != null && readyQty > 0) {
-        return readyQty;
-      }
-
-      if (
-        isMovements &&
-        inventoryAvailable != null &&
-        inventoryAvailable !== requested &&
-        (!detail.movementSplits || detail.movementSplits.length === 0)
-      ) {
-        return 0;
-      }
-
-      if (detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0) {
-        const cd = detail.countryDetails.find((c: { country: string }) => c.country === destinationCountry);
-        return cd ? (cd.quantity ?? 0) : detail.quantity || 0;
-      }
-      return detail.quantity || 0;
-    };
-
-    qr.purchase_details.forEach((detail: any, index: number) => {
-      const procResponse =
-        qr.procurement_response && typeof qr.procurement_response === "object"
-          ? (qr.procurement_response as any)[index]
-          : null;
-
-      if (procResponse?.combinations && Array.isArray(procResponse.combinations) && procResponse.combinations.length > 0) {
-        procResponse.combinations.forEach((combo: any) => {
-          const destinationCountry = combo.destinationCountry || "";
-          const quantity = getQuantityForCountry(detail, destinationCountry, index);
-          const currency = getCurrencyByCountry(destinationCountry);
-          const landedCost = combo.landedCostPerUnit ?? 0;
-          result.push({
-            productName: detail.productName || "",
-            skuCode: "",
-            destinationCountry,
-            quantity,
-            landedCostPrice: landedCost,
-            sellingPricePerUnit: 0,
-            currency,
-            totalAmount: 0,
-            shippingType: combo.shippingType || "sea",
-            movementType: combo.movementType || "normal",
-            remarks: detail.remarks || "",
-          });
-        });
-      } else {
-        const destinationCountry = detail.destinationCountries?.[0] || detail.destinationCountry || "";
-        const quantity = getQuantityForCountry(detail, destinationCountry, index);
-        const currency = getCurrencyByCountry(destinationCountry);
-        const landedCost = procResponse?.landedCostPerUnit || 0;
-        result.push({
-          productName: detail.productName || "",
-          skuCode: "",
-          destinationCountry,
-          quantity,
-          landedCostPrice: landedCost,
-          sellingPricePerUnit: 0,
-          currency,
-          totalAmount: 0,
-          shippingType: detail.shippingType || "sea",
-          movementType: detail.movementType || "normal",
-          remarks: detail.remarks || "",
-        });
-      }
-    });
-    return result.length > 0 ? result : [{
-      productName: "",
-      skuCode: "",
-      destinationCountry: "",
-      quantity: 0,
-      landedCostPrice: 0,
-      sellingPricePerUnit: 0,
-      currency: "AED",
-      totalAmount: 0,
-      shippingType: "sea",
-      movementType: "normal",
-    }];
-  };
-
-  const [products, setProducts] = useState<PrProduct[]>(initializeProducts());
+  useEffect(() => {
+    setProducts(buildProductsFromQr(qr));
+  }, [qr.purchase_details, qr.procurement_response, qr.service_needed]);
 
   const comboLookup = useMemo(() => {
     const map: Record<string, ComboLookupEntry> = {};
@@ -167,12 +194,23 @@ export default function ConvertQrToPrForm({
     return map;
   }, [qr]);
 
-  const convertLockedFields: (keyof PrProduct)[] = [
-    "landedCostPrice",
-    "quantity",
-    "destinationCountry",
-    "productName",
-  ];
+  const convertLockedFields: (keyof PrProduct)[] = isMovements
+    ? ["landedCostPrice", "quantity", "destinationCountry", "fromSku", "toSku"]
+    : ["landedCostPrice", "quantity", "destinationCountry", "productName"];
+
+  const needsSplit = useMemo(() => {
+    if (!isMovements || !qr.purchase_details) return false;
+    const proc =
+      qr.procurement_response && typeof qr.procurement_response === "object"
+        ? (qr.procurement_response as Record<number, { inventoryAvailable?: number }>)
+        : {};
+    return qr.purchase_details.some((detail, index) => {
+      const inv = proc[index]?.inventoryAvailable;
+      const requested = getRequestedQuantity(detail);
+      const hasSplit = detail.movementSplits && detail.movementSplits.length > 0;
+      return inv != null && inv !== requested && !hasSplit;
+    });
+  }, [isMovements, qr.purchase_details, qr.procurement_response]);
   const [sellerChannelName, setSellerChannelName] = useState(
     qr.reseller_code || ""
   );
@@ -209,13 +247,24 @@ export default function ConvertQrToPrForm({
 
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
-      if (!p.productName.trim()) {
-        setError(`Combination ${i + 1}: Product Name is required`);
-        return false;
-      }
-      if (!p.skuCode.trim()) {
-        setError(`Combination ${i + 1}: SKU Code is required`);
-        return false;
+      if (isMovements) {
+        if (!p.fromSku?.trim()) {
+          setError(`Combination ${i + 1}: From SKU is required`);
+          return false;
+        }
+        if (!p.toSku?.trim()) {
+          setError(`Combination ${i + 1}: To SKU is required`);
+          return false;
+        }
+      } else {
+        if (!p.productName.trim()) {
+          setError(`Combination ${i + 1}: Product Name is required`);
+          return false;
+        }
+        if (!p.skuCode.trim()) {
+          setError(`Combination ${i + 1}: SKU Code is required`);
+          return false;
+        }
       }
       if (!p.destinationCountry) {
         setError(`Combination ${i + 1}: Destination Country is required`);
@@ -273,6 +322,17 @@ export default function ConvertQrToPrForm({
       }
 
       // Create PR
+      const productsPayload = products.map((p) => {
+        if (!isMovements) return p;
+        const fromSku = p.fromSku?.trim() ?? "";
+        const toSku = p.toSku?.trim() ?? "";
+        return {
+          ...p,
+          productName: fromSku && toSku ? `${fromSku} → ${toSku}` : p.productName,
+          skuCode: "",
+        };
+      });
+
       const response = await fetch("/api/growth/pr/create", {
         method: "POST",
         headers: {
@@ -283,7 +343,7 @@ export default function ConvertQrToPrForm({
           seller_channel_name: sellerChannelName,
           seller_user_id: sellerUserId,
           seller_service_type: sellerServiceType,
-          products: products,
+          products: productsPayload,
           payment_type: paymentType,
           payment_entries: payment_entries.length > 0 ? payment_entries : undefined,
           remarks: remarks || null,
@@ -327,6 +387,13 @@ export default function ConvertQrToPrForm({
           Review and complete the PR details based on the quotation
         </p>
       </div>
+
+      {needsSplit && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg text-sm">
+          Inventory available is less than requested. Use <strong>Split movement</strong> in the
+          quotation summary (left) before creating the PR.
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
@@ -392,6 +459,7 @@ export default function ConvertQrToPrForm({
             headingMode="combination"
             lockedFields={convertLockedFields}
             comboLookup={comboLookup}
+            movementsMode={isMovements}
           />
         </div>
 
@@ -454,7 +522,7 @@ export default function ConvertQrToPrForm({
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || needsSplit}
             className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             {loading ? (

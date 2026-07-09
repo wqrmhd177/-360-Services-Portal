@@ -24,6 +24,8 @@ interface MultiProductFormProps {
   lockedFields?: (keyof PrProduct)[];
   /** Lookup for shipping-type → landed cost when converting from QR. */
   comboLookup?: Record<string, ComboLookupEntry>;
+  /** Movements service: show From/To SKU instead of Product Name / SKU Code. */
+  movementsMode?: boolean;
 }
 
 const emptyProduct: PrProduct = {
@@ -48,6 +50,7 @@ export default function MultiProductForm({
   headingMode = "product",
   lockedFields = [],
   comboLookup = {},
+  movementsMode = false,
 }: MultiProductFormProps) {
   const isLocked = (field: keyof PrProduct) => lockedFields.includes(field);
   const [countrySearches, setCountrySearches] = useState<string[]>(
@@ -198,6 +201,53 @@ export default function MultiProductForm({
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {movementsMode ? (
+              <>
+                {/* From SKU */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    From SKU <span className="text-red-500">*</span>
+                  </label>
+                  {isLocked("fromSku") ? (
+                    <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                      {product.fromSku || "—"}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={product.fromSku ?? ""}
+                      onChange={(e) => updateProduct(index, "fromSku", e.target.value)}
+                      disabled={disabled}
+                      required
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                      placeholder="Source SKU"
+                    />
+                  )}
+                </div>
+                {/* To SKU */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    To SKU <span className="text-red-500">*</span>
+                  </label>
+                  {isLocked("toSku") ? (
+                    <div className="block w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 sm:text-sm text-gray-700">
+                      {product.toSku || "—"}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={product.toSku ?? ""}
+                      onChange={(e) => updateProduct(index, "toSku", e.target.value)}
+                      disabled={disabled}
+                      required
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                      placeholder="Destination SKU"
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
             {/* Product Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -239,6 +289,8 @@ export default function MultiProductForm({
                 placeholder="Enter SKU code"
               />
             </div>
+              </>
+            )}
 
             {/* Destination Country */}
             <div className="relative">

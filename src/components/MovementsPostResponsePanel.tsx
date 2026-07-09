@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   countryDetailTotal,
   getRequestedQuantity,
@@ -74,6 +74,19 @@ export default function MovementsPostResponsePanel({
   const [saving, setSaving] = useState<"split" | "prices" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (detail.movementSplits?.length) {
+      const ready = detail.movementSplits.find((s) => s.status === "ready");
+      const pending = detail.movementSplits.find((s) => s.status === "pending");
+      if (ready) setReadyQty(ready.quantity);
+      if (pending) setPendingQty(pending.quantity);
+    } else if (hasMismatch) {
+      const defaultReady = Math.min(inventoryAvailable ?? 0, requestedQty);
+      setReadyQty(defaultReady);
+      setPendingQty(requestedQty - defaultReady);
+    }
+  }, [detail.movementSplits, hasMismatch, inventoryAvailable, requestedQty]);
 
   async function saveSplit() {
     setSaving("split");

@@ -4,6 +4,7 @@ import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
 import { validateProductsAgainstQr } from "@/lib/qrQuantityValidation";
+import { isMovementsService } from "@/lib/serviceTypes";
 
 /** Add N working days (Mon–Fri) to a date. */
 function addWorkingDays(fromDate: Date, workingDays: number): Date {
@@ -78,9 +79,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isMovements = isMovementsService(seller_service_type ?? "");
+
     // Validate each product
     for (const product of products) {
-      if (
+      if (isMovements) {
+        if (
+          !product.fromSku?.trim() ||
+          !product.toSku?.trim() ||
+          !product.destinationCountry ||
+          !product.quantity ||
+          !product.sellingPricePerUnit
+        ) {
+          return NextResponse.json(
+            { error: "All product fields are required (From SKU, To SKU, destination, quantity, selling price)" },
+            { status: 400 }
+          );
+        }
+        product.productName = `${product.fromSku.trim()} → ${product.toSku.trim()}`;
+        product.skuCode = product.fromSku.trim();
+      } else if (
         !product.productName ||
         !product.skuCode ||
         !product.destinationCountry ||

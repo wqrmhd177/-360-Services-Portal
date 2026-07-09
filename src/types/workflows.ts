@@ -96,7 +96,12 @@ export interface Qr {
 // Product item for multi-product PR
 export interface PrProduct {
   productName: string;
+  /** @deprecated For Movements use fromSku/toSku instead */
   skuCode: string;
+  /** Movements only */
+  fromSku?: string;
+  /** Movements only */
+  toSku?: string;
   destinationCountry: string;
   /** Where the goods are purchased from (e.g. China, Local Market). */
   countryOfPurchase?: string;
