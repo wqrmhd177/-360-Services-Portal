@@ -39,68 +39,70 @@ function parseDate(raw: string | null | undefined): Date | null {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function normalizeOrderRows(raw: any[]): OrderRow[] {
+export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((r) => ({
-    orderId: Number(r.id ?? 0),
-    orderNumber: String(r.order_number ?? ""),
-    domain: String(r.domain ?? ""),
-    storeId: Number(r.store_id ?? 0),
-    storeUrl: String(r.store_url ?? ""),
-    country: String(r.country ?? ""),
-    city: String(r.city ?? ""),
-    title: String(r.title ?? ""),
-    sku: String(r.sku ?? ""),
-    quantity: Number(r.quantity ?? 1),
-    totalPayable: Number(r.total_payable ?? 0),
-    currency: String(r.currency ?? ""),
-    status: String(r.status ?? ""),
-    substatus: String(r.substatus ?? ""),
-    tag: String(r.tag ?? ""),
-    bifurcation: String(r.bifurcation ?? ""),
-    deliveryPartner: String(r.delivery_partner ?? ""),
-    platform: String(r.platform ?? ""),
-    orderDate: parseDate(r.Order_date),
-    approvedDate: parseDate(r.approved_date),
-    shipmentDate: parseDate(r.shipment_date),
-    shipmentDateLog: parseDate(r.shipment_date_log),
-    deliveredDate: parseDate(r.delivered_date),
-    returnedDate: parseDate(r.Returned_date),
-    undeliveredDate: parseDate(r.Undelivered_date),
-  }));
+  return raw.map((r_) => {
+    const r = r_ as Record<string, unknown>;
+    return {
+      orderId: Number(r.id ?? 0),
+      orderNumber: String(r.order_number ?? ""),
+      domain: String(r.domain ?? ""),
+      storeId: Number(r.store_id ?? 0),
+      storeUrl: String(r.store_url ?? ""),
+      country: String(r.country ?? ""),
+      city: String(r.city ?? ""),
+      title: String(r.title ?? ""),
+      sku: String(r.sku ?? ""),
+      quantity: Number(r.quantity ?? 1),
+      totalPayable: Number(r.total_payable ?? 0),
+      currency: String(r.currency ?? ""),
+      status: String(r.status ?? ""),
+      substatus: String(r.substatus ?? ""),
+      tag: String(r.tag ?? ""),
+      bifurcation: String(r.bifurcation ?? ""),
+      deliveryPartner: String(r.delivery_partner ?? ""),
+      platform: String(r.platform ?? ""),
+      orderDate: parseDate(r.Order_date as string | null),
+      approvedDate: parseDate(r.approved_date as string | null),
+      shipmentDate: parseDate(r.shipment_date as string | null),
+      shipmentDateLog: parseDate(r.shipment_date_log as string | null),
+      deliveredDate: parseDate(r.delivered_date as string | null),
+      returnedDate: parseDate(r.Returned_date as string | null),
+      undeliveredDate: parseDate(r.Undelivered_date as string | null),
+    };
+  });
 }
 
-export function normalizeDbOrderRows(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rows: any[]
-): OrderRow[] {
+export function normalizeDbOrderRows(rows: unknown[]): OrderRow[] {
   if (!Array.isArray(rows)) return [];
-  return rows.map((r) => ({
-    orderId: Number(r.order_id ?? 0),
-    orderNumber: String(r.order_number ?? ""),
-    domain: String(r.domain ?? ""),
-    storeId: Number(r.store_id ?? 0),
-    storeUrl: String(r.store_url ?? ""),
-    country: String(r.country ?? ""),
-    city: String(r.city ?? ""),
-    title: String(r.title ?? ""),
-    sku: String(r.sku ?? ""),
-    quantity: Number(r.quantity ?? 1),
-    totalPayable: Number(r.total_payable ?? 0),
-    currency: String(r.currency ?? ""),
-    status: String(r.status ?? ""),
-    substatus: String(r.substatus ?? ""),
-    tag: String(r.tag ?? ""),
-    bifurcation: String(r.bifurcation ?? ""),
-    deliveryPartner: String(r.delivery_partner ?? ""),
-    platform: String(r.platform ?? ""),
-    orderDate: r.order_date ? new Date(r.order_date) : null,
-    approvedDate: r.approved_date ? new Date(r.approved_date) : null,
-    shipmentDate: r.shipment_date ? new Date(r.shipment_date) : null,
-    shipmentDateLog: r.shipment_date_log ? new Date(r.shipment_date_log) : null,
-    deliveredDate: r.delivered_date ? new Date(r.delivered_date) : null,
-    returnedDate: r.returned_date ? new Date(r.returned_date) : null,
-    undeliveredDate: r.undelivered_date ? new Date(r.undelivered_date) : null,
-  }));
+  return rows.map((r_) => {
+    const r = r_ as Record<string, unknown>;
+    return {
+      orderId: Number(r.order_id ?? 0),
+      orderNumber: String(r.order_number ?? ""),
+      domain: String(r.domain ?? ""),
+      storeId: Number(r.store_id ?? 0),
+      storeUrl: String(r.store_url ?? ""),
+      country: String(r.country ?? ""),
+      city: String(r.city ?? ""),
+      title: String(r.title ?? ""),
+      sku: String(r.sku ?? ""),
+      quantity: Number(r.quantity ?? 1),
+      totalPayable: Number(r.total_payable ?? 0),
+      currency: String(r.currency ?? ""),
+      status: String(r.status ?? ""),
+      substatus: String(r.substatus ?? ""),
+      tag: String(r.tag ?? ""),
+      bifurcation: String(r.bifurcation ?? ""),
+      deliveryPartner: String(r.delivery_partner ?? ""),
+      platform: String(r.platform ?? ""),
+      orderDate: r.order_date ? new Date(String(r.order_date)) : null,
+      approvedDate: r.approved_date ? new Date(String(r.approved_date)) : null,
+      shipmentDate: r.shipment_date ? new Date(String(r.shipment_date)) : null,
+      shipmentDateLog: r.shipment_date_log ? new Date(String(r.shipment_date_log)) : null,
+      deliveredDate: r.delivered_date ? new Date(String(r.delivered_date)) : null,
+      returnedDate: r.returned_date ? new Date(String(r.returned_date)) : null,
+      undeliveredDate: r.undelivered_date ? new Date(String(r.undelivered_date)) : null,
+    };
+  });
 }
