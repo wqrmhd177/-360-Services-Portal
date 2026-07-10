@@ -126,12 +126,13 @@ function RevenueLossTable({ rows }: { rows: RevenueLossRow[] }) {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {rows.map((r) => {
-              const hasChildren =
+              const rawChildren =
                 r.kind === "group"
-                  ? (r.tagSplits ?? []).length > 0
-                  : (r.statusSplits ?? []).length > 0;
+                  ? (r.tagSplits ?? []).map((t) => ({ label: t.name, orders: t.orders, revenue: t.revenue }))
+                  : (r.statusSplits ?? []).map((s) => ({ label: s.status, orders: s.orders, revenue: s.revenue }));
+              const hasChildren = rawChildren.length > 0;
               const isOpen = expanded.has(r.name);
-              const children = r.kind === "group" ? (r.tagSplits ?? []) : (r.statusSplits ?? []);
+              const children = rawChildren;
 
               return (
                 <>
@@ -152,8 +153,8 @@ function RevenueLossTable({ rows }: { rows: RevenueLossRow[] }) {
                   </tr>
                   {isOpen &&
                     children.map((c) => (
-                      <tr key={c.name} className="bg-gray-50/50">
-                        <td className="px-4 py-2 pl-9 text-gray-600">{c.name}</td>
+                      <tr key={c.label} className="bg-gray-50/50">
+                        <td className="px-4 py-2 pl-9 text-gray-600">{c.label}</td>
                         <td className="px-4 py-2 text-right text-gray-600">{fmt(c.orders)}</td>
                         <td className="px-4 py-2 text-right text-gray-500">{fmtPct(c.orders / total)}</td>
                         <td className="px-4 py-2 text-right text-red-500">{fmt(c.revenue)}</td>
