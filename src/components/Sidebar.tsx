@@ -27,6 +27,7 @@ import {
   Truck,
   BarChart3,
   Warehouse,
+  Eye,
 } from "lucide-react";
 import { deriveEffectivePermissions } from "@/lib/permissions";
 import type { UserPermissions } from "@/lib/permissions";
@@ -913,6 +914,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
                   <NavLink href="/dashboard/operations" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent />
                   <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Orders" indent matchPrefix="/operations/orders" />
+                  <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
                   <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
                   <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
                   <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
