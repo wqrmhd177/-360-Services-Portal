@@ -1,62 +1,91 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, Warehouse } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, RefreshCw, Warehouse } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
+import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import type { InventoryRow } from "@/lib/operations/inventory";
-import { filterInventoryRows } from "@/lib/operations/inventory";
 
 const ITEMS_PER_PAGE = 25;
 
 export default function OperationsInventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
-  }, []);
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [debouncedSearch]);
 
-  async function load() {
+  const load = useCallback(async (page: number, q: string) => {
     setLoading(true);
     setError("");
+    setWarning(null);
     try {
-      const res = await fetch("/api/operations/inventory");
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(ITEMS_PER_PAGE),
+        search: q,
+      });
+      const res = await fetch(`/api/operations/inventory?${params}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Failed to load inventory");
         return;
       }
       setItems(Array.isArray(data.items) ? data.items : []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+      setLastSyncedAt(data.lastSyncedAt ?? null);
+      if (data.warning) setWarning(data.warning);
     } catch {
       setError("Failed to load inventory");
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    load(currentPage, debouncedSearch);
+  }, [currentPage, debouncedSearch, load]);
+
+  async function handleSync() {
+    setSyncing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/operations/inventory/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || data.hint || "Sync failed");
+        return;
+      }
+      setCurrentPage(1);
+      await load(1, debouncedSearch);
+    } catch {
+      setError("Sync failed");
+    } finally {
+      setSyncing(false);
+    }
   }
-
-  const filtered = useMemo(
-    () => filterInventoryRows(items, search),
-    [items, search]
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <ListPageHeader
         title="Inventory"
-        subtitle="SKU inventory levels from Metabase"
+        subtitle="SKU inventory cached in Supabase for fast multi-user access"
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <input
@@ -66,12 +95,24 @@ export default function OperationsInventoryPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="input w-full sm:w-72"
             />
-            <button type="button" onClick={load} className="btn-secondary shrink-0" disabled={loading}>
-              Refresh
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing || loading}
+              className="btn-primary inline-flex shrink-0 items-center gap-2 disabled:opacity-60"
+            >
+              {syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Sync
             </button>
           </div>
         }
       />
+
+      <SyncStatusBar lastSyncedAt={lastSyncedAt} syncing={syncing} warning={warning} />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -83,17 +124,14 @@ export default function OperationsInventoryPage() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-portal-500" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warehouse className="mb-4 h-14 w-14 text-gray-300" />
           <p className="text-base font-medium text-gray-600">
-            {items.length === 0 ? "No inventory records found" : "No records match your search"}
+            {total === 0 && !debouncedSearch
+              ? "No inventory cached yet — click Sync to load from Metabase"
+              : "No records match your search"}
           </p>
-          {search.trim() && (
-            <p className="mt-1 text-sm text-gray-400">
-              SKU search matches by full SKU or the first 3–4 characters
-            </p>
-          )}
         </div>
       ) : (
         <>
@@ -112,7 +150,7 @@ export default function OperationsInventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
-                  {paginated.map((row, idx) => (
+                  {items.map((row, idx) => (
                     <tr key={`${row.sku}-${row.user_id}-${idx}`} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-center text-gray-700">{row.user_id}</td>
                       <td className="px-4 py-3 text-gray-600">{row.username}</td>
@@ -128,35 +166,13 @@ export default function OperationsInventoryPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-              {search.trim() ? ` matching "${search.trim()}"` : ""}
-            </span>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  className="btn-secondary disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span>
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="btn-secondary disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </div>
+          <ListPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={total}
+            itemLabel="records"
+            onPageChange={setCurrentPage}
+          />
         </>
       )}
     </div>
