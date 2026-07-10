@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Loader2, Radio, Search } from "lucide-react";
+import { ExternalLink, Loader2, Radio } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import type { ChannelListRow } from "@/lib/operations/channelList";
 import { matchesChannelSearch } from "@/lib/operations/channelList";
@@ -70,13 +70,13 @@ export default function ChannelListPage() {
 
       <div className="card p-4">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+         
           <input
             type="text"
             placeholder="Search by store name, store link, store ID, or user ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input w-full pl-10"
+            className="input w-full"
           />
         </div>
       </div>

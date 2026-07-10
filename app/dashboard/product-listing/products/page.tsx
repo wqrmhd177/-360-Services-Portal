@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Package,
   Plus,
-  Search,
   Filter,
   Trash2,
   CheckCircle,
@@ -272,13 +271,13 @@ export default function ProductsPage() {
       {/* Filters */}
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          
           <input
             type="text"
             placeholder="Search products…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input pl-9 w-full"
+            className="input w-full"
           />
         </div>
         <select

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Users,
   Plus,
-  Search,
   Package,
   Phone,
   Loader2,
@@ -89,13 +88,13 @@ export default function SuppliersPage() {
       {/* Search */}
       <div className="card p-4">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          
           <input
             type="text"
             placeholder="Search by name, phone or code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input w-full pl-10"
+            className="input w-full"
           />
         </div>
       </div>
