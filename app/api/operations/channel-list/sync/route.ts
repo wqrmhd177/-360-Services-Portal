@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
+import { hasServiceRoleKey } from "@/lib/operations/syncAll";
 import { syncChannelListFromMetabase } from "@/lib/operations/syncChannelList";
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   if (!isPortalAuthenticated(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!hasServiceRoleKey()) {
+    return NextResponse.json(
+      {
+        error: "SUPABASE_SERVICE_ROLE_KEY is not configured.",
+        hint: "Add the service role key in Vercel environment variables and redeploy.",
+      },
+      { status: 503 }
+    );
   }
 
   try {

@@ -1,85 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw, Warehouse } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
+import { useOperationsListPage } from "@/hooks/useOperationsListPage";
 import type { InventoryRow } from "@/lib/operations/inventory";
 
-const ITEMS_PER_PAGE = 25;
-
 export default function OperationsInventoryPage() {
-  const [items, setItems] = useState<InventoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState("");
-  const [warning, setWarning] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const {
+    items,
+    loading,
+    syncing,
+    bootstrapping,
+    error,
+    warning,
+    search,
+    setSearch,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    total,
+    lastSyncedAt,
+    runSync,
+  } = useOperationsListPage<InventoryRow>({
+    apiPath: "/api/operations/inventory",
+    syncPath: "/api/operations/inventory/sync",
+    itemsKey: "items",
+  });
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch]);
-
-  const load = useCallback(async (page: number, q: string) => {
-    setLoading(true);
-    setError("");
-    setWarning(null);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(ITEMS_PER_PAGE),
-        search: q,
-      });
-      const res = await fetch(`/api/operations/inventory?${params}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || "Failed to load inventory");
-        return;
-      }
-      setItems(Array.isArray(data.items) ? data.items : []);
-      setTotal(data.total ?? 0);
-      setTotalPages(data.totalPages ?? 1);
-      setLastSyncedAt(data.lastSyncedAt ?? null);
-      if (data.warning) setWarning(data.warning);
-    } catch {
-      setError("Failed to load inventory");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load(currentPage, debouncedSearch);
-  }, [currentPage, debouncedSearch, load]);
-
-  async function handleSync() {
-    setSyncing(true);
-    setError("");
-    try {
-      const res = await fetch("/api/operations/inventory/sync", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error || data.hint || "Sync failed");
-        return;
-      }
-      setCurrentPage(1);
-      await load(1, debouncedSearch);
-    } catch {
-      setError("Sync failed");
-    } finally {
-      setSyncing(false);
-    }
-  }
+  const busy = loading || syncing || bootstrapping;
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -97,8 +46,8 @@ export default function OperationsInventoryPage() {
             />
             <button
               type="button"
-              onClick={handleSync}
-              disabled={syncing || loading}
+              onClick={runSync}
+              disabled={busy}
               className="btn-primary inline-flex shrink-0 items-center gap-2 disabled:opacity-60"
             >
               {syncing ? (
@@ -112,7 +61,12 @@ export default function OperationsInventoryPage() {
         }
       />
 
-      <SyncStatusBar lastSyncedAt={lastSyncedAt} syncing={syncing} warning={warning} />
+      <SyncStatusBar
+        lastSyncedAt={lastSyncedAt}
+        syncing={syncing}
+        bootstrapping={bootstrapping}
+        warning={warning}
+      />
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -120,16 +74,19 @@ export default function OperationsInventoryPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-portal-500" />
+      {busy && items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Loader2 className="mb-4 h-8 w-8 animate-spin text-portal-500" />
+          <p className="text-sm text-gray-600">
+            {bootstrapping ? "Loading initial inventory from Metabase…" : "Loading inventory…"}
+          </p>
         </div>
       ) : items.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Warehouse className="mb-4 h-14 w-14 text-gray-300" />
           <p className="text-base font-medium text-gray-600">
-            {total === 0 && !debouncedSearch
-              ? "No inventory cached yet — click Sync to load from Metabase"
+            {total === 0 && !search.trim()
+              ? "No inventory records found"
               : "No records match your search"}
           </p>
         </div>

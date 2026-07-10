@@ -61,16 +61,23 @@ function formatSyncedAt(iso: string | null): string {
 export function SyncStatusBar({
   lastSyncedAt,
   syncing,
+  bootstrapping,
   warning,
 }: {
   lastSyncedAt: string | null;
   syncing?: boolean;
+  bootstrapping?: boolean;
   warning?: string | null;
 }) {
+  const busy = syncing || bootstrapping;
   return (
     <div className="space-y-1 text-xs text-gray-500">
       <p>
-        {syncing ? "Syncing from Metabase…" : `Last synced: ${formatSyncedAt(lastSyncedAt)}`}
+        {busy
+          ? bootstrapping
+            ? "Loading initial data from Metabase…"
+            : "Syncing from Metabase…"
+          : `Last synced: ${formatSyncedAt(lastSyncedAt)}`}
       </p>
       {warning && <p className="text-amber-600">{warning}</p>}
     </div>

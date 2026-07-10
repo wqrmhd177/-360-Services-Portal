@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       limit,
       totalPages: Math.max(1, Math.ceil(total / limit)),
       lastSyncedAt: lastSync?.synced_at ?? null,
+      needsSync: !lastSync?.synced_at && !search,
       source: "supabase",
     });
   } catch (dbErr) {
@@ -52,8 +53,9 @@ export async function GET(request: NextRequest) {
         limit,
         totalPages: Math.max(1, Math.ceil(total / limit)),
         lastSyncedAt: lastSync?.synced_at ?? null,
+        needsSync: !lastSync?.synced_at && !search,
         source: "metabase_fallback",
-        warning: "Cache not ready — run setup_operations_cache.sql and click Sync for faster loads.",
+        warning: "Loading from Metabase — cache will populate after the first sync.",
       });
     } catch {
       const msg = dbErr instanceof Error ? dbErr.message : "Failed to load inventory";

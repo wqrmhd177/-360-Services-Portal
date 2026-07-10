@@ -3,7 +3,7 @@ import {
   normalizeInventoryRows,
   type InventoryRow,
 } from "@/lib/operations/inventory";
-import { getOpsDb, logSync, refreshInventorySummary } from "@/lib/operations/opsDb";
+import { getOpsDb, getOpsServiceDb, logSync, refreshInventorySummary } from "@/lib/operations/opsDb";
 
 const BATCH = 500;
 
@@ -26,7 +26,7 @@ export async function syncInventoryFromMetabase(): Promise<{
 
     const raw = await response.json();
     const rows = normalizeInventoryRows(raw);
-    const supabase = getOpsDb();
+    const supabase = getOpsServiceDb();
     const syncedAt = new Date().toISOString();
 
     const { error: delErr } = await supabase

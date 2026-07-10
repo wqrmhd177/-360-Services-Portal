@@ -33,15 +33,19 @@ export async function logSync(
   status: "success" | "failed",
   errorMessage?: string
 ) {
-  const supabase = getOpsServiceDb();
-  await supabase.from("ops_sync_log").insert([
-    {
-      source,
-      row_count: rowCount,
-      status,
-      error_message: errorMessage ?? null,
-    },
-  ]);
+  try {
+    const supabase = getOpsServiceDb();
+    await supabase.from("ops_sync_log").insert([
+      {
+        source,
+        row_count: rowCount,
+        status,
+        error_message: errorMessage ?? null,
+      },
+    ]);
+  } catch (err) {
+    console.warn("ops_sync_log insert failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 export async function refreshInventorySummary() {

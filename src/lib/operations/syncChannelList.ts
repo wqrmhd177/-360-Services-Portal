@@ -3,7 +3,7 @@ import {
   normalizeChannelListRows,
   type ChannelListRow,
 } from "@/lib/operations/channelList";
-import { getOpsDb, logSync } from "@/lib/operations/opsDb";
+import { getOpsDb, getOpsServiceDb, logSync } from "@/lib/operations/opsDb";
 
 const BATCH = 500;
 
@@ -26,7 +26,7 @@ export async function syncChannelListFromMetabase(): Promise<{
 
     const raw = await response.json();
     const rows = normalizeChannelListRows(raw);
-    const supabase = getOpsDb();
+    const supabase = getOpsServiceDb();
     const syncedAt = new Date().toISOString();
 
     const { error: delErr } = await supabase

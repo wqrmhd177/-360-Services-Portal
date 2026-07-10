@@ -6,7 +6,8 @@
     "dev": "next dev -H localhost",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:ops": "node scripts/seed-operations-cache.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",
