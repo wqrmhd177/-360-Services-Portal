@@ -24,12 +24,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await syncAllOperations();
-    const ok = result.inventory.ok && result.channelList.ok;
+    const ok = result.inventory.ok && result.channelList.ok && result.orders.ok;
     return NextResponse.json({
       ok,
       syncedAt: new Date().toISOString(),
       inventory: result.inventory,
       channelList: result.channelList,
+      orders: result.orders,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Cron sync failed";

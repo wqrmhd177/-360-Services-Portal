@@ -55,3 +55,11 @@ export async function refreshInventorySummary() {
     console.warn("Materialized view refresh failed:", error.message);
   }
 }
+
+export async function refreshOrdersSummaries() {
+  const supabase = getOpsServiceDb();
+  const { error } = await supabase.rpc("refresh_ops_orders_summaries_simple");
+  if (error) {
+    console.warn("Orders materialized view refresh failed:", error.message);
+  }
+}

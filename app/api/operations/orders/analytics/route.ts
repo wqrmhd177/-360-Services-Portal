@@ -1,47 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { fetchOrdersFiltered } from "@/lib/operations/syncOrders";
-import { normalizeDbOrderRows } from "@/lib/operations/orders";
-import {
-  computeFulfillmentSLA,
-  computeOperationsStatusCounts,
-  computeDeliveryPartnerBreakdownByCountry,
-  computeRevenueLossBreakdown,
-} from "@/lib/operations/orderAnalytics";
 import { getLastSync } from "@/lib/operations/opsDb";
+import { getOperationsAnalytics } from "@/lib/orders/analyticsData";
+import { serializeDateRange } from "@/lib/orders/params";
 
 export const maxDuration = 60;
+
+function searchParamsToObject(request: NextRequest) {
+  const sp = request.nextUrl.searchParams;
+  const result: Record<string, string | string[] | undefined> = {};
+  for (const key of new Set(sp.keys())) {
+    const values = sp.getAll(key);
+    result[key] = values.length > 1 ? values : values[0];
+  }
+  return result;
+}
 
 export async function GET(request: NextRequest) {
   if (!isPortalAuthenticated(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const sp = request.nextUrl.searchParams;
-  const country = sp.get("country") || undefined;
-  const bifurcation = sp.get("bifurcation") || undefined;
-  const from = sp.get("from") || undefined;
-  const to = sp.get("to") || undefined;
-
-  const lastSync = await getLastSync("orders");
-
   try {
-    const raw = await fetchOrdersFiltered({ country, bifurcation, from, to });
-    const rows = normalizeDbOrderRows(raw);
-
-    const sla = computeFulfillmentSLA(rows);
-    const statusCounts = computeOperationsStatusCounts(rows);
-    const deliveryPartner = computeDeliveryPartnerBreakdownByCountry(rows);
-    const revenueLoss = computeRevenueLossBreakdown(rows);
+    const params = searchParamsToObject(request);
+    const data = await getOperationsAnalytics(params);
+    const lastSync = await getLastSync("orders");
+    const { from, to } = serializeDateRange(data.range);
 
     return NextResponse.json({
       ok: true,
-      totalRows: rows.length,
       lastSyncedAt: lastSync?.synced_at ?? null,
-      sla,
-      statusCounts,
-      deliveryPartner,
-      revenueLoss,
+      rangeLabel: `${from} – ${to}`,
+      fulfillmentSLA: data.fulfillmentSLA,
+      operationsStatusCounts: data.operationsStatusCounts,
+      revenueLossBreakdown: data.revenueLossBreakdown,
+      deliveryPartnerByCountry: data.deliveryPartnerByCountry,
+      filteredCount: data.filteredCount,
+      allCount: data.allCount,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analytics failed";

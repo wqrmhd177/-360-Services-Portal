@@ -1,7 +1,11 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { DateRangePicker } from "@/components/layout/date-range-picker";
+import { usePortalNavigation } from "@/components/layout/navigation-loading";
+import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
+import { cn } from "@/lib/utils";
 
 interface FilterOptions {
   countries: string[];
@@ -19,133 +23,177 @@ interface OrdersFilterBarProps {
   showStoreFilter?: boolean;
 }
 
-export default function OrdersFilterBar({
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  disabled,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+        {label}
+      </span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "h-10 w-full min-w-0 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] shadow-sm",
+          "transition-colors hover:border-[var(--muted)] focus:border-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--card-border)]",
+          "disabled:cursor-not-allowed disabled:opacity-60",
+        )}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function OrdersFilterBarInner({
   options,
   country,
   bifurcation,
-  from,
-  to,
   storeId = "",
   showStoreFilter = false,
 }: OrdersFilterBarProps) {
-  const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { push: navigate } = usePortalNavigation();
   const [isPending, startTransition] = useTransition();
 
-  const push = useCallback(
-    (updates: Record<string, string>) => {
-      const sp = new URLSearchParams({
-        country,
-        bifurcation,
-        from,
-        to,
-        ...(showStoreFilter ? { store_id: storeId } : {}),
-        ...updates,
+  const updateParam = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value) params.set(key, value);
+      else params.delete(key);
+      startTransition(() => {
+        navigate(`${pathname}?${params.toString()}`);
       });
-      for (const [k, v] of [...sp.entries()]) {
-        if (!v) sp.delete(k);
-      }
-      startTransition(() => router.push(`${pathname}?${sp.toString()}`));
     },
-    [router, pathname, country, bifurcation, from, to, storeId, showStoreFilter]
+    [navigate, pathname, searchParams],
   );
 
-  const clearAll = () => {
-    startTransition(() => router.push(pathname));
+  const clearFacetFilters = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("country");
+    params.delete("bifurcation");
+    params.delete("store_id");
+    startTransition(() => {
+      navigate(`${pathname}?${params.toString()}`);
+    });
   };
 
-  const hasFilters = !!(country || bifurcation || from || to || (showStoreFilter && storeId));
-
-  const labelCls = "block text-xs font-medium text-gray-500 mb-1";
-  const selectCls =
-    "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition disabled:opacity-50";
-  const inputCls =
-    "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition disabled:opacity-50";
+  const hasFacetFilters = !!(country || bifurcation || (showStoreFilter && storeId));
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-      <div className={`grid gap-3 ${showStoreFilter ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}`}>
-        <div>
-          <label className={labelCls}>Country</label>
-          <select
-            className={selectCls}
-            value={country}
-            disabled={isPending}
-            onChange={(e) => push({ country: e.target.value })}
-          >
-            <option value="">All Countries</option>
-            {options.countries.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className={labelCls}>Bifurcation</label>
-          <select
-            className={selectCls}
-            value={bifurcation}
-            disabled={isPending}
-            onChange={(e) => push({ bifurcation: e.target.value })}
-          >
-            <option value="">All Bifurcations</option>
-            {options.bifurcations.map((b) => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-        </div>
-
-        {showStoreFilter && (
-          <div>
-            <label className={labelCls}>Store ID</label>
-            <select
-              className={selectCls}
-              value={storeId}
-              disabled={isPending}
-              onChange={(e) => push({ store_id: e.target.value })}
-            >
-              <option value="">All Stores</option>
-              {(options.storeIds ?? []).map((s) => (
-                <option key={s} value={String(s)}>{s}</option>
-              ))}
-            </select>
-          </div>
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm sm:p-4">
+      <div
+        className={cn(
+          "grid gap-3",
+          showStoreFilter
+            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
+            : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
         )}
+      >
+        <FilterSelect
+          label="Country"
+          value={country}
+          disabled={isPending}
+          onChange={(value) => updateParam("country", value)}
+        >
+          <option value="">All countries</option>
+          {options.countries.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </FilterSelect>
 
-        <div>
-          <label className={labelCls}>From Date</label>
-          <input
-            type="date"
-            className={inputCls}
-            value={from}
-            disabled={isPending}
-            onChange={(e) => push({ from: e.target.value })}
-          />
-        </div>
+        <FilterSelect
+          label="Bifurcation"
+          value={bifurcation}
+          disabled={isPending}
+          onChange={(value) => updateParam("bifurcation", value)}
+        >
+          <option value="">All bifurcations</option>
+          {options.bifurcations.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </FilterSelect>
 
-        <div>
-          <label className={labelCls}>To Date</label>
-          <input
-            type="date"
-            className={inputCls}
-            value={to}
+        {showStoreFilter ? (
+          <FilterSelect
+            label="Store ID"
+            value={storeId}
             disabled={isPending}
-            onChange={(e) => push({ to: e.target.value })}
-          />
-        </div>
+            onChange={(value) => updateParam("store_id", value)}
+          >
+            <option value="">All stores</option>
+            {(options.storeIds ?? []).map((s) => (
+              <option key={s} value={String(s)}>
+                {s}
+              </option>
+            ))}
+          </FilterSelect>
+        ) : null}
+
+        <DateRangePicker layout="stacked" className="min-w-0" />
       </div>
 
-      {hasFilters && (
-        <div className="mt-3 flex justify-end">
+      {hasFacetFilters ? (
+        <div className="mt-3 flex justify-end border-t border-[var(--card-border)] pt-3">
           <button
-            onClick={clearAll}
+            type="button"
+            onClick={clearFacetFilters}
             disabled={isPending}
-            className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+            className="text-xs font-medium text-teal-600 hover:underline disabled:opacity-50"
           >
-            Clear all filters
+            Clear filters
           </button>
         </div>
-      )}
+      ) : null}
     </div>
   );
+}
+
+export default function OrdersFilterBar(props: OrdersFilterBarProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-24 animate-pulse rounded-2xl border border-[var(--card-border)] bg-[var(--table-header)]" />
+      }
+    >
+      <OrdersFilterBarInner {...props} />
+    </Suspense>
+  );
+}
+
+/** Redirect to default "this month" range when no dates are in the URL. */
+export function useDefaultOrdersDateRange() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    if (from && to) return;
+
+    const def = defaultDateRange();
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("from", toInputValue(def.from));
+    params.set("to", toInputValue(def.to));
+    params.set("range", "thisMonth");
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [pathname, router, searchParams]);
 }

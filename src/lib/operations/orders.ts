@@ -9,6 +9,7 @@ export interface OrderRow {
   storeUrl: string;
   country: string;
   city: string;
+  fullName: string;
   title: string;
   sku: string;
   quantity: number;
@@ -43,6 +44,7 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((r_) => {
     const r = r_ as Record<string, unknown>;
+    // Metabase `id` is the unique order key (DB: order_id). order_number is seller-facing and not unique.
     return {
       orderId: Number(r.id ?? 0),
       orderNumber: String(r.order_number ?? ""),
@@ -51,6 +53,7 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
       storeUrl: String(r.store_url ?? ""),
       country: String(r.country ?? ""),
       city: String(r.city ?? ""),
+      fullName: String(r.full_name ?? ""),
       title: String(r.title ?? ""),
       sku: String(r.sku ?? ""),
       quantity: Number(r.quantity ?? 1),
@@ -61,7 +64,7 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
       tag: String(r.tag ?? ""),
       bifurcation: String(r.bifurcation ?? ""),
       deliveryPartner: String(r.delivery_partner ?? ""),
-      platform: String(r.platform ?? ""),
+      platform: String(r.platform ?? r.PLATFORM ?? ""),
       orderDate: parseDate(r.Order_date as string | null),
       approvedDate: parseDate(r.approved_date as string | null),
       shipmentDate: parseDate(r.shipment_date as string | null),
@@ -85,6 +88,7 @@ export function normalizeDbOrderRows(rows: unknown[]): OrderRow[] {
       storeUrl: String(r.store_url ?? ""),
       country: String(r.country ?? ""),
       city: String(r.city ?? ""),
+      fullName: String(r.full_name ?? ""),
       title: String(r.title ?? ""),
       sku: String(r.sku ?? ""),
       quantity: Number(r.quantity ?? 1),
@@ -95,7 +99,7 @@ export function normalizeDbOrderRows(rows: unknown[]): OrderRow[] {
       tag: String(r.tag ?? ""),
       bifurcation: String(r.bifurcation ?? ""),
       deliveryPartner: String(r.delivery_partner ?? ""),
-      platform: String(r.platform ?? ""),
+      platform: String(r.platform ?? r.PLATFORM ?? ""),
       orderDate: r.order_date ? new Date(String(r.order_date)) : null,
       approvedDate: r.approved_date ? new Date(String(r.approved_date)) : null,
       shipmentDate: r.shipment_date ? new Date(String(r.shipment_date)) : null,

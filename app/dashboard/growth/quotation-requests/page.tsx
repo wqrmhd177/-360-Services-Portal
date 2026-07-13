@@ -131,7 +131,7 @@ export default function GrowthQuotationRequestsPage() {
               Create QR
             </Link>
             <button type="button" onClick={downloadCSV} className="btn-secondary">
-              Download CSV ({selectedIds.size} selected)
+            Download CSV ({selectedIds.size} selected)
             </button>
           </>
         }

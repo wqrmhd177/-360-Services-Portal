@@ -5,6 +5,21 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --card: #ffffff;
+    --card-border: #e2e8f0;
+    --foreground: #021024;
+    --muted: #64748b;
+    --table-header: #f8fafc;
+    --input-border: #e2e8f0;
+    --input-bg: #ffffff;
+    --table-row-hover: #f1f5f9;
+    --background: #f8fafc;
+    --popover-bg: #ffffff;
+    --popover-border: #e2e8f0;
+    --animation-shine: 255 255 255;
+  }
+
   body {
     @apply bg-portal-50 text-portal-900 font-sans;
   }
@@ -91,5 +106,121 @@
 /* Card with light background */
 .bg-gradient-to-br.from-slate-950\/60.to-slate-900\/40 {
   @apply bg-white;
+}
+
+/* Ops Portal order dashboard modals and chart animations */
+.portal-status-dialog:not([open]) {
+  display: none;
+}
+
+.portal-status-dialog[open] {
+  display: flex;
+}
+
+@keyframes chart-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-chart-panel-in {
+  animation: chart-panel-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes status-legend-glow-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes status-legend-shine-sweep {
+  0% {
+    background-position: 180% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+.status-mix-legend-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background-color: transparent;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.status-mix-legend-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0;
+  background: linear-gradient(
+    120deg,
+    rgb(var(--status-rgb, 139 92 246) / 0.2) 0%,
+    rgb(var(--status-rgb, 139 92 246) / 0.45) 28%,
+    rgb(var(--status-rgb, 139 92 246) / 0.28) 52%,
+    rgb(var(--status-rgb, 139 92 246) / 0.55) 76%,
+    rgb(var(--status-rgb, 139 92 246) / 0.22) 100%
+  );
+  background-size: 280% 280%;
+  transition: opacity 0.2s ease;
+}
+
+.status-mix-legend-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgb(var(--status-rgb, 139 92 246) / 0.55) 48%,
+    rgb(var(--animation-shine) / 0.35) 52%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+}
+
+.status-mix-legend-btn:hover,
+.status-mix-legend-btn:focus-visible {
+  border-color: rgb(var(--status-rgb, 139 92 246) / 0.55);
+  box-shadow: 0 4px 18px rgb(var(--status-rgb, 139 92 246) / 0.38);
+  transform: translateY(-1px);
+}
+
+.status-mix-legend-btn:hover::before,
+.status-mix-legend-btn:focus-visible::before {
+  opacity: 1;
+  animation: status-legend-glow-shift 2.4s ease-in-out infinite;
+}
+
+.status-mix-legend-btn:hover::after,
+.status-mix-legend-btn:focus-visible::after {
+  opacity: 1;
+  animation: status-legend-shine-sweep 2.1s ease-in-out infinite;
+}
+
+.status-mix-legend-btn:focus-visible {
+  outline: none;
 }
 

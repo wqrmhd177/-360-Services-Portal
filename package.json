@@ -7,11 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed:ops": "node scripts/seed-operations-cache.js"
+    "test:orders": "npx tsx scripts/run-order-analytics-tests.ts",
+    "validate:orders": "node scripts/validate-order-counts.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",
     "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
@@ -19,7 +22,9 @@
     "next": "14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "resend": "^6.12.4"
+    "recharts": "^3.9.2",
+    "resend": "^6.12.4",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
