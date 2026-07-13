@@ -206,6 +206,58 @@ async function fetchFilteredOrderLineItemsFallback(
   return applyOrderLevelFacetFilters(dateFiltered, { country, bifurcation });
 }
 
+export type StoreFilterOption = {
+  id: number;
+  label: string;
+};
+
+function formatStoreLabel(id: number, storeUrl?: string | null): string {
+  const url = storeUrl?.trim();
+  return url ? `${id} — ${url}` : String(id);
+}
+
+async function fetchStoreOptionsFromDb(): Promise<StoreFilterOption[]> {
+  const supabase = getOpsDb();
+  const pageSize = 1000;
+  let offset = 0;
+  const byId = new Map<number, string>();
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("ops_orders_items")
+      .select("store_id, store_url")
+      .not("store_id", "is", null)
+      .gt("store_id", 0)
+      .range(offset, offset + pageSize - 1);
+
+    if (error || !data?.length) break;
+
+    for (const row of data as { store_id: number | null; store_url: string | null }[]) {
+      const id = Number(row.store_id ?? 0);
+      if (id <= 0 || byId.has(id)) continue;
+      byId.set(id, formatStoreLabel(id, row.store_url));
+    }
+
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return [...byId.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.id - b.id);
+}
+
+function buildStoreOptionsFromItems(items: OrderLineItem[]): StoreFilterOption[] {
+  const byId = new Map<number, string>();
+  for (const item of items) {
+    if (item.storeId <= 0 || byId.has(item.storeId)) continue;
+    byId.set(item.storeId, String(item.storeId));
+  }
+  return [...byId.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.id - b.id);
+}
+
 export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
   allCount: number;
   filteredCount: number;
@@ -232,6 +284,7 @@ export async function fetchFilterOptionsFromDb(): Promise<{
   countries: string[];
   bifurcations: string[];
   storeIds: number[];
+  storeOptions: StoreFilterOption[];
 }> {
   const supabase = getOpsDb();
   const { data, error } = await supabase.rpc("get_ops_orders_filter_options_v2");
@@ -243,20 +296,27 @@ export async function fetchFilterOptionsFromDb(): Promise<{
       storeIds?: number[];
     };
 
+    const storeIds = (payload.storeIds ?? []).map(Number).filter((n) => n > 0);
+    const storeOptionsFromDb = await fetchStoreOptionsFromDb();
+    const storeOptions =
+      storeOptionsFromDb.length > 0
+        ? storeOptionsFromDb
+        : storeIds.map((id) => ({ id, label: String(id) }));
+
     return {
       countries: payload.countries ?? [],
       bifurcations: payload.bifurcations ?? [],
-      storeIds: (payload.storeIds ?? []).map(Number).filter((n) => n > 0),
+      storeIds,
+      storeOptions,
     };
   }
 
   const allItems = applyRevenueImputation(await getAllOrderLineItems());
   const countries = [...new Set(allItems.map((i) => i.country).filter(Boolean))].sort();
   const bifurcations = [...new Set(allItems.map((i) => i.bifurcation).filter(Boolean))].sort();
-  const storeIds = [...new Set(allItems.map((i) => i.storeId).filter((id) => id > 0))].sort(
-    (a, b) => a - b,
-  );
-  return { countries, bifurcations, storeIds };
+  const storeOptions = buildStoreOptionsFromItems(allItems);
+  const storeIds = storeOptions.map((opt) => opt.id);
+  return { countries, bifurcations, storeIds, storeOptions };
 }
 
 export function searchParamsToFilterParams(

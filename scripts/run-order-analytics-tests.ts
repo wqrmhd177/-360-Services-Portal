@@ -7,6 +7,7 @@ import {
   orderMatchesFacetFilters,
 } from "../src/lib/analytics/orders";
 import { computeOperationsStatusCounts as computeStatus } from "../src/lib/analytics/operations-status-detail";
+import { computeStoreVisibilityTables } from "../src/lib/analytics/store-visibility";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -95,12 +96,59 @@ function testStatusCountsByMetabaseId() {
   assert(counts.byGroup.approved === 1, "one approved id");
 }
 
+function testStoreVisibilityTables() {
+  const items = [
+    line({
+      metabaseId: 1,
+      orderNumber: "A",
+      title: "Widget",
+      status: "Confirmation Pending",
+      tag: "Awaiting callback",
+    }),
+    line({
+      metabaseId: 2,
+      orderNumber: "B",
+      title: "Widget",
+      status: "Delivered",
+      tag: "",
+    }),
+    line({
+      metabaseId: 3,
+      orderNumber: "C",
+      title: "Gadget",
+      status: "Undelivered",
+      tag: "Customer refused",
+    }),
+  ];
+
+  const tables = computeStoreVisibilityTables(items);
+  assert(tables.productOrders.length === 2, "two products");
+  assert(
+    tables.productOrders.find((row) => row.product === "Widget")?.orders === 2,
+    "Widget has 2 orders",
+  );
+  assert(
+    tables.confirmationReasons[0]?.reason === "Awaiting callback" &&
+      tables.confirmationReasons[0]?.orders === 1,
+    "confirmation reason by tag",
+  );
+  assert(
+    tables.productDeliveryRatios.find((row) => row.product === "Widget")?.deliveryRatio === 0.5,
+    "Widget delivery ratio 50%",
+  );
+  assert(
+    tables.undeliveredReasons[0]?.reason === "Customer refused",
+    "undelivered reason by tag",
+  );
+}
+
 function run() {
   const tests = [
     ["same order_number different ids", testSameOrderNumberDifferentIds],
     ["facet All vs specific", testFacetAllVsSpecific],
     ["country normalization", testCountryNormalization],
     ["status counts by Metabase id", testStatusCountsByMetabaseId],
+    ["store visibility tables", testStoreVisibilityTables],
   ];
 
   for (const [name, fn] of tests as [string, () => void][]) {

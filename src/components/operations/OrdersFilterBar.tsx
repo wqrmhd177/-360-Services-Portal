@@ -4,6 +4,10 @@ import { Suspense, useCallback, useEffect, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DateRangePicker } from "@/components/layout/date-range-picker";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
+import {
+  StoreIdSearchSelect,
+  type StoreOption,
+} from "@/components/operations/StoreIdSearchSelect";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +15,7 @@ interface FilterOptions {
   countries: string[];
   bifurcations: string[];
   storeIds?: number[];
+  storeOptions?: StoreOption[];
 }
 
 interface OrdersFilterBarProps {
@@ -132,19 +137,18 @@ function OrdersFilterBarInner({
         </FilterSelect>
 
         {showStoreFilter ? (
-          <FilterSelect
-            label="Store ID"
+          <StoreIdSearchSelect
             value={storeId}
             disabled={isPending}
             onChange={(value) => updateParam("store_id", value)}
-          >
-            <option value="">All stores</option>
-            {(options.storeIds ?? []).map((s) => (
-              <option key={s} value={String(s)}>
-                {s}
-              </option>
-            ))}
-          </FilterSelect>
+            options={
+              options.storeOptions ??
+              (options.storeIds ?? []).map((id) => ({
+                id,
+                label: String(id),
+              }))
+            }
+          />
         ) : null}
 
         <DateRangePicker layout="stacked" className="min-w-0" />

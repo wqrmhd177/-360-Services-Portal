@@ -2,20 +2,27 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { OrdersOverviewSection } from "@/components/orders/orders-overview-section";
-import { OrdersProductsSection } from "@/components/orders/orders-products-section";
+import { OperationsStatusKpis } from "@/components/orders/operations-status-kpis";
+import { StoreVisibilityTablesSection } from "@/components/orders/store-visibility-tables-section";
 import OrdersFilterBar, {
   useDefaultOrdersDateRange,
 } from "@/components/operations/OrdersFilterBar";
+import type { StoreOption } from "@/components/operations/StoreIdSearchSelect";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
-import type { getStoresAnalytics } from "@/lib/orders/data";
-
-type StoreAnalyticsData = Awaited<ReturnType<typeof getStoresAnalytics>>;
+import type { OperationsStatusCounts } from "@/lib/analytics/operations-status-detail";
+import type { StoreVisibilityTables } from "@/lib/analytics/store-visibility";
 
 interface FilterOptions {
   countries: string[];
   bifurcations: string[];
   storeIds: number[];
+  storeOptions: StoreOption[];
+}
+
+interface StoreAnalyticsData {
+  rangeLabel: string;
+  operationsStatusCounts: OperationsStatusCounts;
+  storeTables: StoreVisibilityTables;
 }
 
 function StoreVisibilityContent() {
@@ -31,6 +38,7 @@ function StoreVisibilityContent() {
     countries: [],
     bifurcations: [],
     storeIds: [],
+    storeOptions: [],
   });
   const [data, setData] = useState<StoreAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +47,15 @@ function StoreVisibilityContent() {
   const loadFilterOptions = useCallback(async () => {
     try {
       const res = await fetch("/api/operations/orders/filter-options");
-      if (res.ok) setFilterOpts(await res.json());
+      if (res.ok) {
+        const json = await res.json();
+        setFilterOpts({
+          countries: json.countries ?? [],
+          bifurcations: json.bifurcations ?? [],
+          storeIds: json.storeIds ?? [],
+          storeOptions: json.storeOptions ?? [],
+        });
+      }
     } catch {
       /* ignore */
     }
@@ -115,8 +131,14 @@ function StoreVisibilityContent() {
 
       {!loading && data ? (
         <>
-          <OrdersOverviewSection data={data} compactKpis />
-          <OrdersProductsSection data={data} />
+          <OperationsStatusKpis
+            counts={data.operationsStatusCounts}
+            rangeLabel={data.rangeLabel}
+          />
+          <StoreVisibilityTablesSection
+            tables={data.storeTables}
+            storeId={storeId || undefined}
+          />
         </>
       ) : null}
     </div>

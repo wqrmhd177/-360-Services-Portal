@@ -1,5 +1,6 @@
 import { computeOperationsStatusCounts } from "@/lib/analytics/operations-status-detail";
 import { computeOperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
+import { computeStoreVisibilityTables } from "@/lib/analytics/store-visibility";
 import {
   computeAccountManagerBreakdown,
   computeCountryDeliveryRatios,
@@ -64,6 +65,8 @@ export async function getStoreVisibilityAnalyticsFromDb(
     filters,
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
+    operationsStatusCounts: computeOperationsStatusCounts(items),
+    storeTables: computeStoreVisibilityTables(items),
     kpis: computeKPIs(items),
     trends: computeTrends(items, range),
     statusBreakdown: computeStatusBreakdown(items),
