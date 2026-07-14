@@ -171,6 +171,53 @@ def load_env() -> None:
             os.environ[key] = val
 
 
+def env_value(*keys: str) -> str | None:
+    """First non-empty env var. Empty strings count as unset (GitHub Actions quirk)."""
+    for key in keys:
+        raw = os.environ.get(key)
+        if raw is None:
+            continue
+        val = raw.strip()
+        if val:
+            return val
+    return None
+
+
+def metabase_orders_url() -> str:
+    return (
+        env_value("METABASE_ORDERS_API_URL", "METABASE_OPERATIONS_ORDERS_URL")
+        or DEFAULT_METABASE_URL
+    )
+
+
+def supabase_url() -> str | None:
+    url = env_value("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL")
+    if not url:
+        return None
+    if not url.startswith(("http://", "https://")):
+        url = f"https://{url.lstrip('/')}"
+    return url.rstrip("/")
+
+
+def supabase_service_key() -> str | None:
+    return env_value("SUPABASE_SERVICE_ROLE_KEY")
+
+
+def validate_sync_env(use_rest: bool) -> None:
+    metabase = metabase_orders_url()
+    if not metabase.startswith(("http://", "https://")):
+        raise RuntimeError(
+            "Metabase orders URL is missing or invalid. "
+            "Set METABASE_ORDERS_API_URL or remove an empty GitHub secret so the default URL is used."
+        )
+
+    if use_rest and (not supabase_url() or not supabase_service_key()):
+        raise RuntimeError(
+            "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for REST sync. "
+            "URL must include https:// (e.g. https://xxxx.supabase.co)."
+        )
+
+
 def parse_date(raw: Any) -> datetime | None:
     if not raw:
         return None
@@ -631,8 +678,8 @@ def upsert_postgres(
 
 def upsert_rest(rows: list[dict[str, Any]], synced_at: datetime, batch_size: int, workers: int) -> None:
     """Fallback: Supabase REST upsert with concurrent batches."""
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = supabase_url()
+    key = supabase_service_key()
     if not url or not key:
         raise RuntimeError("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required for REST fallback")
 
@@ -643,7 +690,7 @@ def upsert_rest(rows: list[dict[str, Any]], synced_at: datetime, batch_size: int
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
-    endpoint = f"{url.rstrip('/')}/rest/v1/ops_orders_items?on_conflict=order_id,sku"
+    endpoint = f"{url}/rest/v1/ops_orders_items?on_conflict=order_id,sku"
 
     def payload(row: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -726,11 +773,11 @@ def delete_stale(synced_at: datetime) -> None:
     except Exception:
         pass
 
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = supabase_url()
+    key = supabase_service_key()
     if not url or not key:
         return
-    endpoint = f"{url.rstrip('/')}/rest/v1/ops_orders_items"
+    endpoint = f"{url}/rest/v1/ops_orders_items"
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     requests.delete(
         endpoint,
@@ -759,19 +806,22 @@ def log_sync(row_count: int, status: str, error: str | None = None) -> None:
     except Exception:
         pass
 
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = supabase_url()
+    key = supabase_service_key()
     if url and key:
-        requests.post(
-            f"{url.rstrip('/')}/rest/v1/ops_sync_log",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json=[{"source": "orders", "row_count": row_count, "status": status, "error_message": error}],
-            timeout=30,
-        )
+        try:
+            requests.post(
+                f"{url}/rest/v1/ops_sync_log",
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json=[{"source": "orders", "row_count": row_count, "status": status, "error_message": error}],
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  WARN sync log write failed: {exc}", flush=True)
 
 
 def refresh_summaries() -> None:
@@ -789,12 +839,12 @@ def refresh_summaries() -> None:
     except Exception:
         pass
 
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = supabase_url()
+    key = supabase_service_key()
     if url and key:
         try:
             requests.post(
-                f"{url.rstrip('/')}/rest/v1/rpc/refresh_ops_orders_summaries_simple",
+                f"{url}/rest/v1/rpc/refresh_ops_orders_summaries_simple",
                 headers={"apikey": key, "Authorization": f"Bearer {key}"},
                 timeout=120,
             )
@@ -820,20 +870,23 @@ def update_job(job_id: str, **fields: Any) -> None:
     except Exception:
         pass
 
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    url = supabase_url()
+    key = supabase_service_key()
     if url and key:
-        requests.patch(
-            f"{url.rstrip('/')}/rest/v1/ops_sync_jobs",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            params={"id": f"eq.{job_id}"},
-            json=fields,
-            timeout=30,
-        )
+        try:
+            requests.patch(
+                f"{url}/rest/v1/ops_sync_jobs",
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                params={"id": f"eq.{job_id}"},
+                json=fields,
+                timeout=30,
+            )
+        except Exception as exc:
+            print(f"  WARN job update failed: {exc}", flush=True)
 
 
 def run_sync(
@@ -843,7 +896,8 @@ def run_sync(
     use_rest: bool = False,
 ) -> dict[str, Any]:
     load_env()
-    metabase_url = os.environ.get("METABASE_ORDERS_API_URL", DEFAULT_METABASE_URL)
+    validate_sync_env(use_rest)
+    metabase_url = metabase_orders_url()
     synced_at = datetime.now(timezone.utc)
     t_total = time.perf_counter()
 
@@ -851,6 +905,7 @@ def run_sync(
         if job_id:
             update_job(job_id, status="running", error_message="Fetching data from Metabase...")
 
+        print(f"Metabase URL: {metabase_url}", flush=True)
         raw = fetch_metabase(metabase_url)
         rows = normalize_rows(raw)
 

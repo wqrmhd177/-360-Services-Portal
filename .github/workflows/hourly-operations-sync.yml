@@ -1,16 +1,17 @@
 # Hourly Metabase → Supabase orders sync + materialized view refresh.
 #
 # ── Required GitHub secrets (Settings → Secrets and variables → Actions) ─────
-#   NEXT_PUBLIC_SUPABASE_URL
-#   SUPABASE_SERVICE_ROLE_KEY
+#   NEXT_PUBLIC_SUPABASE_URL      — Full URL with https:// e.g. https://xxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY     — Service role key (not anon key)
 #
 # ── Optional secrets ─────────────────────────────────────────────────────────
-#   METABASE_ORDERS_API_URL   — Override Metabase orders JSON feed
-#   DATABASE_URL              — Supabase Postgres URI (Session pooler). Faster sync.
-#                             If unset, uses REST upsert (works reliably from GitHub).
-#   VERCEL_PRODUCTION_URL     — e.g. https://360-portal-beige.vercel.app
-#   CRON_SECRET               — Same value as Vercel CRON_SECRET; syncs inventory +
-#                             channel list + orders via deployed app (optional 2nd step)
+#   METABASE_ORDERS_API_URL       — Override Metabase orders JSON feed.
+#                                   IMPORTANT: Do not create this secret with an
+#                                   empty value — delete it entirely to use the
+#                                   built-in default Metabase URL.
+#   DATABASE_URL                  — Supabase Postgres URI (Session pooler). Faster sync.
+#   VERCEL_PRODUCTION_URL         — e.g. https://360-portal-beige.vercel.app
+#   CRON_SECRET                   — Same value as Vercel CRON_SECRET
 #
 # Schedule: every hour at :00 UTC.
 
@@ -34,6 +35,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXT_PUBLIC_SUPABASE_URL:-}" ]; then
+            echo "::error::Missing GitHub secret NEXT_PUBLIC_SUPABASE_URL"
+            exit 1
+          fi
+          case "${NEXT_PUBLIC_SUPABASE_URL}" in
+            http://*|https://*) ;;
+            *)
+              echo "::error::NEXT_PUBLIC_SUPABASE_URL must include https:// (e.g. https://xxxx.supabase.co)"
+              exit 1
+              ;;
+          esac
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::Missing GitHub secret SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          fi
+          echo "Required secrets are set."
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -68,16 +92,17 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          BASE="${SUPABASE_URL%/}"
+          case "${SUPABASE_URL}" in
+            http://*|https://*) BASE="${SUPABASE_URL%/}" ;;
+            *) BASE="https://${SUPABASE_URL#/}" ;;
+          esac
           curl -sf -X POST \
             "${BASE}/rest/v1/rpc/refresh_ops_orders_summaries_simple" \
             -H "apikey: ${SUPABASE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEY}" \
             -H "Content-Type: application/json" \
             -d "{}"
-          echo "Refreshed: ops_orders_daily_rollup, ops_orders_status_rollup,"
-          echo "  ops_orders_domain_rollup, ops_orders_delivery_partner_rollup,"
-          echo "  ops_orders_revenue_loss_rollup, ops_orders_sla_rollup"
+          echo "Order materialized views refreshed."
 
       - name: Full operations sync via Vercel cron (optional)
         continue-on-error: true
@@ -88,7 +113,6 @@ jobs:
           set -euo pipefail
           if [ -z "${VERCEL_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
             echo "Skipping Vercel cron — set VERCEL_PRODUCTION_URL and CRON_SECRET to enable"
-            echo "inventory + channel list sync from the deployed app."
             exit 0
           fi
           BASE="${VERCEL_URL%/}"
@@ -97,4 +121,4 @@ jobs:
             "${BASE}/api/cron/operations-sync" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             --max-time 1800
-          echo "Full operations sync completed (inventory, channel list, orders)."
+          echo "Full operations sync completed."
