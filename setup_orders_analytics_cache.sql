@@ -269,7 +269,8 @@ AS $$
     AND (
       (NULLIF(TRIM(p_bifurcation), '') IS NOT NULL AND o.bifurcation = NULLIF(TRIM(p_bifurcation), ''))
       OR (NULLIF(TRIM(p_bifurcation), '') IS NULL AND o.bifurcation IS NOT NULL AND TRIM(o.bifurcation) <> '')
-    );
+    )
+  ORDER BY o.id;
 $$;
 
 -- ── Row counts for empty-state checks ─────────────────────────────────────────

@@ -140,6 +140,7 @@ export async function fetchFilteredOrderLineItems(
   while (true) {
     const { data, error } = await supabase
       .rpc("get_ops_orders_filtered_enriched", rpcParams)
+      .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
 
     if (error) break;
