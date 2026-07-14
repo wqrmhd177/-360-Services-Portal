@@ -1,10 +1,14 @@
-import { METABASE_ORDERS_URL, normalizeOrderRows } from "@/lib/operations/orders";
+import { spawn } from "child_process";
+import path from "path";
 import { getOpsServiceDb, logSync, refreshOrdersSummaries } from "@/lib/operations/opsDb";
 import { enrichOrderRows } from "@/lib/orders/enrichment";
 import { clearOrderLineItemsCache } from "@/lib/orders/lineItems";
+import { METABASE_ORDERS_URL, normalizeOrderRows } from "@/lib/operations/orders";
 import { updateSyncJob } from "@/lib/operations/syncJobs";
 
-const BATCH = 1000;
+/** REST fallback batch size (Python uses 5000+ via direct Postgres). */
+const BATCH = 5000;
+const PARALLEL = 4;
 
 export type SyncOrdersResult = {
   ok: boolean;
@@ -32,7 +36,92 @@ async function reportProgress(
   });
 }
 
-export async function syncOrdersFromMetabase(
+function pythonCommand(): { cmd: string; prefixArgs: string[] } {
+  if (process.env.PYTHON_PATH) {
+    return { cmd: process.env.PYTHON_PATH, prefixArgs: [] };
+  }
+  if (process.platform === "win32") {
+    return { cmd: "py", prefixArgs: ["-3"] };
+  }
+  return { cmd: "python3", prefixArgs: [] };
+}
+
+/** Run fast Python sync (direct Postgres batch upsert). */
+export async function runPythonOrdersSync(jobId?: string): Promise<SyncOrdersResult | null> {
+  const script = path.join(process.cwd(), "scripts", "sync_orders.py");
+  const { cmd, prefixArgs } = pythonCommand();
+  const args = [...prefixArgs, script];
+  if (jobId) args.push("--job-id", jobId);
+
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stdout += text;
+      process.stdout.write(text);
+    });
+
+    proc.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stderr += text;
+      process.stderr.write(text);
+    });
+
+    proc.on("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        resolve(null);
+        return;
+      }
+      resolve({ ok: false, rowCount: 0, error: err.message });
+    });
+
+    proc.on("close", (code) => {
+      if (code === null) {
+        resolve({ ok: false, rowCount: 0, error: "Python sync process terminated" });
+        return;
+      }
+
+      const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
+      const lastLine = lines[lines.length - 1] ?? "";
+
+      try {
+        const parsed = JSON.parse(lastLine) as SyncOrdersResult & { elapsedSeconds?: number };
+        if (parsed.ok) {
+          clearOrderLineItemsCache();
+          resolve({ ok: true, rowCount: parsed.rowCount ?? 0 });
+          return;
+        }
+        resolve({
+          ok: false,
+          rowCount: 0,
+          error: parsed.error ?? stderr.trim() ?? "Python sync failed",
+        });
+        return;
+      } catch {
+        if (code === 0) {
+          resolve({ ok: true, rowCount: 0 });
+          return;
+        }
+        resolve({
+          ok: false,
+          rowCount: 0,
+          error: stderr.trim() || stdout.trim() || `Python sync exited with code ${code}`,
+        });
+      }
+    });
+  });
+}
+
+/** Legacy REST upsert fallback when Python is unavailable (e.g. Vercel without Python). */
+async function syncOrdersRestFallback(
   options: SyncOrdersOptions = {},
 ): Promise<SyncOrdersResult> {
   const { jobId, onProgress } = options;
@@ -56,12 +145,6 @@ export async function syncOrdersFromMetabase(
       return { ok: false, rowCount: 0, error: msg };
     }
 
-    if (jobId) {
-      await updateSyncJob(jobId, {
-        error_message: "Parsing and enriching order rows…",
-      });
-    }
-
     const raw = await response.json();
     const rows = normalizeOrderRows(raw);
     const enriched = enrichOrderRows(rows);
@@ -69,8 +152,9 @@ export async function syncOrdersFromMetabase(
     const syncedAt = new Date().toISOString();
     const total = enriched.length;
 
-    for (let i = 0; i < enriched.length; i += BATCH) {
-      const slice = enriched.slice(i, i + BATCH).map((r) => ({
+    const slices: ReturnType<typeof mapRowToDb>[] = [];
+    function mapRowToDb(r: (typeof enriched)[number]) {
+      return {
         order_id: r.orderId,
         order_number: r.orderNumber,
         domain: r.domain,
@@ -103,39 +187,38 @@ export async function syncOrdersFromMetabase(
         account_manager_key: r.accountManagerKey,
         order_date_day: r.orderDateDay,
         synced_at: syncedAt,
-      }));
+      };
+    }
 
+    for (const r of enriched) {
+      slices.push(mapRowToDb(r));
+    }
+
+    async function upsertSlice(slice: typeof slices) {
       const { error } = await supabase
         .from("ops_orders_items")
         .upsert(slice, { onConflict: "order_id,sku" });
-
-      if (error) {
-        await logSync("orders", 0, "failed", error.message);
-        return { ok: false, rowCount: 0, error: error.message };
-      }
-
-      const processed = Math.min(i + BATCH, total);
-      await reportProgress(jobId, processed, total, onProgress);
+      if (error) throw new Error(error.message);
+      return slice.length;
     }
 
-    if (jobId) {
-      await updateSyncJob(jobId, {
-        error_message: "Removing stale rows…",
-      });
+    let processed = 0;
+    for (let i = 0; i < slices.length; i += BATCH * PARALLEL) {
+      const batchPromises: Promise<number>[] = [];
+      for (let p = 0; p < PARALLEL; p++) {
+        const start = i + p * BATCH;
+        if (start >= total) break;
+        batchPromises.push(upsertSlice(slices.slice(start, start + BATCH)));
+      }
+      const counts = await Promise.all(batchPromises);
+      processed += counts.reduce((a, b) => a + b, 0);
+      await reportProgress(jobId, Math.min(processed, total), total, onProgress);
     }
 
     await supabase.from("ops_orders_items").delete().lt("synced_at", syncedAt);
-
     await logSync("orders", enriched.length, "success");
     clearOrderLineItemsCache();
 
-    if (jobId) {
-      await updateSyncJob(jobId, {
-        error_message: "Refreshing summary views…",
-      });
-    }
-
-    // MV refresh is best-effort — don't fail the sync if it times out
     try {
       await refreshOrdersSummaries();
     } catch (refreshErr) {
@@ -151,4 +234,27 @@ export async function syncOrdersFromMetabase(
     await logSync("orders", 0, "failed", msg);
     return { ok: false, rowCount: 0, error: msg };
   }
+}
+
+/**
+ * Sync orders: prefers Python (direct Postgres batch upsert), falls back to parallel REST.
+ * Set SYNC_ORDERS_FORCE_REST=1 to skip Python (Vercel serverless).
+ */
+export async function syncOrdersFromMetabase(
+  options: SyncOrdersOptions = {},
+): Promise<SyncOrdersResult> {
+  const forceRest = process.env.SYNC_ORDERS_FORCE_REST === "1";
+
+  if (!forceRest) {
+    const pythonResult = await runPythonOrdersSync(options.jobId);
+    if (pythonResult != null) {
+      return pythonResult;
+    }
+    console.warn(
+      "Python sync unavailable — falling back to parallel REST upsert. " +
+        "Install Python + pip install -r scripts/requirements-sync.txt and set DATABASE_URL for fast sync.",
+    );
+  }
+
+  return syncOrdersRestFallback(options);
 }

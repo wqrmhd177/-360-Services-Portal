@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test:orders": "npx tsx scripts/run-order-analytics-tests.ts",
-    "validate:orders": "node scripts/validate-order-counts.js"
+    "validate:orders": "node scripts/validate-order-counts.js",
+    "sync:orders": "py -3 scripts/sync_orders.py",
+    "sync:orders:rest": "py -3 scripts/sync_orders.py --rest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",

@@ -1,0 +1,4 @@
+# Fast orders sync: direct PostgreSQL batch upsert (install: pip install -r scripts/requirements-sync.txt)
+psycopg2-binary>=2.9.9
+requests>=2.31.0
+python-dotenv>=1.0.0
