@@ -6,7 +6,7 @@ import {
   normalizeOrderCountry,
   orderMatchesFacetFilters,
 } from "../src/lib/analytics/orders";
-import { computeOperationsStatusCounts as computeStatus } from "../src/lib/analytics/operations-status-detail";
+import { mapStatusRollupRows } from "../src/lib/orders/operationsRollup";
 import { computeStoreVisibilityTables } from "../src/lib/analytics/store-visibility";
 
 function assert(condition: boolean, message: string) {
@@ -84,16 +84,14 @@ function testCountryNormalization() {
   assert(orderMatchesFacetFilters(lines, { country: "United Arab Emirates" }), "UAE matches UAE full name filter");
 }
 
-function testStatusCountsByMetabaseId() {
-  const items = [
-    line({ metabaseId: 10, orderNumber: "S1", status: "Delivered", sku: "A" }),
-    line({ metabaseId: 11, orderNumber: "S1", status: "Delivered", sku: "B" }),
-    line({ metabaseId: 12, orderNumber: "S2", status: "Approved" }),
-  ];
-  const counts = computeStatus(items);
-  assert(counts.totalOrders === 3, "totalOrders counts unique Metabase ids");
-  assert(counts.deliveredOrders === 2, "two delivered ids");
-  assert(counts.byGroup.approved === 1, "one approved id");
+function testStatusCountsFromRollup() {
+  const counts = mapStatusRollupRows([
+    { status: "Delivered", order_count: 2 },
+    { status: "Approved", order_count: 1 },
+  ]);
+  assert(counts.totalOrders === 3, "totalOrders sums rollup rows");
+  assert(counts.deliveredOrders === 2, "two delivered orders");
+  assert(counts.byGroup.approved === 1, "one approved order");
 }
 
 function testStoreVisibilityTables() {
@@ -147,7 +145,7 @@ function run() {
     ["same order_number different ids", testSameOrderNumberDifferentIds],
     ["facet All vs specific", testFacetAllVsSpecific],
     ["country normalization", testCountryNormalization],
-    ["status counts by Metabase id", testStatusCountsByMetabaseId],
+    ["status counts from rollup", testStatusCountsFromRollup],
     ["store visibility tables", testStoreVisibilityTables],
   ];
 

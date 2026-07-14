@@ -266,17 +266,19 @@ export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
   const supabase = getOpsDb();
   const { data, error } = await supabase.rpc(
     "get_ops_orders_counts",
-    toRpcFilterParams({}),
+    toRpcFilterParams(filters),
   );
 
-  let allCount = 0;
   if (!error && data) {
-    allCount = Number((data as { allCount?: number }).allCount ?? 0);
-  } else {
-    const allItems = await getAllOrderLineItems();
-    allCount = groupByOrder(allItems).size;
+    const payload = data as { allCount?: number; filteredCount?: number };
+    return {
+      allCount: Number(payload.allCount ?? 0),
+      filteredCount: Number(payload.filteredCount ?? 0),
+    };
   }
 
+  const allItems = await getAllOrderLineItems();
+  const allCount = groupByOrder(allItems).size;
   const items = await fetchFilteredOrderLineItems(filters);
   return { allCount, filteredCount: groupByOrder(items).size };
 }

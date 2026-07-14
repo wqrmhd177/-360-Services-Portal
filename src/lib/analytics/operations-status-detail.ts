@@ -7,7 +7,6 @@ import {
   type OrderGroupMap,
 } from "@/lib/analytics/orders";
 import {
-  OPERATIONS_STATUS_KPI_GROUPS,
   type OperationsDaysFrom,
   type OperationsStatusDetailLayout,
   type OperationsStatusGroupBy,
@@ -189,36 +188,6 @@ export interface OperationsStatusCounts {
   /** Unique orders with status = Delivered. */
   deliveredOrders: number;
   byGroup: Record<OperationsStatusGroupId, number>;
-}
-
-export function computeOperationsStatusCounts(
-  items: OrderLineItem[],
-): OperationsStatusCounts {
-  const byOrder = groupByOrder(items);
-  const byGroup = Object.fromEntries(
-    OPERATIONS_STATUS_KPI_GROUPS.map((g) => [g.id, 0]),
-  ) as Record<OperationsStatusGroupId, number>;
-
-  let deliveredOrders = 0;
-
-  for (const group of OPERATIONS_STATUS_KPI_GROUPS) {
-    const statusSet = new Set(group.statuses);
-    let n = 0;
-    for (const [, lines] of byOrder) {
-      if (statusSet.has(orderStatusFromLines(lines))) n++;
-    }
-    byGroup[group.id] = n;
-  }
-
-  for (const [, lines] of byOrder) {
-    if (orderStatusFromLines(lines) === "Delivered") deliveredOrders++;
-  }
-
-  return {
-    totalOrders: byOrder.size,
-    deliveredOrders,
-    byGroup,
-  };
 }
 
 function computeCountryTagDetail(

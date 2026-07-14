@@ -1,0 +1,100 @@
+# Hourly Metabase → Supabase orders sync + materialized view refresh.
+#
+# ── Required GitHub secrets (Settings → Secrets and variables → Actions) ─────
+#   NEXT_PUBLIC_SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+#
+# ── Optional secrets ─────────────────────────────────────────────────────────
+#   METABASE_ORDERS_API_URL   — Override Metabase orders JSON feed
+#   DATABASE_URL              — Supabase Postgres URI (Session pooler). Faster sync.
+#                             If unset, uses REST upsert (works reliably from GitHub).
+#   VERCEL_PRODUCTION_URL     — e.g. https://360-portal-beige.vercel.app
+#   CRON_SECRET               — Same value as Vercel CRON_SECRET; syncs inventory +
+#                             channel list + orders via deployed app (optional 2nd step)
+#
+# Schedule: every hour at :00 UTC.
+
+name: Hourly Operations Sync
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: hourly-operations-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-orders-and-refresh:
+    name: Sync orders & refresh materialized views
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements-sync.txt
+
+      - name: Install sync dependencies
+        run: pip install -r scripts/requirements-sync.txt
+
+      - name: Sync Metabase orders to Supabase
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          METABASE_ORDERS_API_URL: ${{ secrets.METABASE_ORDERS_API_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DATABASE_URL:-}" ]; then
+            echo "Using Postgres upsert (DATABASE_URL set)"
+            python scripts/sync_orders.py --batch-size 10000 --workers 4
+          else
+            echo "Using REST upsert (no DATABASE_URL)"
+            python scripts/sync_orders.py --rest --batch-size 1000 --workers 2
+          fi
+
+      - name: Refresh order materialized views
+        if: success()
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          BASE="${SUPABASE_URL%/}"
+          curl -sf -X POST \
+            "${BASE}/rest/v1/rpc/refresh_ops_orders_summaries_simple" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{}"
+          echo "Refreshed: ops_orders_daily_rollup, ops_orders_status_rollup,"
+          echo "  ops_orders_domain_rollup, ops_orders_delivery_partner_rollup,"
+          echo "  ops_orders_revenue_loss_rollup, ops_orders_sla_rollup"
+
+      - name: Full operations sync via Vercel cron (optional)
+        continue-on-error: true
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Skipping Vercel cron — set VERCEL_PRODUCTION_URL and CRON_SECRET to enable"
+            echo "inventory + channel list sync from the deployed app."
+            exit 0
+          fi
+          BASE="${VERCEL_URL%/}"
+          echo "Calling ${BASE}/api/cron/operations-sync"
+          curl -sf -X GET \
+            "${BASE}/api/cron/operations-sync" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 1800
+          echo "Full operations sync completed (inventory, channel list, orders)."

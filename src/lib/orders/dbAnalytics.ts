@@ -1,13 +1,9 @@
-import { computeOperationsStatusCounts } from "@/lib/analytics/operations-status-detail";
 import { computeOperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
 import { computeStoreVisibilityTables } from "@/lib/analytics/store-visibility";
 import {
   computeAccountManagerBreakdown,
   computeCountryDeliveryRatios,
-  computeDeliveryPartnerBreakdownByCountry,
-  computeFulfillmentSLA,
   computeKPIs,
-  computeRevenueLossBreakdown,
   computeStatusBreakdown,
   computeTitleBreakdown,
   computeTitleDeliveryBreakdownForAccountManager,
@@ -18,34 +14,42 @@ import {
   fetchOrderCounts,
   searchParamsToFilterParams,
 } from "@/lib/orders/filteredItems";
+import {
+  fetchDeliveryPartnerByCountry,
+  fetchFulfillmentSla,
+  fetchOperationsStatusCounts,
+  fetchRevenueLossBreakdown,
+} from "@/lib/orders/operationsRollup";
 import { parseDateRange, parseFilters } from "@/lib/orders/params";
 import { getOperationsStatusGroup } from "@/lib/operations/status-kpi-groups";
 
-/**
- * Fast analytics path: filtered SQL fetch (enriched rows) + in-memory compute on subset only.
- * Replaces full-table load + imputation on every request.
- */
+/** Orders page analytics — all widgets from materialized views (no line-item load). */
 export async function getOperationsAnalyticsFromDb(
   searchParams: Record<string, string | string[] | undefined>,
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
-  const [items, counts] = await Promise.all([
-    fetchFilteredOrderLineItems(dbFilters),
-    fetchOrderCounts(dbFilters),
-  ]);
+
+  const [counts, operationsStatusCounts, revenueLossBreakdown, deliveryPartnerByCountry] =
+    await Promise.all([
+      fetchOrderCounts(dbFilters),
+      fetchOperationsStatusCounts(dbFilters),
+      fetchRevenueLossBreakdown(dbFilters),
+      fetchDeliveryPartnerByCountry(dbFilters),
+    ]);
+
+  const fulfillmentSLA = await fetchFulfillmentSla(dbFilters, counts.filteredCount);
 
   return {
     range,
     filters,
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
-    fulfillmentSLA: computeFulfillmentSLA(items),
-    operationsStatusCounts: computeOperationsStatusCounts(items),
-    revenueLossBreakdown: computeRevenueLossBreakdown(items),
-    deliveryPartnerByCountry: computeDeliveryPartnerBreakdownByCountry(items),
-    items,
+    fulfillmentSLA,
+    operationsStatusCounts,
+    revenueLossBreakdown,
+    deliveryPartnerByCountry,
   };
 }
 
@@ -55,9 +59,10 @@ export async function getStoreVisibilityAnalyticsFromDb(
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
-  const [items, counts] = await Promise.all([
+  const [items, counts, operationsStatusCounts] = await Promise.all([
     fetchFilteredOrderLineItems(dbFilters),
     fetchOrderCounts(dbFilters),
+    fetchOperationsStatusCounts(dbFilters),
   ]);
 
   return {
@@ -65,7 +70,7 @@ export async function getStoreVisibilityAnalyticsFromDb(
     filters,
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
-    operationsStatusCounts: computeOperationsStatusCounts(items),
+    operationsStatusCounts,
     storeTables: computeStoreVisibilityTables(items),
     kpis: computeKPIs(items),
     trends: computeTrends(items, range),
