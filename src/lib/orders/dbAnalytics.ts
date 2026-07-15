@@ -12,6 +12,7 @@ import {
 import {
   fetchFilteredOrderLineItems,
   fetchOrderCounts,
+  fetchOrderCountDiagnostics,
   fetchCachedFilterOptionsFromDb,
   searchParamsToFilterParams,
 } from "@/lib/orders/filteredItems";
@@ -53,6 +54,7 @@ export async function getOperationsAnalyticsFromDb(
     deliveryPartnerByCountry,
     slaRows,
     filterOptions,
+    diagnostics,
   ] = await Promise.all([
     fetchOrderCounts(dbFilters),
     fetchOperationsStatusCounts(dbFilters),
@@ -64,9 +66,70 @@ export async function getOperationsAnalyticsFromDb(
       "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
     ),
     fetchCachedFilterOptionsFromDb(),
+    fetchOrderCountDiagnostics(dbFilters),
   ]);
 
+  const rollupVsRpcDelta =
+    operationsStatusCounts.totalOrders - counts.filteredCount;
+
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "75f7fa",
+    },
+    body: JSON.stringify({
+      sessionId: "75f7fa",
+      runId: "pre-fix",
+      hypothesisId: "H1-H5",
+      location: "dbAnalytics.ts:getOperationsAnalyticsFromDb",
+      message: "portal count comparison",
+      data: {
+        dbFilters,
+        filteredCount: counts.filteredCount,
+        allCount: counts.allCount,
+        statusRollupTotal: operationsStatusCounts.totalOrders,
+        deliveredRollup: operationsStatusCounts.deliveredOrders,
+        rollupVsRpcDelta,
+        diagnostics,
+        excelExpectedTotal: 22922,
+        portalReportedGap: 22922 - operationsStatusCounts.totalOrders,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   const fulfillmentSLA = mapSlaRollupRows(slaRows, counts.filteredCount);
+
+  const statusCounts = {
+    ...operationsStatusCounts,
+    totalOrders: counts.filteredCount,
+  };
+
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "75f7fa",
+    },
+    body: JSON.stringify({
+      sessionId: "75f7fa",
+      runId: "post-fix",
+      hypothesisId: "H3",
+      location: "dbAnalytics.ts:getOperationsAnalyticsFromDb",
+      message: "total orders source after fix",
+      data: {
+        filteredCount: counts.filteredCount,
+        rollupSumBeforeOverride: operationsStatusCounts.totalOrders,
+        totalOrdersReturned: statusCounts.totalOrders,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   return {
     range,
@@ -74,7 +137,7 @@ export async function getOperationsAnalyticsFromDb(
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
     fulfillmentSLA,
-    operationsStatusCounts,
+    operationsStatusCounts: statusCounts,
     revenueLossBreakdown,
     deliveryPartnerByCountry,
     filterOptions: {
@@ -97,12 +160,17 @@ export async function getStoreVisibilityAnalyticsFromDb(
     fetchCachedFilterOptionsFromDb(),
   ]);
 
+  const statusCounts = {
+    ...operationsStatusCounts,
+    totalOrders: counts.filteredCount,
+  };
+
   return {
     range,
     filters,
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
-    operationsStatusCounts,
+    operationsStatusCounts: statusCounts,
     filterOptions: {
       countries: filterOptions.countries,
       bifurcations: filterOptions.bifurcations,

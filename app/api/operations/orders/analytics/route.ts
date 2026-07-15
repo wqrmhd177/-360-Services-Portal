@@ -27,6 +27,31 @@ export async function GET(request: NextRequest) {
     const lastSync = await getLastSync("orders");
     const { from, to } = serializeDateRange(data.range);
 
+    // #region agent log
+    fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "75f7fa",
+      },
+      body: JSON.stringify({
+        sessionId: "75f7fa",
+        runId: "pre-fix",
+        hypothesisId: "H4",
+        location: "analytics/route.ts:GET",
+        message: "analytics request params",
+        data: {
+          params,
+          rangeFrom: from,
+          rangeTo: to,
+          lastSyncedAt: lastSync?.synced_at ?? null,
+          totalOrdersKpi: data.operationsStatusCounts.totalOrders,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
     return NextResponse.json({
       ok: true,
       lastSyncedAt: lastSync?.synced_at ?? null,

@@ -98,7 +98,33 @@ export async function fetchOperationsStatusCounts(
     filters,
     "status, order_count",
   );
-  return mapStatusRollupRows(rows);
+  const mapped = mapStatusRollupRows(rows);
+
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "75f7fa",
+    },
+    body: JSON.stringify({
+      sessionId: "75f7fa",
+      runId: "pre-fix",
+      hypothesisId: "H3-H5",
+      location: "operationsRollup.ts:fetchOperationsStatusCounts",
+      message: "status rollup fetch",
+      data: {
+        filters,
+        rollupRowCount: rows.length,
+        totalOrders: mapped.totalOrders,
+        deliveredOrders: mapped.deliveredOrders,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  return mapped;
 }
 
 function buildDeliveryPartnerRows(

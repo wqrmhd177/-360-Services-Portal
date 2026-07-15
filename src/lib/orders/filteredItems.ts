@@ -270,6 +270,30 @@ export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
     toRpcFilterParams(filters),
   );
 
+  // #region agent log
+  fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "75f7fa",
+    },
+    body: JSON.stringify({
+      sessionId: "75f7fa",
+      runId: "pre-fix",
+      hypothesisId: "H2-H3",
+      location: "filteredItems.ts:fetchOrderCounts",
+      message: "get_ops_orders_counts RPC result",
+      data: {
+        filters,
+        rpcError: error?.message ?? null,
+        allCount: (data as { allCount?: number } | null)?.allCount ?? null,
+        filteredCount: (data as { filteredCount?: number } | null)?.filteredCount ?? null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   if (!error && data) {
     const payload = data as { allCount?: number; filteredCount?: number };
     return {
@@ -282,6 +306,80 @@ export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
   const allCount = groupByOrder(allItems).size;
   const items = await fetchFilteredOrderLineItems(filters);
   return { allCount, filteredCount: groupByOrder(items).size };
+}
+
+/** Debug: compare raw DB orders vs portal facet filters in a date range. */
+export async function fetchOrderCountDiagnostics(filters: OrdersFilterParams): Promise<{
+  distinctInRange: number;
+  distinctRpcFacet: number;
+  distinctEmptyCountry: number;
+  distinctEmptyBifurcation: number;
+  distinctMissingEitherFacet: number;
+}> {
+  const supabase = getOpsDb();
+  const fromDate = normalizeOptionalFilter(filters.fromDate);
+  const toDate = normalizeOptionalFilter(filters.toDate);
+  if (!fromDate || !toDate) {
+    return {
+      distinctInRange: 0,
+      distinctRpcFacet: 0,
+      distinctEmptyCountry: 0,
+      distinctEmptyBifurcation: 0,
+      distinctMissingEitherFacet: 0,
+    };
+  }
+
+  type Row = { order_id: number | null; country: string | null; bifurcation: string | null };
+  const rows: Row[] = [];
+  let offset = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("ops_orders_items")
+      .select("order_id, country, bifurcation")
+      .gte("order_date_day", fromDate)
+      .lte("order_date_day", toDate)
+      .not("order_id", "is", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`diagnostics fetch failed: ${error.message}`);
+    if (!data?.length) break;
+    rows.push(...(data as Row[]));
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  const byOrder = new Map<number, { hasCountry: boolean; hasBifurcation: boolean }>();
+  for (const row of rows) {
+    const orderId = Number(row.order_id);
+    if (!orderId) continue;
+    const bucket = byOrder.get(orderId) ?? { hasCountry: false, hasBifurcation: false };
+    if (row.country?.trim()) bucket.hasCountry = true;
+    if (row.bifurcation?.trim()) bucket.hasBifurcation = true;
+    byOrder.set(orderId, bucket);
+  }
+
+  let distinctRpcFacet = 0;
+  let distinctEmptyCountry = 0;
+  let distinctEmptyBifurcation = 0;
+  let distinctMissingEitherFacet = 0;
+
+  for (const bucket of byOrder.values()) {
+    if (!bucket.hasCountry) distinctEmptyCountry++;
+    if (!bucket.hasBifurcation) distinctEmptyBifurcation++;
+    if (!bucket.hasCountry || !bucket.hasBifurcation) distinctMissingEitherFacet++;
+    if (bucket.hasCountry && bucket.hasBifurcation) distinctRpcFacet++;
+  }
+
+  return {
+    distinctInRange: byOrder.size,
+    distinctRpcFacet,
+    distinctEmptyCountry,
+    distinctEmptyBifurcation,
+    distinctMissingEitherFacet,
+  };
 }
 
 export async function fetchFilterOptionsFromDb(): Promise<{
