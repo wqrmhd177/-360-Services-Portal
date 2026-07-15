@@ -12,14 +12,16 @@ import {
 import {
   fetchFilteredOrderLineItems,
   fetchOrderCounts,
+  fetchCachedFilterOptionsFromDb,
   searchParamsToFilterParams,
 } from "@/lib/orders/filteredItems";
 import {
   fetchDeliveryPartnerByCountry,
-  fetchFulfillmentSla,
   fetchOperationsStatusCounts,
   fetchRevenueLossBreakdown,
+  mapSlaRollupRows,
 } from "@/lib/orders/operationsRollup";
+import { fetchOrdersRollupRows } from "@/lib/orders/rollupQuery";
 import { parseDateRange, parseFilters } from "@/lib/orders/params";
 import { getOperationsStatusGroup } from "@/lib/operations/status-kpi-groups";
 
@@ -31,15 +33,40 @@ export async function getOperationsAnalyticsFromDb(
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
 
-  const [counts, operationsStatusCounts, revenueLossBreakdown, deliveryPartnerByCountry] =
-    await Promise.all([
-      fetchOrderCounts(dbFilters),
-      fetchOperationsStatusCounts(dbFilters),
-      fetchRevenueLossBreakdown(dbFilters),
-      fetchDeliveryPartnerByCountry(dbFilters),
-    ]);
+  type SlaRollupRow = {
+    country: string | null;
+    confirm_days_sum: number | null;
+    confirm_count: number | null;
+    deliver_days_sum: number | null;
+    deliver_count: number | null;
+    return_days_sum: number | null;
+    return_count: number | null;
+    ship_days_sum: number | null;
+    ship_count: number | null;
+    shipped_within_48h_count: number | null;
+  };
 
-  const fulfillmentSLA = await fetchFulfillmentSla(dbFilters, counts.filteredCount);
+  const [
+    counts,
+    operationsStatusCounts,
+    revenueLossBreakdown,
+    deliveryPartnerByCountry,
+    slaRows,
+    filterOptions,
+  ] = await Promise.all([
+    fetchOrderCounts(dbFilters),
+    fetchOperationsStatusCounts(dbFilters),
+    fetchRevenueLossBreakdown(dbFilters),
+    fetchDeliveryPartnerByCountry(dbFilters),
+    fetchOrdersRollupRows<SlaRollupRow>(
+      "ops_orders_sla_rollup",
+      dbFilters,
+      "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
+    ),
+    fetchCachedFilterOptionsFromDb(),
+  ]);
+
+  const fulfillmentSLA = mapSlaRollupRows(slaRows, counts.filteredCount);
 
   return {
     range,
@@ -50,6 +77,10 @@ export async function getOperationsAnalyticsFromDb(
     operationsStatusCounts,
     revenueLossBreakdown,
     deliveryPartnerByCountry,
+    filterOptions: {
+      countries: filterOptions.countries,
+      bifurcations: filterOptions.bifurcations,
+    },
   };
 }
 
@@ -59,10 +90,11 @@ export async function getStoreVisibilityAnalyticsFromDb(
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
-  const [items, counts, operationsStatusCounts] = await Promise.all([
+  const [items, counts, operationsStatusCounts, filterOptions] = await Promise.all([
     fetchFilteredOrderLineItems(dbFilters),
     fetchOrderCounts(dbFilters),
     fetchOperationsStatusCounts(dbFilters),
+    fetchCachedFilterOptionsFromDb(),
   ]);
 
   return {
@@ -71,6 +103,12 @@ export async function getStoreVisibilityAnalyticsFromDb(
     allCount: counts.allCount,
     filteredCount: counts.filteredCount,
     operationsStatusCounts,
+    filterOptions: {
+      countries: filterOptions.countries,
+      bifurcations: filterOptions.bifurcations,
+      storeIds: filterOptions.storeIds,
+      storeOptions: filterOptions.storeOptions,
+    },
     storeTables: computeStoreVisibilityTables(items),
     kpis: computeKPIs(items),
     trends: computeTrends(items, range),

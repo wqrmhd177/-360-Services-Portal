@@ -28,6 +28,7 @@ interface AnalyticsPayload {
   operationsStatusCounts: OperationsStatusCounts;
   revenueLossBreakdown: RevenueLossRow[];
   deliveryPartnerByCountry: DeliveryPartnerByCountryData;
+  filterOptions?: FilterOptions;
   lastSyncedAt: string | null;
 }
 
@@ -54,17 +55,28 @@ function OrdersOperationsContent() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const syncing = syncStatus === "pending" || syncStatus === "running";
+  const dateRangeReady = Boolean(from && to);
 
   const loadFilterOptions = useCallback(async () => {
     try {
-      const res = await fetch("/api/operations/orders/filter-options");
-      if (res.ok) setFilterOpts(await res.json());
+      const res = await fetch("/api/operations/orders/filter-options", {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setFilterOpts({
+          countries: json.countries ?? [],
+          bifurcations: json.bifurcations ?? [],
+        });
+      }
     } catch {
-      /* ignore */
+      /* fallback: options also arrive with analytics payload */
     }
   }, []);
 
   const loadAnalytics = useCallback(async () => {
+    if (!dateRangeReady) return;
+
     setLoading(true);
     setError(null);
     try {
@@ -74,7 +86,9 @@ function OrdersOperationsContent() {
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
-      const res = await fetch(`/api/operations/orders/analytics?${params}`);
+      const res = await fetch(`/api/operations/orders/analytics?${params}`, {
+        cache: "no-store",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load analytics");
       if (json.filteredCount === 0 && json.allCount === 0) {
@@ -82,6 +96,14 @@ function OrdersOperationsContent() {
         setData(null);
         return;
       }
+
+      if (json.filterOptions) {
+        setFilterOpts({
+          countries: json.filterOptions.countries ?? [],
+          bifurcations: json.filterOptions.bifurcations ?? [],
+        });
+      }
+
       setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load analytics");
@@ -89,7 +111,7 @@ function OrdersOperationsContent() {
     } finally {
       setLoading(false);
     }
-  }, [country, bifurcation, from, to]);
+  }, [country, bifurcation, from, to, dateRangeReady]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -153,12 +175,9 @@ function OrdersOperationsContent() {
   };
 
   useEffect(() => {
-    loadFilterOptions();
-  }, [loadFilterOptions]);
-
-  useEffect(() => {
+    if (!dateRangeReady) return;
     loadAnalytics();
-  }, [loadAnalytics]);
+  }, [loadAnalytics, dateRangeReady]);
 
   useEffect(() => {
     void (async () => {

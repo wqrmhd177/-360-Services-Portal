@@ -3,6 +3,7 @@ import { applyRevenueImputation } from "@/lib/analytics/revenue-imputation";
 import { getOpsDb } from "@/lib/operations/opsDb";
 import { getAllOrderLineItems } from "@/lib/orders/lineItems";
 import type { OrderLineItem } from "@/lib/types/order";
+import { unstable_cache } from "next/cache";
 
 export type OrdersFilterParams = {
   country?: string | null;
@@ -321,6 +322,13 @@ export async function fetchFilterOptionsFromDb(): Promise<{
   const storeIds = storeOptions.map((opt) => opt.id);
   return { countries, bifurcations, storeIds, storeOptions };
 }
+
+/** Cached filter options — countries/bifurcations change only after sync. */
+export const fetchCachedFilterOptionsFromDb = unstable_cache(
+  async () => fetchFilterOptionsFromDb(),
+  ["ops-orders-filter-options"],
+  { revalidate: 3600, tags: ["ops-orders-filter-options"] },
+);
 
 export function searchParamsToFilterParams(
   searchParams: Record<string, string | string[] | undefined>,

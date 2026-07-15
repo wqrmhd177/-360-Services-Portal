@@ -42,33 +42,38 @@ const ROLLUP_ORDER_COLUMNS: Record<OrdersRollupTable, string[]> = {
   ],
 };
 
-function applyRollupFilters(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query: any,
-  filters: OrdersFilterParams,
-) {
+type RollupQueryBuilder = {
+  gte: (column: string, value: string) => RollupQueryBuilder;
+  lte: (column: string, value: string) => RollupQueryBuilder;
+  eq: (column: string, value: string | number) => RollupQueryBuilder;
+  neq: (column: string, value: string) => RollupQueryBuilder;
+};
+
+function applyRollupFilters<T>(query: T, filters: OrdersFilterParams): T {
   const country = normalizeOptionalFilter(filters.country);
   const bifurcation = normalizeOptionalFilter(filters.bifurcation);
   const fromDate = normalizeOptionalFilter(filters.fromDate);
   const toDate = normalizeOptionalFilter(filters.toDate);
 
-  if (fromDate) query = query.gte("order_date_day", fromDate);
-  if (toDate) query = query.lte("order_date_day", toDate);
-  if (filters.storeId != null) query = query.eq("store_id", filters.storeId);
+  let q = query as unknown as RollupQueryBuilder;
+
+  if (fromDate) q = q.gte("order_date_day", fromDate);
+  if (toDate) q = q.lte("order_date_day", toDate);
+  if (filters.storeId != null) q = q.eq("store_id", filters.storeId);
 
   if (country) {
-    query = query.eq("country", country);
+    q = q.eq("country", country);
   } else {
-    query = query.neq("country", "Unknown").neq("country", "");
+    q = q.neq("country", "Unknown").neq("country", "");
   }
 
   if (bifurcation) {
-    query = query.eq("bifurcation", bifurcation);
+    q = q.eq("bifurcation", bifurcation);
   } else {
-    query = query.neq("bifurcation", "");
+    q = q.neq("bifurcation", "");
   }
 
-  return query;
+  return q as unknown as T;
 }
 
 /** Paginated fetch from an ops_orders_* materialized view with standard facet filters. */

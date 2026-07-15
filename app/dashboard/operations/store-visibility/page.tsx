@@ -43,10 +43,13 @@ function StoreVisibilityContent() {
   const [data, setData] = useState<StoreAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dateRangeReady = Boolean(from && to);
 
   const loadFilterOptions = useCallback(async () => {
     try {
-      const res = await fetch("/api/operations/orders/filter-options");
+      const res = await fetch("/api/operations/orders/filter-options", {
+        cache: "no-store",
+      });
       if (res.ok) {
         const json = await res.json();
         setFilterOpts({
@@ -57,11 +60,13 @@ function StoreVisibilityContent() {
         });
       }
     } catch {
-      /* ignore */
+      /* fallback: options also arrive with analytics payload */
     }
   }, []);
 
   const loadAnalytics = useCallback(async () => {
+    if (!dateRangeReady) return;
+
     setLoading(true);
     setError(null);
     try {
@@ -72,7 +77,9 @@ function StoreVisibilityContent() {
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
-      const res = await fetch(`/api/operations/store-visibility/analytics?${params}`);
+      const res = await fetch(`/api/operations/store-visibility/analytics?${params}`, {
+        cache: "no-store",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load analytics");
       if (json.filteredCount === 0 && json.allCount === 0) {
@@ -80,6 +87,16 @@ function StoreVisibilityContent() {
         setData(null);
         return;
       }
+
+      if (json.filterOptions) {
+        setFilterOpts({
+          countries: json.filterOptions.countries ?? [],
+          bifurcations: json.filterOptions.bifurcations ?? [],
+          storeIds: json.filterOptions.storeIds ?? [],
+          storeOptions: json.filterOptions.storeOptions ?? [],
+        });
+      }
+
       setData(json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -87,15 +104,12 @@ function StoreVisibilityContent() {
     } finally {
       setLoading(false);
     }
-  }, [country, bifurcation, storeId, from, to]);
+  }, [country, bifurcation, storeId, from, to, dateRangeReady]);
 
   useEffect(() => {
-    loadFilterOptions();
-  }, [loadFilterOptions]);
-
-  useEffect(() => {
+    if (!dateRangeReady) return;
     loadAnalytics();
-  }, [loadAnalytics]);
+  }, [loadAnalytics, dateRangeReady]);
 
   return (
     <div className="space-y-8">

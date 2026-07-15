@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       operationsStatusCounts: data.operationsStatusCounts,
       revenueLossBreakdown: data.revenueLossBreakdown,
       deliveryPartnerByCountry: data.deliveryPartnerByCountry,
+      filterOptions: data.filterOptions,
       filteredCount: data.filteredCount,
       allCount: data.allCount,
     });
