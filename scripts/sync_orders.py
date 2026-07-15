@@ -184,10 +184,10 @@ def env_value(*keys: str) -> str | None:
 
 
 def metabase_orders_url() -> str:
-    return (
-        env_value("METABASE_ORDERS_API_URL", "METABASE_OPERATIONS_ORDERS_URL")
-        or DEFAULT_METABASE_URL
-    )
+    explicit = env_value("METABASE_ORDERS_API_URL", "METABASE_OPERATIONS_ORDERS_URL")
+    if explicit:
+        return explicit
+    return DEFAULT_METABASE_URL
 
 
 def supabase_url() -> str | None:

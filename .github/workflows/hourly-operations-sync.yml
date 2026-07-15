@@ -36,6 +36,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show commit
+        run: git rev-parse --short HEAD && git log -1 --oneline
+
       - name: Validate required secrets
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -77,6 +80,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
+          # Empty GitHub secrets still inject "" — unset or use built-in default Metabase feed
+          DEFAULT_METABASE="https://zambeel.metabaseapp.com/public/question/96450ced-a27c-47c9-b9cd-58fe804a7889.json"
+          if [ -z "${METABASE_ORDERS_API_URL:-}" ]; then
+            unset METABASE_ORDERS_API_URL || true
+            export METABASE_ORDERS_API_URL="${DEFAULT_METABASE}"
+          fi
+          unset METABASE_OPERATIONS_ORDERS_URL || true
+          if [ -z "${DATABASE_URL:-}" ]; then
+            unset DATABASE_URL || true
+          fi
+          echo "Metabase URL: ${METABASE_ORDERS_API_URL}"
           if [ -n "${DATABASE_URL:-}" ]; then
             echo "Using Postgres upsert (DATABASE_URL set)"
             python scripts/sync_orders.py --batch-size 10000 --workers 4
