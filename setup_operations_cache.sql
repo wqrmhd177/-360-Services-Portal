@@ -139,13 +139,11 @@ AS $$
 DECLARE
   v_q TEXT := NULLIF(TRIM(p_search), '');
   v_norm TEXT;
-  v_prefix4 TEXT;
-  v_prefix3 TEXT;
+  v_token TEXT;
 BEGIN
   IF v_q IS NOT NULL THEN
     v_norm := UPPER(REGEXP_REPLACE(v_q, '^,+', ''));
-    IF LENGTH(v_norm) >= 4 THEN v_prefix4 := LEFT(v_norm, 4); END IF;
-    IF LENGTH(v_norm) >= 3 THEN v_prefix3 := LEFT(v_norm, 3); END IF;
+    v_token := UPPER(REGEXP_REPLACE(split_part(v_norm, '-', 1), '^,+', ''));
   END IF;
 
   RETURN QUERY
@@ -156,9 +154,11 @@ BEGIN
        OR i.user_id ILIKE '%' || v_q || '%'
        OR i.product_name ILIKE '%' || v_q || '%'
        OR COALESCE(i.username, '') ILIKE '%' || v_q || '%'
-       OR i.sku ILIKE '%' || v_norm || '%'
-       OR (v_prefix4 IS NOT NULL AND i.sku ILIKE v_prefix4 || '%')
-       OR (v_prefix3 IS NOT NULL AND i.sku ILIKE v_prefix3 || '%')
+       OR (
+         v_token IS NOT NULL
+         AND v_token <> ''
+         AND UPPER(split_part(i.sku, '-', 1)) LIKE v_token || '%'
+       )
   ),
   counted AS (SELECT COUNT(*)::BIGINT AS cnt FROM filtered)
   SELECT
@@ -173,7 +173,16 @@ BEGIN
     c.cnt
   FROM filtered f
   CROSS JOIN counted c
-  ORDER BY f.product_name, f.sku
+  ORDER BY
+    CASE
+      WHEN v_norm IS NOT NULL AND f.sku = v_norm THEN 0
+      WHEN v_norm IS NOT NULL AND f.sku ILIKE v_norm || '%' THEN 1
+      WHEN v_token IS NOT NULL
+           AND v_token <> ''
+           AND UPPER(split_part(f.sku, '-', 1)) LIKE v_token || '%' THEN 2
+      ELSE 3
+    END,
+    f.sku ASC
   LIMIT GREATEST(p_limit, 1)
   OFFSET GREATEST(p_offset, 0);
 END;
