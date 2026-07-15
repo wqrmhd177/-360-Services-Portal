@@ -270,30 +270,6 @@ export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
     toRpcFilterParams(filters),
   );
 
-  // #region agent log
-  fetch("http://127.0.0.1:7764/ingest/d1ead4db-e7ce-43dc-9e13-a703fdb1f6ba", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "75f7fa",
-    },
-    body: JSON.stringify({
-      sessionId: "75f7fa",
-      runId: "pre-fix",
-      hypothesisId: "H2-H3",
-      location: "filteredItems.ts:fetchOrderCounts",
-      message: "get_ops_orders_counts RPC result",
-      data: {
-        filters,
-        rpcError: error?.message ?? null,
-        allCount: (data as { allCount?: number } | null)?.allCount ?? null,
-        filteredCount: (data as { filteredCount?: number } | null)?.filteredCount ?? null,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   if (!error && data) {
     const payload = data as { allCount?: number; filteredCount?: number };
     return {
