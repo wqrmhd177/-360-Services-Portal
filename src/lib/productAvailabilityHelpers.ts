@@ -195,6 +195,32 @@ function countryMatchesMarket(market: string, country: string | null | undefined
   return keywords.some((keyword) => normalizedCountry.includes(keyword));
 }
 
+/** PostgREST rejects very large `.in()` filters — batch request IDs. */
+async function fetchResponsesForRequestIds(
+  requestIds: string[]
+): Promise<ProductAvailabilityResponse[]> {
+  if (requestIds.length === 0) return [];
+
+  const CHUNK_SIZE = 80;
+  const allRows: ProductAvailabilityResponse[] = [];
+
+  for (let i = 0; i < requestIds.length; i += CHUNK_SIZE) {
+    const chunk = requestIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await supabase
+      .from("product_availability_responses")
+      .select("*")
+      .in("request_id", chunk)
+      .order("round_number", { ascending: false });
+
+    if (error) {
+      throw new Error(error.message || "Failed to fetch availability responses");
+    }
+    if (data) allRows.push(...data);
+  }
+
+  return allRows;
+}
+
 export async function cancelProductAvailabilityRequest(requestId: string): Promise<void> {
   const { error } = await supabase
     .from("product_availability_requests")
@@ -316,11 +342,7 @@ export async function fetchAllProductAvailabilityData(params: {
   const requestIds = (requestRows || []).map((row: { id: string }) => row.id);
   if (requestIds.length === 0) return [];
 
-  const { data: allResponseRows } = await supabase
-    .from("product_availability_responses")
-    .select("*")
-    .in("request_id", requestIds)
-    .order("round_number", { ascending: false });
+  const allResponseRows = await fetchResponsesForRequestIds(requestIds);
 
   const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {};
   (allResponseRows || []).forEach((r: ProductAvailabilityResponse) => {
