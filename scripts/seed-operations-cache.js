@@ -27,6 +27,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const METABASE_INVENTORY =
+  process.env.METABASE_INVENTORY_API_URL ||
   "https://zambeel.metabaseapp.com/public/question/316b4595-6180-43fe-b635-839b7f479c26.json";
 const METABASE_CHANNELS =
   "https://zambeel.metabaseapp.com/public/question/4a368bc7-82ae-417d-b182-cfe3e3df7490.json";

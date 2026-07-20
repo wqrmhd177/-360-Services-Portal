@@ -358,6 +358,102 @@ export async function fetchOrderCountDiagnostics(filters: OrdersFilterParams): P
   };
 }
 
+type StatusCountRow = { status: string; order_count: number };
+
+function orderPassesFacetFilters(
+  countries: Set<string>,
+  bifurcations: Set<string>,
+  filters: OrdersFilterParams,
+): boolean {
+  const country = normalizeOptionalFilter(filters.country);
+  const bifurcation = normalizeOptionalFilter(filters.bifurcation);
+  const countryOk = country ? countries.has(country) : countries.size > 0;
+  const bifurcationOk = bifurcation ? bifurcations.has(bifurcation) : bifurcations.size > 0;
+  return countryOk && bifurcationOk;
+}
+
+/**
+ * Status KPI counts from distinct order_id — same order_date_day + facet rules as get_ops_orders_counts.
+ * One status per order (first line by table id). Each KPI bucket is independent.
+ */
+export async function fetchOperationsStatusCountsFromLineItems(
+  filters: OrdersFilterParams,
+): Promise<StatusCountRow[]> {
+  const supabase = getOpsDb();
+  const fromDate = normalizeOptionalFilter(filters.fromDate);
+  const toDate = normalizeOptionalFilter(filters.toDate);
+
+  type Row = {
+    order_id: number | null;
+    status: string | null;
+    country: string | null;
+    bifurcation: string | null;
+  };
+
+  const rows: Row[] = [];
+  let offset = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    let query = supabase
+      .from("ops_orders_items")
+      .select("order_id, status, country, bifurcation")
+      .not("order_id", "is", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (fromDate) query = query.gte("order_date_day", fromDate);
+    if (toDate) query = query.lte("order_date_day", toDate);
+    if (filters.storeId != null) query = query.eq("store_id", filters.storeId);
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`status counts fetch failed: ${error.message}`);
+    }
+    if (!data?.length) break;
+    rows.push(...(data as Row[]));
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  const byOrder = new Map<
+    number,
+    { status: string; countries: Set<string>; bifurcations: Set<string> }
+  >();
+
+  for (const row of rows) {
+    const orderId = Number(row.order_id);
+    if (!orderId) continue;
+
+    const country = row.country?.trim() ?? "";
+    const bifurcation = row.bifurcation?.trim() ?? "";
+    const status = row.status?.trim() || "Unknown";
+
+    const existing = byOrder.get(orderId);
+    if (!existing) {
+      byOrder.set(orderId, {
+        status,
+        countries: new Set(country ? [country] : []),
+        bifurcations: new Set(bifurcation ? [bifurcation] : []),
+      });
+      continue;
+    }
+
+    if (country) existing.countries.add(country);
+    if (bifurcation) existing.bifurcations.add(bifurcation);
+  }
+
+  const byStatus = new Map<string, number>();
+  for (const bucket of byOrder.values()) {
+    if (!orderPassesFacetFilters(bucket.countries, bucket.bifurcations, filters)) continue;
+    byStatus.set(bucket.status, (byStatus.get(bucket.status) ?? 0) + 1);
+  }
+
+  return [...byStatus.entries()]
+    .map(([status, order_count]) => ({ status, order_count }))
+    .sort((a, b) => a.status.localeCompare(b.status));
+}
+
 export async function fetchFilterOptionsFromDb(): Promise<{
   countries: string[];
   bifurcations: string[];

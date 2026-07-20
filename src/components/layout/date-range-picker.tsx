@@ -4,17 +4,20 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Calendar, ChevronDown, X } from "lucide-react";
-import { endOfDay, format, parseISO, startOfDay } from "date-fns";
 import {
   QUICK_SELECT_PRESETS,
   defaultDateRange,
-  findMatchingPresetId,
-  formatCompactRangeLabel,
-  formatRangeLabel,
+  findMatchingPresetIdFromRange,
+  formatCompactRangeLabelFromStrings,
+  formatRangeLabelFromStrings,
   parseRangeFromSearchParams,
-  toInputValue,
   type DateRangeValue,
 } from "@/lib/date-range-presets";
+import {
+  dateRangeFromParamStrings,
+  dateRangeFromPickerDates,
+} from "@/lib/calendar-range";
+import type { DateRange } from "@/lib/types/order";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
 import { isOrdersOverviewPath, toDateOnlySearchParams } from "@/lib/orders/params";
 import { cn } from "@/lib/utils";
@@ -41,7 +44,7 @@ function DateRangePanel({
   handleCancel,
   handleApply,
 }: {
-  draft: DateRangeValue;
+  draft: DateRange;
   activePreset: string | null;
   selectPreset: (presetId: string) => void;
   updateDraftFromInput: (field: "from" | "to", value: string) => void;
@@ -77,7 +80,7 @@ function DateRangePanel({
           <div className="relative">
             <input
               type="date"
-              value={toInputValue(draft.from)}
+              value={draft.fromDate}
               onChange={(e) => updateDraftFromInput("from", e.target.value)}
               className="w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] py-2.5 pl-3 pr-10 text-sm text-[var(--foreground)]"
             />
@@ -91,7 +94,7 @@ function DateRangePanel({
           <div className="relative">
             <input
               type="date"
-              value={toInputValue(draft.to)}
+              value={draft.toDate}
               onChange={(e) => updateDraftFromInput("to", e.target.value)}
               className="w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] py-2.5 pl-3 pr-10 text-sm text-[var(--foreground)]"
             />
@@ -147,9 +150,9 @@ export function DateRangePicker({
   );
 
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DateRangeValue>(applied);
+  const [draft, setDraft] = useState<DateRange>(applied);
   const [activePreset, setActivePreset] = useState<string | null>(
-    findMatchingPresetId(applied),
+    findMatchingPresetIdFromRange(applied),
   );
 
   useEffect(() => setMounted(true), []);
@@ -157,7 +160,7 @@ export function DateRangePicker({
   useEffect(() => {
     const next = parseRangeFromSearchParams(fromParam, toParam, defaultDateRange());
     setDraft(next);
-    setActivePreset(findMatchingPresetId(next));
+    setActivePreset(findMatchingPresetIdFromRange(next));
   }, [fromParam, toParam]);
 
   useEffect(() => {
@@ -175,18 +178,18 @@ export function DateRangePicker({
       if (containerRef.current?.contains(e.target as Node)) return;
       setOpen(false);
       setDraft(applied);
-      setActivePreset(findMatchingPresetId(applied));
+      setActivePreset(findMatchingPresetIdFromRange(applied));
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open, useSheet, applied]);
 
-  function applyRange(range: DateRangeValue, presetId: string | null) {
+  function applyRange(range: DateRange, presetId: string | null) {
     const params = isOrdersOverviewPath(pathname)
       ? toDateOnlySearchParams(searchParams)
       : new URLSearchParams(searchParams.toString());
-    params.set("from", format(range.from, "yyyy-MM-dd"));
-    params.set("to", format(range.to, "yyyy-MM-dd"));
+    params.set("from", range.fromDate);
+    params.set("to", range.toDate);
     if (presetId) params.set("range", presetId);
     else params.delete("range");
     const query = params.toString();
@@ -195,41 +198,41 @@ export function DateRangePicker({
   }
 
   function handleApply() {
-    let from = draft.from;
-    let to = draft.to;
-    if (from > to) [from, to] = [to, from];
-    applyRange({ from, to }, findMatchingPresetId({ from, to }));
+    let fromDate = draft.fromDate;
+    let toDate = draft.toDate;
+    if (fromDate > toDate) [fromDate, toDate] = [toDate, fromDate];
+    const range = dateRangeFromParamStrings(fromDate, toDate);
+    applyRange(range, findMatchingPresetIdFromRange(range));
   }
 
   function handleCancel() {
     setDraft(applied);
-    setActivePreset(findMatchingPresetId(applied));
+    setActivePreset(findMatchingPresetIdFromRange(applied));
     setOpen(false);
   }
 
   function selectPreset(presetId: string) {
     const preset = QUICK_SELECT_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
-    setDraft(preset.getRange());
+    const pickerRange: DateRangeValue = preset.getRange();
+    setDraft(dateRangeFromPickerDates(pickerRange.from, pickerRange.to));
     setActivePreset(presetId);
   }
 
   function updateDraftFromInput(field: "from" | "to", value: string) {
     if (!value) return;
     try {
-      const parsed = parseISO(value);
-      setDraft((prev) => ({
-        ...prev,
-        [field]: field === "from" ? startOfDay(parsed) : endOfDay(parsed),
-      }));
+      const fromDate = field === "from" ? value : draft.fromDate;
+      const toDate = field === "to" ? value : draft.toDate;
+      setDraft(dateRangeFromParamStrings(fromDate, toDate));
       setActivePreset(null);
     } catch {
       /* ignore invalid */
     }
   }
 
-  const displayLabel = formatRangeLabel(applied.from, applied.to);
-  const compactLabel = formatCompactRangeLabel(applied.from, applied.to);
+  const displayLabel = formatRangeLabelFromStrings(applied.fromDate, applied.toDate);
+  const compactLabel = formatCompactRangeLabelFromStrings(applied.fromDate, applied.toDate);
 
   const panelProps = {
     draft,

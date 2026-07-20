@@ -4,6 +4,7 @@ import {
   format,
   isSameDay,
   isSameMonth,
+  parseISO,
   startOfDay,
   startOfMonth,
   startOfYear,
@@ -106,6 +107,11 @@ export function formatRangeLabel(from: Date, to: Date) {
   return `${formatDisplayDate(from)} to ${formatDisplayDate(to)}`;
 }
 
+/** Labels from URL yyyy-MM-dd strings — avoids local-TZ shift on UTC day bounds. */
+export function formatRangeLabelFromStrings(fromDate: string, toDate: string) {
+  return formatRangeLabel(parseISO(fromDate), parseISO(toDate));
+}
+
 const COMPACT_DATE_FORMAT = "MMM d";
 
 export function formatCompactRangeLabel(from: Date, to: Date) {
@@ -113,6 +119,11 @@ export function formatCompactRangeLabel(from: Date, to: Date) {
     return `${format(from, COMPACT_DATE_FORMAT)}–${format(to, "d")}`;
   }
   return `${format(from, COMPACT_DATE_FORMAT)} – ${format(to, COMPACT_DATE_FORMAT)}`;
+}
+
+/** Compact label from URL yyyy-MM-dd strings — avoids +1 day display in UTC+ timezones. */
+export function formatCompactRangeLabelFromStrings(fromDate: string, toDate: string) {
+  return formatCompactRangeLabel(parseISO(fromDate), parseISO(toDate));
 }
 
 export function toInputValue(date: Date) {
@@ -123,9 +134,24 @@ export function rangesMatch(a: DateRangeValue, b: DateRangeValue) {
   return isSameDay(a.from, b.from) && isSameDay(a.to, b.to);
 }
 
+export function rangesMatchStrings(a: DateRange, b: DateRange) {
+  return a.fromDate === b.fromDate && a.toDate === b.toDate;
+}
+
 export function findMatchingPresetId(range: DateRangeValue): string | null {
   for (const preset of QUICK_SELECT_PRESETS) {
     if (rangesMatch(range, preset.getRange())) return preset.id;
+  }
+  return null;
+}
+
+export function findMatchingPresetIdFromRange(range: DateRange): string | null {
+  for (const preset of QUICK_SELECT_PRESETS) {
+    const pr = dateRangeFromParamStrings(
+      toInputValue(preset.getRange().from),
+      toInputValue(preset.getRange().to),
+    );
+    if (rangesMatchStrings(range, pr)) return preset.id;
   }
   return null;
 }

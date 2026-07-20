@@ -1,10 +1,10 @@
 export const METABASE_ORDERS_URL =
   process.env.METABASE_ORDERS_API_URL ??
-  "https://zambeel.metabaseapp.com/public/question/3a678d4c-3f65-433e-a451-73db490cac44.json";
+  "https://zambeel.metabaseapp.com/public/question/96450ced-a27c-47c9-b9cd-58fe804a7889.json";
 
 export const METABASE_INVENTORY_URL =
   process.env.METABASE_INVENTORY_API_URL ??
-  "https://zambeel.metabaseapp.com/public/question/1baaf009-da23-4baf-8dad-8e2657498666.json";
+  "https://zambeel.metabaseapp.com/public/question/316b4595-6180-43fe-b635-839b7f479c26.json";
 
 export const TOP_NAV = [
   { label: "Home", href: "/home" },

@@ -31,6 +31,13 @@ export function calendarDayBoundsFromStrings(fromStr: string, toStr: string) {
   };
 }
 
+/** Serialize picker/local calendar picks to URL date params (yyyy-MM-dd). */
+export function dateRangeFromPickerDates(from: Date, to: Date): DateRange {
+  const fromStr = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
+  const toStr = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, "0")}-${String(to.getDate()).padStart(2, "0")}`;
+  return dateRangeFromParamStrings(fromStr, toStr);
+}
+
 export function calendarRangeBounds(range: DateRange) {
   return calendarDayBoundsFromStrings(range.fromDate, range.toDate);
 }

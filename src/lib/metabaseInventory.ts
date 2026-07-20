@@ -1,5 +1,10 @@
-const METABASE_INVENTORY_URL =
-  "https://zambeel.metabaseapp.com/public/question/1baaf009-da23-4baf-8dad-8e2657498666.json";
+import { METABASE_INVENTORY_URL } from "@/lib/constants";
+import {
+  normalizeInventoryRows,
+  normalizeSku,
+  skuFamilyToken,
+  type InventoryRow,
+} from "@/lib/operations/inventory";
 
 export type InventorySku = {
   sku: string;
@@ -12,38 +17,66 @@ let cachedInventory: InventorySku[] | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
+function rowToSku(row: InventoryRow): InventorySku {
+  return {
+    sku: row.sku,
+    country: row.country,
+    quantity: row.available_quantity,
+    sku_type: row.category,
+  };
+}
+
 async function loadInventory(): Promise<InventorySku[]> {
   const now = Date.now();
   if (cachedInventory && now < cacheExpiry) {
     return cachedInventory;
   }
 
-  const res = await fetch(METABASE_INVENTORY_URL, { next: { revalidate: 900 } });
+  const res = await fetch(METABASE_INVENTORY_URL, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(120000),
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch inventory: ${res.status}`);
   }
 
-  const data = (await res.json()) as InventorySku[];
-  cachedInventory = Array.isArray(data) ? data : [];
+  const raw = await res.json();
+  cachedInventory = normalizeInventoryRows(raw).map(rowToSku);
   cacheExpiry = now + CACHE_TTL_MS;
   return cachedInventory;
+}
+
+function skuMatchesPrefix(item: InventorySku, query: string): boolean {
+  const q = query.trim();
+  if (!q) return false;
+
+  const norm = normalizeSku(q);
+  const token = skuFamilyToken(q).toLowerCase();
+  const sku = item.sku;
+  const skuLower = sku.toLowerCase();
+
+  if (sku === norm) return true;
+  if (skuLower.startsWith(norm.toLowerCase())) return true;
+  if (token && skuFamilyToken(sku).toLowerCase().startsWith(token)) return true;
+  return skuLower.startsWith(q.toLowerCase());
 }
 
 export async function searchSkus(
   prefix: string,
   minLength = 3,
-  limit = 20
+  limit = 20,
 ): Promise<InventorySku[]> {
-  const q = prefix.trim().toLowerCase();
+  const q = prefix.trim();
   if (q.length < minLength) return [];
 
   const inventory = await loadInventory();
-  return inventory
-    .filter((item) => item.sku.toLowerCase().startsWith(q))
-    .slice(0, limit);
+  return inventory.filter((item) => skuMatchesPrefix(item, q)).slice(0, limit);
 }
 
 export async function getSkuExact(sku: string): Promise<InventorySku | null> {
   const inventory = await loadInventory();
-  return inventory.find((item) => item.sku === sku) ?? null;
+  const norm = normalizeSku(sku);
+  return inventory.find((item) => item.sku === norm || item.sku === sku.trim()) ?? null;
 }
+
+export { METABASE_INVENTORY_URL };

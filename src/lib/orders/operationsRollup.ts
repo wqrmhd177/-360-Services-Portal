@@ -15,8 +15,13 @@ import {
   getRevenueLossTagGroupHeading,
   REVENUE_LOSS_TAG_GROUPS,
 } from "@/lib/operations/revenue-loss-tag-groups";
-import { type OrdersFilterParams } from "@/lib/orders/filteredItems";
+import {
+  type OrdersFilterParams,
+  fetchOperationsStatusCountsFromLineItems,
+  toRpcFilterParams,
+} from "@/lib/orders/filteredItems";
 import { fetchOrdersRollupRows } from "@/lib/orders/rollupQuery";
+import { getOpsDb } from "@/lib/operations/opsDb";
 
 type StatusRollupDbRow = {
   status: string | null;
@@ -93,11 +98,18 @@ export function mapStatusRollupRows(rows: StatusRollupDbRow[]): OperationsStatus
 export async function fetchOperationsStatusCounts(
   filters: OrdersFilterParams,
 ): Promise<OperationsStatusCounts> {
-  const rows = await fetchOrdersRollupRows<StatusRollupDbRow>(
-    "ops_orders_status_rollup",
-    filters,
-    "status, order_count",
+  const supabase = getOpsDb();
+  const { data, error } = await supabase.rpc(
+    "get_ops_orders_status_counts",
+    toRpcFilterParams(filters),
   );
+
+  if (!error && data != null) {
+    const rows = (Array.isArray(data) ? data : []) as StatusRollupDbRow[];
+    return mapStatusRollupRows(rows);
+  }
+
+  const rows = await fetchOperationsStatusCountsFromLineItems(filters);
   return mapStatusRollupRows(rows);
 }
 

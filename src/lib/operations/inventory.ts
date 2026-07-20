@@ -1,5 +1,4 @@
-export const METABASE_INVENTORY_URL =
-  "https://zambeel.metabaseapp.com/public/question/316b4595-6180-43fe-b635-839b7f479c26.json";
+export { METABASE_INVENTORY_URL } from "@/lib/constants";
 
 export interface InventoryRow {
   user_id: string;
