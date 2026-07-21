@@ -1,5 +1,38 @@
--- Patch: fix Operations Inventory SKU search (run in Supabase SQL Editor).
--- Safe to re-run. Matches SKUs by first hyphen-delimited segment; exact SKU sorts first.
+-- Patch: Operations Inventory SKU search — exact SKU first, then closest segment matches.
+-- Run in Supabase SQL Editor. Safe to re-run.
+
+CREATE OR REPLACE FUNCTION sku_segment_prefix_depth(p_sku TEXT, p_query TEXT)
+RETURNS INT
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  sku_parts TEXT[];
+  query_parts TEXT[];
+  i INT := 1;
+  depth INT := 0;
+  max_i INT;
+BEGIN
+  IF p_sku IS NULL OR p_query IS NULL OR p_query = '' THEN
+    RETURN 0;
+  END IF;
+
+  sku_parts := string_to_array(UPPER(TRIM(p_sku)), '-');
+  query_parts := string_to_array(UPPER(TRIM(p_query)), '-');
+  max_i := LEAST(array_length(sku_parts, 1), array_length(query_parts, 1));
+
+  WHILE i <= max_i LOOP
+    IF sku_parts[i] = query_parts[i] THEN
+      depth := depth + 1;
+    ELSE
+      EXIT;
+    END IF;
+    i := i + 1;
+  END LOOP;
+
+  RETURN depth;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION search_ops_inventory(
   p_search TEXT DEFAULT NULL,
@@ -59,13 +92,17 @@ BEGIN
   CROSS JOIN counted c
   ORDER BY
     CASE
-      WHEN v_norm IS NOT NULL AND f.sku = v_norm THEN 0
-      WHEN v_norm IS NOT NULL AND f.sku ILIKE v_norm || '%' THEN 1
+      WHEN v_norm IS NOT NULL AND UPPER(f.sku) = v_norm THEN 0
+      WHEN v_norm IS NOT NULL AND UPPER(f.sku) LIKE v_norm || '%' THEN 1
+      WHEN v_norm IS NOT NULL AND v_norm LIKE UPPER(f.sku) || '%' THEN 2
+      WHEN v_norm IS NOT NULL AND POSITION(v_norm IN UPPER(f.sku)) > 0 THEN 3
       WHEN v_token IS NOT NULL
            AND v_token <> ''
-           AND UPPER(split_part(f.sku, '-', 1)) LIKE v_token || '%' THEN 2
-      ELSE 3
+           AND UPPER(split_part(f.sku, '-', 1)) LIKE v_token || '%' THEN 4
+      ELSE 5
     END,
+    sku_segment_prefix_depth(f.sku, v_norm) DESC,
+    LENGTH(f.sku) ASC,
     f.sku ASC
   LIMIT GREATEST(p_limit, 1)
   OFFSET GREATEST(p_offset, 0);

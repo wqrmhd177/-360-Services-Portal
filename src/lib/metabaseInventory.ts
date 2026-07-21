@@ -3,6 +3,7 @@ import {
   normalizeInventoryRows,
   normalizeSku,
   skuFamilyToken,
+  skuSegmentPrefixDepth,
   type InventoryRow,
 } from "@/lib/operations/inventory";
 
@@ -57,8 +58,27 @@ function skuMatchesPrefix(item: InventorySku, query: string): boolean {
 
   if (sku === norm) return true;
   if (skuLower.startsWith(norm.toLowerCase())) return true;
+  if (norm.toLowerCase().startsWith(skuLower)) return true;
+  if (skuLower.includes(norm.toLowerCase())) return true;
   if (token && skuFamilyToken(sku).toLowerCase().startsWith(token)) return true;
   return skuLower.startsWith(q.toLowerCase());
+}
+
+function compareSkuSearch(a: InventorySku, b: InventorySku, query: string): number {
+  const norm = normalizeSku(query);
+  const rank = (item: InventorySku) => {
+    const sku = item.sku;
+    if (sku === norm) return 0;
+    if (sku.startsWith(norm)) return 1;
+    if (norm.startsWith(sku)) return 2;
+    if (sku.includes(norm)) return 3;
+    return 4;
+  };
+  const rankDiff = rank(a) - rank(b);
+  if (rankDiff !== 0) return rankDiff;
+  const depthDiff = skuSegmentPrefixDepth(b.sku, query) - skuSegmentPrefixDepth(a.sku, query);
+  if (depthDiff !== 0) return depthDiff;
+  return a.sku.localeCompare(b.sku);
 }
 
 export async function searchSkus(
@@ -70,7 +90,10 @@ export async function searchSkus(
   if (q.length < minLength) return [];
 
   const inventory = await loadInventory();
-  return inventory.filter((item) => skuMatchesPrefix(item, q)).slice(0, limit);
+  return inventory
+    .filter((item) => skuMatchesPrefix(item, q))
+    .sort((a, b) => compareSkuSearch(a, b, q))
+    .slice(0, limit);
 }
 
 export async function getSkuExact(sku: string): Promise<InventorySku | null> {

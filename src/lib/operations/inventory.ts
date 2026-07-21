@@ -59,19 +59,50 @@ function matchesNonSkuFields(row: InventoryRow, query: string): boolean {
   );
 }
 
+/** Count matching hyphen segments from the left (TCD-N-HAE vs TCD-N-KA → 2 vs 2, TCD-N-HAE vs TCD-N-HAE-ZAM → 3). */
+export function skuSegmentPrefixDepth(sku: string, query: string): number {
+  const skuParts = normalizeSku(sku).split("-");
+  const queryParts = normalizeSku(query).split("-");
+  let depth = 0;
+  const max = Math.min(skuParts.length, queryParts.length);
+  for (let i = 0; i < max; i++) {
+    if (skuParts[i] === queryParts[i]) depth++;
+    else break;
+  }
+  return depth;
+}
+
 /** Lower rank = higher in results. Aligns with search_ops_inventory ORDER BY. */
 export function inventorySearchRank(row: InventoryRow, query: string): number {
   const q = query.trim();
-  if (!q) return 3;
+  if (!q) return 5;
 
   const norm = normalizeSku(q);
   const token = skuFamilyToken(q);
 
   if (row.sku === norm) return 0;
   if (row.sku.startsWith(norm)) return 1;
-  if (token && skuFamilyToken(row.sku).startsWith(token)) return 2;
-  if (matchesNonSkuFields(row, q)) return 3;
-  return 4;
+  if (norm.startsWith(row.sku)) return 2;
+  if (row.sku.includes(norm)) return 3;
+  if (token && skuFamilyToken(row.sku).startsWith(token)) return 4;
+  if (matchesNonSkuFields(row, q)) return 5;
+  return 6;
+}
+
+export function compareInventorySearch(
+  a: InventoryRow,
+  b: InventoryRow,
+  query: string,
+): number {
+  const rankDiff = inventorySearchRank(a, query) - inventorySearchRank(b, query);
+  if (rankDiff !== 0) return rankDiff;
+
+  const depthDiff =
+    skuSegmentPrefixDepth(b.sku, query) - skuSegmentPrefixDepth(a.sku, query);
+  if (depthDiff !== 0) return depthDiff;
+
+  if (a.sku.length !== b.sku.length) return a.sku.length - b.sku.length;
+  return a.sku.localeCompare(b.sku);
 }
 
 export function matchesInventorySearch(row: InventoryRow, query: string): boolean {
@@ -87,9 +118,5 @@ export function filterInventoryRows(rows: InventoryRow[], query: string): Invent
 
   return rows
     .filter((row) => matchesInventorySearch(row, q))
-    .sort((a, b) => {
-      const rankDiff = inventorySearchRank(a, q) - inventorySearchRank(b, q);
-      if (rankDiff !== 0) return rankDiff;
-      return a.sku.localeCompare(b.sku);
-    });
+    .sort((a, b) => compareInventorySearch(a, b, q));
 }
