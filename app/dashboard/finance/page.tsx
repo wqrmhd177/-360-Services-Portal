@@ -12,6 +12,7 @@ async function getFinanceData() {
       .from("pr")
       .select("*")
       .eq("approval_status", "approved")
+      .neq("pr_status", "awaiting_payment")
       .eq("finance_verification_status", "pending")
       .order("created_at", { ascending: false }),
     supabase.from("pr").select("id, finance_verification_status").then((r) => r),

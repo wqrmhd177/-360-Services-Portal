@@ -26,6 +26,8 @@ interface MultiProductFormProps {
   comboLookup?: Record<string, ComboLookupEntry>;
   /** Movements service: show From/To SKU instead of Product Name / SKU Code. */
   movementsMode?: boolean;
+  /** Direct Movements PR: only From/To SKU, qty, selling price, total (no destination/cost/shipping). */
+  movementsDirectMode?: boolean;
 }
 
 const emptyProduct: PrProduct = {
@@ -51,6 +53,7 @@ export default function MultiProductForm({
   lockedFields = [],
   comboLookup = {},
   movementsMode = false,
+  movementsDirectMode = false,
 }: MultiProductFormProps) {
   const isLocked = (field: keyof PrProduct) => lockedFields.includes(field);
   const [countrySearches, setCountrySearches] = useState<string[]>(
@@ -292,6 +295,8 @@ export default function MultiProductForm({
               </>
             )}
 
+            {!movementsDirectMode && (
+            <>
             {/* Destination Country */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -355,6 +360,8 @@ export default function MultiProductForm({
                 <option value="PKR">PKR</option>
               </select>
             </div>
+            </>
+            )}
 
             {/* Quantity */}
             <div>
@@ -382,7 +389,7 @@ export default function MultiProductForm({
               )}
             </div>
 
-            {/* Landed Cost Price (Per Unit) */}
+            {!movementsDirectMode && (
             <div>
               {isLocked("landedCostPrice") ? (
                 <>
@@ -404,6 +411,7 @@ export default function MultiProductForm({
                 />
               )}
             </div>
+            )}
 
             {/* Selling Price Per Unit */}
             <div>
@@ -428,6 +436,8 @@ export default function MultiProductForm({
               </div>
             </div>
 
+            {!movementsDirectMode && (
+            <>
             {/* Margin (Read-only): Total Amount - (Landed Cost Price * Quantity) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -486,6 +496,8 @@ export default function MultiProductForm({
                 <option value="express">Express</option>
               </select>
             </div>
+            </>
+            )}
 
             {/* Remarks */}
             <div className="md:col-span-2">

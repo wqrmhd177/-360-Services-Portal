@@ -119,11 +119,12 @@ export interface PrProduct {
 }
 
 // PR Status types
-export type PrStatus = 
-  | "pending" 
-  | "approved" 
-  | "rejected" 
-  | "payment_verified" 
+export type PrStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "awaiting_payment"
+  | "payment_verified"
   | "converted_to_po";
 
 export interface Pr {

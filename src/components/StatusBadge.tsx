@@ -43,6 +43,13 @@ export default function StatusBadge({
           label: "Rejected",
         };
       }
+      if (statusLower === "awaiting_payment") {
+        return {
+          bg: "bg-amber-100",
+          text: "text-amber-800",
+          label: "Awaiting Payment",
+        };
+      }
       if (statusLower === "payment_verified") {
         return {
           bg: "bg-blue-100",

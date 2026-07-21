@@ -85,6 +85,15 @@ export default async function GrowthDashboardPage() {
               </svg>
               New QR
             </Link>
+            <Link
+              href="/dashboard/growth/pr/new?service=Movements"
+              className="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-800 bg-indigo-50 hover:bg-indigo-100 transition-all"
+            >
+              <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              New Movement PR
+            </Link>
           </div>
         </div>
 

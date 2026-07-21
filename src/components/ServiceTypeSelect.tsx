@@ -8,6 +8,8 @@ interface ServiceTypeSelectProps {
   required?: boolean;
   className?: string;
   id?: string;
+  /** Service types to omit from the dropdown (e.g. Movements on QR form). */
+  excludeOptions?: string[];
 }
 
 export default function ServiceTypeSelect({
@@ -16,7 +18,10 @@ export default function ServiceTypeSelect({
   required = false,
   className = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20",
   id,
+  excludeOptions = [],
 }: ServiceTypeSelectProps) {
+  const options = ALL_SERVICE_OPTIONS.filter((opt) => !excludeOptions.includes(opt));
+
   return (
     <select
       id={id}
@@ -26,7 +31,7 @@ export default function ServiceTypeSelect({
       className={className}
     >
       <option value="">Select service</option>
-      {ALL_SERVICE_OPTIONS.map((opt) => (
+      {options.map((opt) => (
         <option key={opt} value={opt}>
           {opt}
         </option>

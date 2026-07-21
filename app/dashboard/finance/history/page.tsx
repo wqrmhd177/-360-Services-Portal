@@ -15,7 +15,7 @@ async function getFinanceHistory(session: any) {
     .limit(100);
   
   if (!session.isAdmin) {
-    prQuery = prQuery.eq("approval_status", "approved");
+    prQuery = prQuery.eq("approval_status", "approved").neq("pr_status", "awaiting_payment");
   }
 
   const [{ data: prs }, { data: pos }] = await Promise.all([

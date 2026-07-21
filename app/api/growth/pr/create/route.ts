@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isMovements = isMovementsService(seller_service_type ?? "");
+    const movementsDirect = isMovements && !from_qr_id;
 
     // Validate each product
     for (const product of products) {
@@ -88,17 +89,28 @@ export async function POST(request: NextRequest) {
         if (
           !product.fromSku?.trim() ||
           !product.toSku?.trim() ||
-          !product.destinationCountry ||
           !product.quantity ||
           !product.sellingPricePerUnit
         ) {
           return NextResponse.json(
-            { error: "All product fields are required (From SKU, To SKU, destination, quantity, selling price)" },
+            { error: "All product fields are required (From SKU, To SKU, quantity, selling price)" },
             { status: 400 }
           );
         }
         product.productName = `${product.fromSku.trim()} → ${product.toSku.trim()}`;
         product.skuCode = product.fromSku.trim();
+        if (movementsDirect) {
+          product.destinationCountry = product.destinationCountry || "N/A";
+          product.currency = product.currency || "AED";
+          product.landedCostPrice = product.landedCostPrice ?? 0;
+          product.totalAmount =
+            product.totalAmount ?? product.quantity * product.sellingPricePerUnit;
+        } else if (!product.destinationCountry) {
+          return NextResponse.json(
+            { error: "Destination country is required for Movements products" },
+            { status: 400 }
+          );
+        }
       } else if (
         !product.productName ||
         !product.skuCode ||
@@ -113,7 +125,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!payment_type) {
+    if (!movementsDirect && !payment_type) {
       return NextResponse.json(
         { error: "Payment type is required" },
         { status: 400 }
@@ -197,7 +209,7 @@ export async function POST(request: NextRequest) {
       seller_user_id,
       seller_service_type,
       products,
-      payment_type,
+      payment_type: movementsDirect ? payment_type || null : payment_type,
       remarks: remarks || null,
       pr_status: "pending",
       approval_status: "pending",

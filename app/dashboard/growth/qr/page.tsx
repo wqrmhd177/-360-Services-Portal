@@ -744,6 +744,7 @@ export default function GrowthQrFormPage() {
                 required
                 value={serviceNeeded}
                 onChange={setServiceNeeded}
+                excludeOptions={["Movements"]}
               />
             </div>
           </div>

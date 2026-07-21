@@ -4,7 +4,8 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
-import { canEditGrowthPr } from "@/lib/growthPrAccess";
+import { canAddPaymentToMovementsPr, canEditGrowthPr } from "@/lib/growthPrAccess";
+import MovementsAddPaymentPanel from "@/components/MovementsAddPaymentPanel";
 
 interface PageProps {
   params: {
@@ -175,8 +176,25 @@ export default async function GrowthPRViewPage({ params }: PageProps) {
           </div>
         )}
 
+        {canAddPaymentToMovementsPr(pr) && (
+          <MovementsAddPaymentPanel prId={pr.id} />
+        )}
+
         {pr.approval_status === "approved" &&
-          pr.finance_verification_status === "pending" && (
+          pr.pr_status === "awaiting_payment" &&
+          !canAddPaymentToMovementsPr(pr) && (
+            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-amber-800">Awaiting Payment</h3>
+              <p className="mt-1 text-sm text-amber-700">
+                This Movement PR has been approved. Payment details are required before Finance
+                can verify.
+              </p>
+            </div>
+          )}
+
+        {pr.approval_status === "approved" &&
+          pr.finance_verification_status === "pending" &&
+          pr.pr_status !== "awaiting_payment" && (
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex">
                 <svg

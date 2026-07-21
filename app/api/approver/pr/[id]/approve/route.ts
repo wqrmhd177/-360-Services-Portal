@@ -3,7 +3,8 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
-import { isFinanceSkipService } from "@/lib/serviceTypes";
+import { isFinanceSkipService, isMovementsService } from "@/lib/serviceTypes";
+import { prHasPaymentDetails } from "@/lib/growthPrAccess";
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +45,8 @@ export async function POST(
 
     const serviceType = pr.seller_service_type as string | undefined;
     const skipFinance = isFinanceSkipService(serviceType);
+    const movementsAwaitingPayment =
+      isMovementsService(serviceType ?? "") && !prHasPaymentDetails(pr);
     const now = new Date().toISOString();
 
     const updatePayload: Record<string, unknown> = {
@@ -51,7 +54,7 @@ export async function POST(
       approved_by_email: authSession.email,
       approved_at: now,
       approval_remarks: remarks || null,
-      pr_status: "approved",
+      pr_status: movementsAwaitingPayment ? "awaiting_payment" : "approved",
       updated_at: now,
     };
 
@@ -80,7 +83,18 @@ export async function POST(
       pr.products?.[0]?.productName ?? pr.product_name ?? "product";
 
     try {
-      if (skipFinance) {
+      if (movementsAwaitingPayment) {
+        await notifyStandardUsers(
+          { creatorEmail: pr.created_by_email, roles: ["admin"] },
+          "pr_approved",
+          {
+            pr_id: id,
+            pr_number: prNumber,
+            approved_by: authSession.email,
+            message: `Movement PR ${prNumber} has been approved. Please add payment details to send it to Finance.`,
+          }
+        );
+      } else if (skipFinance) {
         await notifyStandardUsers(
           { creatorEmail: pr.created_by_email, roles: ["admin", "procurement"] },
           "pr_finance_verified",
@@ -106,7 +120,11 @@ export async function POST(
       console.error("Error sending notifications:", notifError);
     }
 
-    return NextResponse.json({ ok: true, finance_skipped: skipFinance });
+    return NextResponse.json({
+      ok: true,
+      finance_skipped: skipFinance,
+      awaiting_payment: movementsAwaitingPayment,
+    });
   } catch (error) {
     console.error("Error in approve PR:", error);
     return NextResponse.json(
