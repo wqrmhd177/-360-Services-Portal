@@ -43,13 +43,22 @@ type RpcSellersPayload = {
   total_records?: number;
 };
 
-function toRpcFilters(filters: SkuPerformanceFilters) {
+function toSummaryRpcFilters(filters: SkuPerformanceFilters) {
   return {
     p_country: normalizeOptionalFilter(filters.country),
     p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
     p_from_date: normalizeOptionalFilter(filters.fromDate),
     p_to_date: normalizeOptionalFilter(filters.toDate),
     p_search: normalizeOptionalFilter(filters.search),
+  };
+}
+
+function toSellerRpcFilters(filters: SkuPerformanceFilters) {
+  return {
+    p_country: normalizeOptionalFilter(filters.country),
+    p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
+    p_from_date: normalizeOptionalFilter(filters.fromDate),
+    p_to_date: normalizeOptionalFilter(filters.toDate),
   };
 }
 
@@ -103,7 +112,7 @@ export async function getSkuPerformanceSummary(params: {
 }> {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
-  const rpcFilters = toRpcFilters(params.filters);
+  const rpcFilters = toSummaryRpcFilters(params.filters);
 
   const supabase = getOpsDb();
   const { data, error } = await supabase.rpc("get_ops_sku_performance_summary", {
@@ -185,12 +194,15 @@ export async function getSkuPerformanceSellers(params: {
 }> {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 50));
-  const rpcFilters = toRpcFilters(params.filters);
+  const rpcFilters = toSellerRpcFilters(params.filters);
 
   const supabase = getOpsDb();
   const { data, error } = await supabase.rpc("get_ops_sku_performance_sellers", {
     p_sku: params.sku,
-    ...rpcFilters,
+    p_country: rpcFilters.p_country,
+    p_bifurcation: rpcFilters.p_bifurcation,
+    p_from_date: rpcFilters.p_from_date,
+    p_to_date: rpcFilters.p_to_date,
     p_page: page,
     p_page_size: pageSize,
   });
