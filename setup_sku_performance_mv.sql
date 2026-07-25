@@ -58,13 +58,7 @@ SELECT
   p.store_id,
   cl.user_id,
   cl.store_name,
-  SUM(
-    CASE
-      WHEN p.status NOT IN ('Confirmation Pending', 'Cancelled', 'Canceled')
-      THEN p.qty
-      ELSE 0
-    END
-  )::INTEGER AS approved_quantity,
+  SUM(CASE WHEN p.status = 'Approved' THEN p.qty ELSE 0 END)::INTEGER AS approved_quantity,
   SUM(
     CASE
       WHEN p.status IN ('Shipped', 'Delivered', 'Undelivered', 'Return', 'Return in Transit')

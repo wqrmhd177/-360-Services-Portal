@@ -168,7 +168,7 @@ export function SkuPerformanceTable({
             <tr>
               <th className="px-4 py-3">Product Title</th>
               <th className="px-4 py-3">SKU</th>
-              <th className="px-4 py-3" title="Item quantity for orders past confirmation (excludes Confirmation Pending and Cancelled)">
+              <th className="px-4 py-3" title="Status Approved only — not yet dispatched">
                 Approved Qty
               </th>
               <th className="px-4 py-3" title="Delivered ÷ Dispatched">
