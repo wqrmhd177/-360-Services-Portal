@@ -1,4 +1,5 @@
 import { getLastSync, getOpsDb } from "@/lib/operations/opsDb";
+import { normalizeSkuForMatch, normalizeSku } from "@/lib/operations/inventory";
 import { normalizeOptionalFilter } from "@/lib/orders/filteredItems";
 
 export type SkuPerformanceFilters = {
@@ -69,28 +70,70 @@ async function fetchInventoryBySkus(
   const result = new Map<string, number>();
   if (skus.length === 0) return result;
 
+  const normalizedKeys = skus.map((s) => normalizeSkuForMatch(s)).filter(Boolean);
+  if (normalizedKeys.length === 0) return result;
+
   const supabase = getOpsDb();
-  const normalized = skus.map((s) => s.toUpperCase().trim());
 
-  let query = supabase
-    .from("ops_inventory_items")
-    .select("sku, available_quantity, country")
-    .in("sku", normalized);
-
-  if (country) {
-    query = query.eq("country", country);
+  async function queryInventory(countryFilter: string | null) {
+    const { data, error } = await supabase.rpc("get_ops_inventory_totals_by_skus", {
+      p_skus: normalizedKeys,
+      p_country: countryFilter,
+    });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as Array<{ sku?: string; available_quantity?: number }>;
   }
 
-  const { data, error } = await query;
-  if (error) {
-    throw new Error(error.message);
+  let rows: Array<{ sku?: string; available_quantity?: number }>;
+  try {
+    rows = await queryInventory(country);
+  } catch (rpcErr) {
+    // Fallback when RPC is not deployed: query likely SKU variants (spacing/casing).
+    const variants = new Set<string>();
+    for (const s of skus) {
+      variants.add(normalizeSkuForMatch(s));
+      variants.add(normalizeSku(s));
+      variants.add(s.trim().toUpperCase());
+    }
+
+    let query = supabase
+      .from("ops_inventory_items")
+      .select("sku, available_quantity, country")
+      .in("sku", [...variants]);
+
+    if (country?.trim()) {
+      query = query.eq("country", country.trim());
+    }
+
+    const { data, error } = await query;
+    if (error) throw rpcErr;
+
+    rows = (data ?? []).map((row) => ({
+      sku: normalizeSkuForMatch(String(row.sku ?? "")),
+      available_quantity: Number(row.available_quantity) || 0,
+    }));
   }
 
-  for (const row of data ?? []) {
-    const sku = String(row.sku ?? "").toUpperCase().trim();
+  for (const row of rows) {
+    const sku = normalizeSkuForMatch(String(row.sku ?? ""));
     if (!sku) continue;
     const qty = Number(row.available_quantity) || 0;
     result.set(sku, (result.get(sku) ?? 0) + qty);
+  }
+
+  // If country filter excluded all rows, retry without country (warehouse names may differ from order countries).
+  if (country && result.size === 0) {
+    try {
+      const globalRows = await queryInventory(null);
+      for (const row of globalRows) {
+        const sku = normalizeSkuForMatch(String(row.sku ?? ""));
+        if (!sku) continue;
+        const qty = Number(row.available_quantity) || 0;
+        result.set(sku, (result.get(sku) ?? 0) + qty);
+      }
+    } catch {
+      /* keep empty result */
+    }
   }
 
   return result;
@@ -154,10 +197,10 @@ export async function getSkuPerformanceSummary(params: {
       rpcFilters.p_country,
     );
     for (const row of rows) {
-      const key = row.sku.toUpperCase().trim();
+      const key = normalizeSkuForMatch(row.sku);
       row.available_inventory = inventoryMap.has(key)
         ? Math.max(0, inventoryMap.get(key)!)
-        : 0;
+        : null;
     }
   } catch (err) {
     inventoryWarning =

@@ -14,6 +14,11 @@ export function normalizeSku(value: string): string {
   return value.trim().replace(/^,+/, "").toUpperCase();
 }
 
+/** Match key shared by orders SKUs and inventory SKUs (ignores whitespace differences). */
+export function normalizeSkuForMatch(value: string): string {
+  return normalizeSku(value).replace(/\s+/g, "");
+}
+
 /** First hyphen-delimited segment of a SKU/search term (family code). */
 export function skuFamilyToken(value: string): string {
   const norm = normalizeSku(value);
