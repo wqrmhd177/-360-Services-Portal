@@ -272,6 +272,7 @@ BEGIN
 
   v_offset := GREATEST(0, (GREATEST(1, COALESCE(p_page, 1)) - 1) * GREATEST(1, LEAST(100, COALESCE(p_page_size, 50))));
 
+  -- CTEs must live in a single statement; a second SELECT cannot reference them.
   WITH filtered AS (
     SELECT *
     FROM ops_sku_daily_performance mv
@@ -310,21 +311,20 @@ BEGIN
       END AS weighted_average
     FROM filtered
     GROUP BY user_id, store_id
-  ),
-  counted AS (
-    SELECT COUNT(*)::BIGINT AS total FROM aggregated
   )
-  SELECT total INTO v_total FROM counted;
-
-  SELECT COALESCE(jsonb_agg(row_to_json(t)::JSONB), '[]'::JSONB)
-  INTO v_result
-  FROM (
-    SELECT *
-    FROM aggregated
-    ORDER BY approved_quantity DESC NULLS LAST
-    LIMIT GREATEST(1, LEAST(100, COALESCE(p_page_size, 50)))
-    OFFSET v_offset
-  ) t;
+  SELECT
+    (SELECT COUNT(*)::BIGINT FROM aggregated),
+    COALESCE((
+      SELECT jsonb_agg(row_to_json(t)::JSONB)
+      FROM (
+        SELECT *
+        FROM aggregated
+        ORDER BY approved_quantity DESC NULLS LAST
+        LIMIT GREATEST(1, LEAST(100, COALESCE(p_page_size, 50)))
+        OFFSET v_offset
+      ) t
+    ), '[]'::JSONB)
+  INTO v_total, v_result;
 
   RETURN jsonb_build_object(
     'data', COALESCE(v_result, '[]'::JSONB),
