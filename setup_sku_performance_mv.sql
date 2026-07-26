@@ -145,31 +145,47 @@ BEGIN
         OR mv.product_title ILIKE '%' || v_search || '%'
       )
   ),
-  aggregated AS (
+  daily_by_sku AS (
     SELECT
       sku,
-      MAX(product_title) AS product_title,
-      SUM(approved_quantity)::INTEGER AS approved_quantity,
-      SUM(dispatched_quantity)::INTEGER AS dispatched_quantity,
-      SUM(delivered_quantity)::INTEGER AS delivered_quantity,
+      order_date_day_pst,
+      SUM(dispatched_quantity) AS day_dispatched
+    FROM filtered
+    GROUP BY sku, order_date_day_pst
+  ),
+  wa_by_sku AS (
+    SELECT
+      sku,
       CASE
-        WHEN SUM(dispatched_quantity) = 0 THEN NULL
+        WHEN COUNT(*) FILTER (WHERE day_dispatched > 0) = 0 THEN NULL
         ELSE ROUND(
-          SUM(delivered_quantity)::NUMERIC / SUM(dispatched_quantity)::NUMERIC * 100,
+          SUM(day_dispatched)::NUMERIC
+            / COUNT(*) FILTER (WHERE day_dispatched > 0)::NUMERIC,
+          1
+        )
+      END AS weighted_average
+    FROM daily_by_sku
+    GROUP BY sku
+  ),
+  aggregated AS (
+    SELECT
+      f.sku,
+      MAX(f.product_title) AS product_title,
+      SUM(f.approved_quantity)::INTEGER AS approved_quantity,
+      SUM(f.dispatched_quantity)::INTEGER AS dispatched_quantity,
+      SUM(f.delivered_quantity)::INTEGER AS delivered_quantity,
+      CASE
+        WHEN SUM(f.dispatched_quantity) = 0 THEN NULL
+        ELSE ROUND(
+          SUM(f.delivered_quantity)::NUMERIC / SUM(f.dispatched_quantity)::NUMERIC * 100,
           2
         )
       END AS dispatch_to_delivery_pct,
-      CASE
-        WHEN COUNT(*) FILTER (WHERE dispatched_quantity > 0) = 0 THEN NULL
-        ELSE ROUND(
-          SUM(dispatched_quantity)::NUMERIC
-            / COUNT(*) FILTER (WHERE dispatched_quantity > 0)::NUMERIC,
-          1
-        )
-      END AS weighted_average,
-      COUNT(DISTINCT store_id)::INTEGER AS seller_count
-    FROM filtered
-    GROUP BY sku
+      w.weighted_average,
+      COUNT(DISTINCT f.store_id)::INTEGER AS seller_count
+    FROM filtered f
+    LEFT JOIN wa_by_sku w ON w.sku = f.sku
+    GROUP BY f.sku, w.weighted_average
   ),
   counted AS (
     SELECT COUNT(*)::BIGINT AS total FROM aggregated
@@ -195,31 +211,47 @@ BEGIN
           OR mv.product_title ILIKE '%%' || $5 || '%%'
         )
     ),
-    aggregated AS (
+    daily_by_sku AS (
       SELECT
         sku,
-        MAX(product_title) AS product_title,
-        SUM(approved_quantity)::INTEGER AS approved_quantity,
-        SUM(dispatched_quantity)::INTEGER AS dispatched_quantity,
-        SUM(delivered_quantity)::INTEGER AS delivered_quantity,
+        order_date_day_pst,
+        SUM(dispatched_quantity) AS day_dispatched
+      FROM filtered
+      GROUP BY sku, order_date_day_pst
+    ),
+    wa_by_sku AS (
+      SELECT
+        sku,
         CASE
-          WHEN SUM(dispatched_quantity) = 0 THEN NULL
+          WHEN COUNT(*) FILTER (WHERE day_dispatched > 0) = 0 THEN NULL
           ELSE ROUND(
-            SUM(delivered_quantity)::NUMERIC / SUM(dispatched_quantity)::NUMERIC * 100,
+            SUM(day_dispatched)::NUMERIC
+              / COUNT(*) FILTER (WHERE day_dispatched > 0)::NUMERIC,
+            1
+          )
+        END AS weighted_average
+      FROM daily_by_sku
+      GROUP BY sku
+    ),
+    aggregated AS (
+      SELECT
+        f.sku,
+        MAX(f.product_title) AS product_title,
+        SUM(f.approved_quantity)::INTEGER AS approved_quantity,
+        SUM(f.dispatched_quantity)::INTEGER AS dispatched_quantity,
+        SUM(f.delivered_quantity)::INTEGER AS delivered_quantity,
+        CASE
+          WHEN SUM(f.dispatched_quantity) = 0 THEN NULL
+          ELSE ROUND(
+            SUM(f.delivered_quantity)::NUMERIC / SUM(f.dispatched_quantity)::NUMERIC * 100,
             2
           )
         END AS dispatch_to_delivery_pct,
-        CASE
-          WHEN COUNT(*) FILTER (WHERE dispatched_quantity > 0) = 0 THEN NULL
-          ELSE ROUND(
-            SUM(dispatched_quantity)::NUMERIC
-              / COUNT(*) FILTER (WHERE dispatched_quantity > 0)::NUMERIC,
-            1
-          )
-        END AS weighted_average,
-        COUNT(DISTINCT store_id)::INTEGER AS seller_count
-      FROM filtered
-      GROUP BY sku
+        w.weighted_average,
+        COUNT(DISTINCT f.store_id)::INTEGER AS seller_count
+      FROM filtered f
+      LEFT JOIN wa_by_sku w ON w.sku = f.sku
+      GROUP BY f.sku, w.weighted_average
     )
     SELECT COALESCE(jsonb_agg(row_to_json(t)::JSONB), '[]'::JSONB)
     FROM (

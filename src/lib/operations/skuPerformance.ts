@@ -176,7 +176,8 @@ export async function getSkuPerformanceSummary(params: {
 
   const payload = (data ?? {}) as RpcSummaryPayload;
   const rows = (payload.data ?? []).map((row) => ({
-    ...row,
+    product_title: String(row.product_title ?? ""),
+    sku: String(row.sku ?? ""),
     approved_quantity: Number(row.approved_quantity) || 0,
     dispatched_quantity: Number(row.dispatched_quantity) || 0,
     delivered_quantity: Number(row.delivered_quantity) || 0,

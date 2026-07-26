@@ -1,6 +1,6 @@
 -- Bulk inventory lookup for SKU Performance (whitespace-insensitive SKU match)
--- Run in Supabase SQL Editor
-
+-- Run in Supabase SQL Editor ONLY — do NOT run setup_sku_performance_mv.sql for this fix.
+-- Running the full setup drops/recreates the MV and refreshes Approved Qty from current order statuses.
 CREATE OR REPLACE FUNCTION normalize_ops_sku_match(p_sku TEXT)
 RETURNS TEXT
 LANGUAGE sql
