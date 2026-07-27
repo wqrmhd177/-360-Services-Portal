@@ -1,10 +1,8 @@
+import { differenceInDays, subDays } from "date-fns";
 import {
-  eachDayOfInterval,
-  format,
-  startOfDay,
-  differenceInDays,
-  subDays,
-} from "date-fns";
+  eachPortalCalendarDay,
+  portalCalendarDay,
+} from "@/lib/portalTimezone";
 import type { DateRange, OrderFilters, OrderLineItem } from "@/lib/types/order";
 import { dateRangeFromParamStrings } from "@/lib/calendar-range";
 import { isInstantInCalendarRange } from "@/lib/calendar-range";
@@ -210,15 +208,14 @@ export interface TrendPoint {
 }
 
 export function computeTrends(items: OrderLineItem[], range: DateRange): TrendPoint[] {
-  const days = eachDayOfInterval({ start: range.from, end: range.to });
+  const dayKeys = eachPortalCalendarDay(range.fromDate, range.toDate);
   const byOrder = groupByOrder(items);
 
   const ordersByDay = new Map<string, Set<OrderGroupKey>>();
   const revenueByDay = new Map<string, number>();
   const unitsByDay = new Map<string, number>();
 
-  for (const day of days) {
-    const key = format(day, "yyyy-MM-dd");
+  for (const key of dayKeys) {
     ordersByDay.set(key, new Set());
     revenueByDay.set(key, 0);
     unitsByDay.set(key, 0);
@@ -226,28 +223,25 @@ export function computeTrends(items: OrderLineItem[], range: DateRange): TrendPo
 
   for (const [orderKey, lines] of byOrder) {
     const rep = orderRepresentativeLine(lines);
-    const key = format(startOfDay(rep.orderDate), "yyyy-MM-dd");
+    const key = portalCalendarDay(rep.orderDate);
     if (!ordersByDay.has(key)) continue;
     ordersByDay.get(key)!.add(orderKey);
     revenueByDay.set(key, (revenueByDay.get(key) ?? 0) + orderRevenue(lines));
   }
 
   for (const item of items) {
-    const key = format(startOfDay(item.orderDate), "yyyy-MM-dd");
+    const key = portalCalendarDay(item.orderDate);
     if (unitsByDay.has(key)) {
       unitsByDay.set(key, (unitsByDay.get(key) ?? 0) + item.quantity);
     }
   }
 
-  return days.map((day) => {
-    const key = format(day, "yyyy-MM-dd");
-    return {
-      date: key,
-      orders: ordersByDay.get(key)?.size ?? 0,
-      revenue: revenueByDay.get(key) ?? 0,
-      units: unitsByDay.get(key) ?? 0,
-    };
-  });
+  return dayKeys.map((key) => ({
+    date: key,
+    orders: ordersByDay.get(key)?.size ?? 0,
+    revenue: revenueByDay.get(key) ?? 0,
+    units: unitsByDay.get(key) ?? 0,
+  }));
 }
 
 export interface BreakdownRow {

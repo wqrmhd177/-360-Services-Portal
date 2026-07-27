@@ -10,6 +10,7 @@ import OrdersFilterBar, {
   useDefaultOrdersDateRange,
 } from "@/components/operations/OrdersFilterBar";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
+import { formatPortalTimestamp } from "@/lib/portalTimezone";
 import type {
   DeliveryPartnerByCountryData,
   FulfillmentSLA,
@@ -210,7 +211,7 @@ function OrdersOperationsContent() {
           <h1 className="text-xl font-bold text-[var(--foreground)]">Operations — Orders</h1>
           {data?.lastSyncedAt ? (
             <p className="text-xs text-[var(--muted)] mt-0.5">
-              Last synced: {new Date(data.lastSyncedAt).toLocaleString()}
+              Last synced: {formatPortalTimestamp(data.lastSyncedAt)}
             </p>
           ) : null}
           {syncMessage ? (

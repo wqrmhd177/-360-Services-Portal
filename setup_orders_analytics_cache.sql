@@ -31,7 +31,7 @@ ALTER TABLE ops_orders_items
 
 -- Backfill order_date_day for existing rows
 UPDATE ops_orders_items
-SET order_date_day = (order_date AT TIME ZONE 'UTC')::DATE
+SET order_date_day = (order_date AT TIME ZONE 'America/Los_Angeles')::DATE
 WHERE order_date IS NOT NULL AND order_date_day IS NULL;
 
 UPDATE ops_orders_items

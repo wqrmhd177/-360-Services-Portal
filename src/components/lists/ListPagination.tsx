@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPortalTimestamp } from "@/lib/portalTimezone";
+
 interface ListPaginationProps {
   currentPage: number;
   totalPages: number;
@@ -51,11 +53,7 @@ export function ListPagination({
 
 function formatSyncedAt(iso: string | null): string {
   if (!iso) return "Never synced";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+  return formatPortalTimestamp(iso);
 }
 
 export function SyncStatusBar({

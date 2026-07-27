@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { portalCalendarDay } from "@/lib/portalTimezone";
 import type { DateRange, OrderFilters } from "@/lib/types/order";
 import { dateRangeFromParamStrings } from "@/lib/calendar-range";
 import type { DateRangeValue } from "@/lib/date-range-presets";
@@ -37,9 +37,9 @@ export function toDateOnlySearchParams(
   return next;
 }
 
-/** Calendar date in local time — matches DateRangePicker URL params. */
+/** Calendar date in PST — matches DateRangePicker URL params. */
 export function formatDateParam(date: Date): string {
-  return format(date, "yyyy-MM-dd");
+  return portalCalendarDay(date);
 }
 
 export function serializeDateRange(range: DateRange): {

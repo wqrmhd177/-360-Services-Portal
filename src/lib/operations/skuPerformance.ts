@@ -280,16 +280,4 @@ export async function getSkuPerformanceSellers(params: {
   };
 }
 
-export function formatPstTimestamp(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Intl.DateTimeFormat("en-GB", {
-      timeZone: "America/Los_Angeles",
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZoneName: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
+export { formatPortalTimestamp, formatPortalTimestamp as formatPstTimestamp } from "@/lib/portalTimezone";

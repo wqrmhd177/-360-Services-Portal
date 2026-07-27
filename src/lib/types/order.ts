@@ -84,7 +84,7 @@ export interface OrderLineItem {
 export interface DateRange {
   from: Date;
   to: Date;
-  /** yyyy-MM-dd from URL — UTC calendar day for filters */
+  /** yyyy-MM-dd from URL — PST calendar day for filters */
   fromDate: string;
   toDate: string;
 }

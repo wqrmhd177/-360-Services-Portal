@@ -54,6 +54,7 @@ function DateRangePanel({
   return (
     <>
       <p className="mb-3 text-sm font-medium text-[var(--foreground)]">Quick select</p>
+      <p className="mb-3 text-xs text-[var(--muted)]">Dates use Pacific Time (PST/PDT).</p>
       <div className="flex flex-wrap gap-2">
         {QUICK_SELECT_PRESETS.map((preset) => (
           <button

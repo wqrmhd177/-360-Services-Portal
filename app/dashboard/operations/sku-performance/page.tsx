@@ -128,7 +128,7 @@ function SkuPerformanceContent() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--foreground)]">SKU Performance</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Order metrics by SKU with seller breakdown. Order dates use PST.
+          Order metrics by SKU with seller breakdown. All Operations dates use PST.
         </p>
       </div>
 

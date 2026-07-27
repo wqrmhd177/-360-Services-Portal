@@ -1,10 +1,12 @@
 import type { DateRange } from "@/lib/types/order";
+import {
+  PORTAL_TIMEZONE,
+  portalCalendarDay,
+  zonedDayEndMs,
+  zonedDayStartMs,
+} from "@/lib/portalTimezone";
 
-/**
- * URL `from` / `to` (yyyy-MM-dd) are UTC calendar days.
- * Matches Metabase `Order_date` (UTC) and production behaviour (~12 for 2026-05-19).
- */
-export const PORTAL_TIMEZONE = "UTC";
+export { PORTAL_TIMEZONE };
 
 function parseYmd(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -13,14 +15,14 @@ function parseYmd(dateStr: string) {
 }
 
 /**
- * Inclusive day bounds for yyyy-MM-dd strings as UTC calendar dates.
- * e.g. 2026-05-19 → 2026-05-19T00:00:00.000Z … 2026-05-19T23:59:59.999Z
+ * URL `from` / `to` (yyyy-MM-dd) are PST/PDT calendar days (America/Los_Angeles).
+ * Matches order_date_day in ops_orders_items and order_date_day_pst in SKU Performance.
  */
 export function calendarDayBoundsFromStrings(fromStr: string, toStr: string) {
-  const from = parseYmd(fromStr);
-  const to = parseYmd(toStr);
-  const fromMs = Date.UTC(from.y, from.m - 1, from.d, 0, 0, 0, 0);
-  const toMs = Date.UTC(to.y, to.m - 1, to.d, 23, 59, 59, 999);
+  parseYmd(fromStr);
+  parseYmd(toStr);
+  const fromMs = zonedDayStartMs(fromStr);
+  const toMs = zonedDayEndMs(toStr);
   return {
     fromMs,
     toMs,
@@ -31,11 +33,9 @@ export function calendarDayBoundsFromStrings(fromStr: string, toStr: string) {
   };
 }
 
-/** Serialize picker/local calendar picks to URL date params (yyyy-MM-dd). */
+/** Serialize preset/picker Date bounds to URL date params (PST calendar days). */
 export function dateRangeFromPickerDates(from: Date, to: Date): DateRange {
-  const fromStr = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
-  const toStr = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, "0")}-${String(to.getDate()).padStart(2, "0")}`;
-  return dateRangeFromParamStrings(fromStr, toStr);
+  return dateRangeFromParamStrings(portalCalendarDay(from), portalCalendarDay(to));
 }
 
 export function calendarRangeBounds(range: DateRange) {
@@ -48,7 +48,7 @@ export function isInstantInCalendarRange(instant: Date, range: DateRange): boole
   return t >= fromMs && t <= toMs;
 }
 
-/** Build DateRange from URL yyyy-MM-dd params. */
+/** Build DateRange from URL yyyy-MM-dd params (PST calendar days). */
 export function dateRangeFromParamStrings(fromStr: string, toStr: string): DateRange {
   const { fromMs, toMs, fromDate, toDate } = calendarDayBoundsFromStrings(
     fromStr,

@@ -1,3 +1,4 @@
+import { dateRangeFromParamStrings } from "@/lib/calendar-range";
 import { filterOrders, applyOrderLevelFacetFilters, groupByOrder } from "@/lib/analytics/orders";
 import { applyRevenueImputation } from "@/lib/analytics/revenue-imputation";
 import { getOpsDb } from "@/lib/operations/opsDb";
@@ -185,18 +186,12 @@ async function fetchFilteredOrderLineItemsFallback(
     return applyFacetFilters(items, filters);
   }
 
-  // Fallback before setup_orders_analytics_cache.sql is applied
   const allItems = applyRevenueImputation(await getAllOrderLineItems());
   if (!filters.fromDate || !filters.toDate) {
     return applyFacetFilters(allItems, filters);
   }
 
-  const range = {
-    from: new Date(`${filters.fromDate}T00:00:00`),
-    to: new Date(`${filters.toDate}T23:59:59.999`),
-    fromDate: filters.fromDate,
-    toDate: filters.toDate,
-  };
+  const range = dateRangeFromParamStrings(filters.fromDate, filters.toDate);
 
   const dateFiltered = filterOrders(allItems, range, {
     storeIds: filters.storeId ? [filters.storeId] : undefined,

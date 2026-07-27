@@ -1,6 +1,7 @@
 import type { OrderLineItem } from "@/lib/types/order";
 import { applyRevenueImputation } from "@/lib/analytics/revenue-imputation";
 import { convertToUsd } from "@/lib/order-currency";
+import { portalCalendarDay } from "@/lib/portalTimezone";
 import type { OrderRow } from "@/lib/operations/orders";
 
 export function accountManagerKey(row: OrderRow): string {
@@ -71,9 +72,7 @@ export function enrichOrderRows(rows: OrderRow[]): Array<OrderRow & {
       row.sku,
       row.currency?.trim() || undefined,
     );
-    const orderDateDay = row.orderDate
-      ? row.orderDate.toISOString().slice(0, 10)
-      : null;
+    const orderDateDay = row.orderDate ? portalCalendarDay(row.orderDate) : null;
 
     return {
       ...row,
