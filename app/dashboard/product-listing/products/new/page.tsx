@@ -54,6 +54,7 @@ interface VariantRow {
   price: string;
   stock: string;
   sku: string;
+  images: string[]; // uploaded image URLs for this specific variant
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -72,6 +73,8 @@ export default function NewProductPage() {
   const [description, setDescription] = useState("");
   const [packageIncludes, setPackageIncludes] = useState<string[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  // Per-variant upload tracking: index → true means that zone is uploading
+  const [uploadingVariant, setUploadingVariant] = useState<Record<number, boolean>>({});
   const [uploading, setUploading] = useState(false);
 
   // Step 2: Variants
@@ -100,34 +103,53 @@ export default function NewProductPage() {
     setVariantRows(
       combos.map((combo) => {
         const key = JSON.stringify(combo);
-        return existing.get(key) ?? { combination: combo, price: "", stock: "", sku: "" };
+        return existing.get(key) ?? { combination: combo, price: "", stock: "", sku: "", images: [] };
       })
     );
   }, [options, hasVariants]);
 
-  // ── Image upload ──
+  // ── Image upload helpers ──
+  async function uploadFilesToStorage(files: FileList | null): Promise<string[]> {
+    if (!files || files.length === 0) return [];
+    const supabase = createSupabaseClient();
+    const urls: string[] = [];
+    for (const file of Array.from(files)) {
+      const ext = file.name.split(".").pop();
+      const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-listing-images")
+        .upload(path, file, { upsert: false });
+      if (!upErr) {
+        const { data } = supabase.storage
+          .from("product-listing-images")
+          .getPublicUrl(path);
+        if (data?.publicUrl) urls.push(data.publicUrl);
+      }
+    }
+    return urls;
+  }
+
   async function handleImageUpload(files: FileList | null) {
-    if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      const supabase = createSupabaseClient();
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const ext = file.name.split(".").pop();
-        const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("product-listing-images")
-          .upload(path, file, { upsert: false });
-        if (!upErr) {
-          const { data } = supabase.storage
-            .from("product-listing-images")
-            .getPublicUrl(path);
-          if (data?.publicUrl) urls.push(data.publicUrl);
-        }
-      }
+      const urls = await uploadFilesToStorage(files);
       setImageUrls((prev) => [...prev, ...urls]);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleVariantImageUpload(variantIndex: number, files: FileList | null) {
+    setUploadingVariant((prev) => ({ ...prev, [variantIndex]: true }));
+    try {
+      const urls = await uploadFilesToStorage(files);
+      setVariantRows((prev) =>
+        prev.map((r, i) =>
+          i === variantIndex ? { ...r, images: [...r.images, ...urls] } : r
+        )
+      );
+    } finally {
+      setUploadingVariant((prev) => ({ ...prev, [variantIndex]: false }));
     }
   }
 
@@ -188,6 +210,7 @@ export default function NewProductPage() {
           price: parseFloat(r.price) || 0,
           stock: parseInt(r.stock) || 0,
           sku: r.sku || null,
+          image: r.images.length > 0 ? r.images : null,
           active: true,
         }));
         const { error: varErr } = await supabase
@@ -495,35 +518,107 @@ export default function NewProductPage() {
         {step === 2 && (
           <>
             <h2 className="text-base font-semibold text-gray-800">Product Images</h2>
-            <Field label="Upload Images">
-              <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
-                <Upload className="h-4 w-4" />
-                {uploading ? "Uploading…" : "Click to upload images"}
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleImageUpload(e.target.files)}
-                />
-              </label>
-              {imageUrls.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {imageUrls.map((url, i) => (
-                    <div key={i} className="relative">
-                      <img src={url} alt="" className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setImageUrls((prev) => prev.filter((_, j) => j !== i))}
-                        className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+
+            {!hasVariants ? (
+              /* Single product — one upload zone */
+              <>
+                <Field label="Upload Images">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
+                    <Upload className="h-4 w-4" />
+                    {uploading ? "Uploading…" : "Click to upload images"}
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleImageUpload(e.target.files)}
+                    />
+                  </label>
+                  {imageUrls.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {imageUrls.map((url, i) => (
+                        <div key={i} className="relative">
+                          <img src={url} alt="" className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setImageUrls((prev) => prev.filter((_, j) => j !== i))}
+                            className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </Field>
+                  )}
+                </Field>
+              </>
+            ) : (
+              /* Multi-variant — one upload zone per variant */
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  Upload images for each variant — each variant can have its own photos.
+                </p>
+                {variantRows.map((row, ri) => (
+                  <div key={ri} className="rounded-xl border border-gray-200 p-4 space-y-3">
+                    {/* Variant label pills */}
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(row.combination).map(([k, v]) => (
+                        <span
+                          key={k}
+                          className="rounded-full bg-portal-100 px-2.5 py-0.5 text-xs font-medium text-portal-700"
+                        >
+                          {k}: {v}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Upload zone */}
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
+                      <Upload className="h-4 w-4" />
+                      {uploadingVariant[ri] ? "Uploading…" : "Click to upload images"}
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleVariantImageUpload(ri, e.target.files)}
+                      />
+                    </label>
+
+                    {/* Thumbnails */}
+                    {row.images.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {row.images.map((url, ii) => (
+                          <div key={ii} className="relative">
+                            <img
+                              src={url}
+                              alt=""
+                              className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVariantRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === ri
+                                      ? { ...r, images: r.images.filter((_, j) => j !== ii) }
+                                      : r
+                                  )
+                                )
+                              }
+                              className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="text-xs text-gray-400">Images are optional — you can add them later.</p>
           </>
         )}
@@ -549,7 +644,14 @@ export default function NewProductPage() {
                 } />
               )}
               {!hasVariants && singlePrice && <ReviewRow label="Price" value={singlePrice} />}
-              <ReviewRow label="Images" value={`${imageUrls.length} image${imageUrls.length !== 1 ? "s" : ""}`} />
+              {hasVariants ? (
+                <ReviewRow
+                  label="Images"
+                  value={`${variantRows.reduce((s, r) => s + r.images.length, 0)} image${variantRows.reduce((s, r) => s + r.images.length, 0) !== 1 ? "s" : ""} across ${variantRows.length} variant${variantRows.length !== 1 ? "s" : ""}`}
+                />
+              ) : (
+                <ReviewRow label="Images" value={`${imageUrls.length} image${imageUrls.length !== 1 ? "s" : ""}`} />
+              )}
               <ReviewRow label="Status after submit" value="Pending Approval" />
             </div>
           </>
