@@ -193,32 +193,25 @@ export default function GrowthQrFormPage() {
     setPurchaseDetails(updated);
   }
 
+  function isImageFile(file: File): boolean {
+    return file.type.startsWith("image/");
+  }
+
   function handleImageChange(index: number, e: React.ChangeEvent<HTMLInputElement>) {
-    console.log("=== IMAGE CHANGE HANDLER ===");
-    console.log("Detail index:", index);
     const files = Array.from(e.target.files || []);
-    console.log("Files selected:", files.length);
-    console.log("File details:", files.map(f => ({ name: f.name, size: f.size, type: f.type })));
-    
     if (files.length > 0) {
       const detail = purchaseDetails[index];
-      console.log("Current images in detail:", detail.images.length);
-      
-      // Store files in ref to prevent them from being lost in state updates
       const currentFiles = imageFilesRef.current.get(index) || [];
       const newImages = [...currentFiles, ...files];
       imageFilesRef.current.set(index, newImages);
-      console.log("New total images stored in ref:", newImages.length);
-      
       const newPreviews = [
         ...detail.imagePreviews,
-        ...files.map((file) => URL.createObjectURL(file))
+        ...files.map((file) =>
+          isImageFile(file) ? URL.createObjectURL(file) : `__doc__:${file.name}`
+        ),
       ];
       updatePurchaseDetail(index, "images", newImages);
       updatePurchaseDetail(index, "imagePreviews", newPreviews);
-      console.log("Images updated in state and ref");
-    } else {
-      console.log("No files selected");
     }
   }
 
@@ -227,8 +220,10 @@ export default function GrowthQrFormPage() {
     const filesFromRef = imageFilesRef.current.get(detailIndex) || [];
     const newImages = filesFromRef.filter((_, i) => i !== imageIndex);
     const newPreviews = detail.imagePreviews.filter((_, i) => i !== imageIndex);
-    URL.revokeObjectURL(detail.imagePreviews[imageIndex]);
-    // Update ref
+    const preview = detail.imagePreviews[imageIndex];
+    if (preview && !preview.startsWith("__doc__:")) {
+      URL.revokeObjectURL(preview);
+    }
     imageFilesRef.current.set(detailIndex, newImages);
     updatePurchaseDetail(detailIndex, "images", newImages);
     updatePurchaseDetail(detailIndex, "imagePreviews", newPreviews);
@@ -1333,9 +1328,9 @@ export default function GrowthQrFormPage() {
                             Packing List Upload
                           </label>
                           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-2 transition-colors hover:border-gray-400">
-                            <input
+                              <input
                               type="file"
-                              accept="image/*"
+                              accept="image/*,.pdf,.csv,.xls,.xlsx,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                               multiple
                               onChange={(e) => handleImageChange(index, e)}
                               className="mb-1.5 w-full text-[10px] text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-gray-900 file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-white file:hover:bg-gray-800"
@@ -1344,11 +1339,18 @@ export default function GrowthQrFormPage() {
                               <div className="grid grid-cols-3 gap-1.5">
                                 {detail.imagePreviews.map((preview, imgIdx) => (
                                   <div key={imgIdx} className="relative">
-                                    <img
-                                      src={preview}
-                                      alt={`Preview ${imgIdx + 1}`}
-                                      className="h-14 w-full rounded-md object-cover"
-                                    />
+                                    {preview.startsWith("__doc__:") ? (
+                                      <div className="flex h-14 w-full items-center gap-1 rounded-md border border-gray-200 bg-gray-100 px-1.5">
+                                        <svg className="h-5 w-5 shrink-0 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        <span className="truncate text-[9px] text-gray-600">{preview.replace("__doc__:", "")}</span>
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={preview}
+                                        alt={`Preview ${imgIdx + 1}`}
+                                        className="h-14 w-full rounded-md object-cover"
+                                      />
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => removeImage(index, imgIdx)}

@@ -1,17 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const SESSION_COOKIE = "portal_session";
-
-function isAuthenticated(request: NextRequest): boolean {
-  const val = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!val) return false;
-  try {
-    const parsed = JSON.parse(val);
-    return Boolean(parsed?.email);
-  } catch {
-    return false;
-  }
-}
+import { getPortalSession } from "@/lib/session";
 
 const METABASE_PUBLIC_URL =
   "https://zambeel.metabaseapp.com/public/question/050ce5ce-ce25-41e9-b34a-819933ec0235.json";
@@ -29,7 +17,8 @@ function normalizeSku(input: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticated(request)) {
+  const session = getPortalSession();
+  if (!session?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -54,8 +43,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const feed = (await response.json()) as MetabaseInventoryRow[];
-    const rows = Array.isArray(feed) ? feed : [];
+    const json = await response.json();
+
+    // Metabase public questions return either a flat array (custom endpoint)
+    // or the standard { data: { rows: [], cols: [] } } envelope.
+    let rows: MetabaseInventoryRow[] = [];
+    if (Array.isArray(json)) {
+      rows = json as MetabaseInventoryRow[];
+    } else if (
+      json?.data?.rows &&
+      Array.isArray(json.data.rows) &&
+      json?.data?.cols &&
+      Array.isArray(json.data.cols)
+    ) {
+      const cols: { name: string }[] = json.data.cols;
+      rows = (json.data.rows as unknown[][]).map((r) =>
+        Object.fromEntries(cols.map((c, i) => [c.name, r[i]]))
+      ) as MetabaseInventoryRow[];
+    }
 
     const byPrefix4 = rows.filter((row) =>
       String(row.sku || "").toUpperCase().startsWith(prefix4)

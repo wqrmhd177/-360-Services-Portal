@@ -65,47 +65,47 @@ export function SkuPerformanceTable({
         </CardHeader>
         <CardContent className="-mx-3 overflow-x-auto p-0 px-3 sm:mx-0 sm:px-0">
           <table className="w-full text-sm">
-            <thead className="border-b bg-[var(--table-header)] text-left text-xs uppercase text-[var(--muted)]">
+            <thead className="border-b bg-[var(--table-header)] text-xs uppercase text-[var(--muted)]">
               <tr>
-                <th className="px-4 py-3">Product Title</th>
-                <th className="px-4 py-3">SKU</th>
-                <th className="px-4 py-3" title="Status Approved only — not yet dispatched">
+                <th className="px-4 py-3 text-left">Product Title</th>
+                <th className="px-4 py-3 text-center">SKU</th>
+                <th className="px-4 py-3 text-right" title="Status Approved only — not yet dispatched">
                   Approved Qty
                 </th>
-                <th className="px-4 py-3" title="Delivered ÷ Dispatched">
+                <th className="px-4 py-3 text-right" title="Delivered ÷ Dispatched">
                   D → D %
                 </th>
                 <th
-                  className="px-4 py-3"
+                  className="px-4 py-3 text-right"
                   title="Avg daily dispatched units per calendar day (zero-dispatch days excluded)"
                 >
                   Wtd. Avg
                 </th>
-                <th className="px-4 py-3">Inventory</th>
-                <th className="w-12 px-4 py-3" aria-label="View stores" />
+                <th className="px-4 py-3 text-right">Inventory</th>
+                <th className="w-12 px-4 py-3 text-center" aria-label="View stores" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.sku} className="border-b">
                   <td
-                    className="max-w-[220px] truncate px-4 py-2 font-medium"
+                    className="max-w-[220px] truncate px-4 py-2 text-left font-medium"
                     title={row.product_title}
                   >
                     {row.product_title}
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs">{row.sku}</td>
-                  <td className="px-4 py-2 tabular-nums">
+                  <td className="px-4 py-2 text-center font-mono text-xs">{row.sku}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">
                     {formatNumber(row.approved_quantity)}
                   </td>
-                  <td className="px-4 py-2 tabular-nums">
+                  <td className="px-4 py-2 text-right tabular-nums">
                     {formatPct(row.dispatch_to_delivery_pct)}
                   </td>
-                  <td className="px-4 py-2 tabular-nums">
+                  <td className="px-4 py-2 text-right tabular-nums">
                     {formatWa(row.weighted_average)}
                   </td>
                   <td
-                    className="px-4 py-2 tabular-nums"
+                    className="px-4 py-2 text-right tabular-nums"
                     title={
                       row.available_inventory == null
                         ? "Inventory data temporarily unavailable"
@@ -114,13 +114,13 @@ export function SkuPerformanceTable({
                   >
                     {formatInventory(row.available_inventory)}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 text-center">
                     <button
                       type="button"
                       onClick={() => openStoresDialog(row)}
                       aria-label={`View stores for ${row.sku}`}
                       className={cn(
-                        "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--card-border)] text-[var(--muted)] transition-colors hover:bg-[var(--table-header)] hover:text-[var(--foreground)]",
+                        "inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--card-border)] text-[var(--muted)] transition-colors hover:bg-[var(--table-header)] hover:text-[var(--foreground)]",
                         selectedRow?.sku === row.sku &&
                           dialogOpen &&
                           "bg-[var(--table-header)] text-[var(--foreground)]",

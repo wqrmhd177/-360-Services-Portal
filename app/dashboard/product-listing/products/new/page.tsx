@@ -135,14 +135,9 @@ export default function NewProductPage() {
   function validateStep1() {
     if (!supplierId) { setError("Please select a supplier"); return false; }
     if (!title.trim()) { setError("Product title is required"); return false; }
-    setError("");
-    return true;
-  }
-
-  function validateStep2() {
     if (hasVariants) {
       const filled = options.filter((o) => o.name && o.values.length > 0);
-      if (filled.length === 0) { setError("Add at least one option with values"); return false; }
+      if (filled.length === 0) { setError("Add at least one variant option with values"); return false; }
       const emptyPrice = variantRows.some((r) => !r.price);
       if (emptyPrice) { setError("Set a price for all variants"); return false; }
     }
@@ -152,7 +147,6 @@ export default function NewProductPage() {
 
   function next() {
     if (step === 1 && !validateStep1()) return;
-    if (step === 2 && !validateStep2()) return;
     setStep((s) => s + 1);
   }
 
@@ -222,7 +216,7 @@ export default function NewProductPage() {
     }
   }
 
-  const steps = ["Product Info", "Variants", "Review"];
+  const steps = ["Product Info & Variants", "Images", "Review"];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
@@ -265,7 +259,7 @@ export default function NewProductPage() {
           </div>
         )}
 
-        {/* ── Step 1: Product Info ── */}
+        {/* ── Step 1: Product Info & Variants ── */}
         {step === 1 && (
           <>
             <h2 className="text-base font-semibold text-gray-800">Product Information</h2>
@@ -326,8 +320,182 @@ export default function NewProductPage() {
               </div>
             </Field>
 
-            {/* Images */}
-            <Field label="Product Images">
+            {/* ── Variant Setup ── */}
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={hasVariants}
+                    onChange={(e) => { setHasVariants(e.target.checked); setVariantRows([]); }}
+                    className="h-4 w-4 rounded"
+                  />
+                  This product has multiple variants (Color, Size, etc.)
+                </label>
+              </div>
+
+              {!hasVariants ? (
+                <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Pricing &amp; Stock</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Price *">
+                      <input type="number" min={0} step={0.01} className="input" value={singlePrice} onChange={(e) => setSinglePrice(e.target.value)} placeholder="0.00" />
+                    </Field>
+                    <Field label="Stock">
+                      <input type="number" min={0} className="input" value={singleStock} onChange={(e) => setSingleStock(e.target.value)} placeholder="0" />
+                    </Field>
+                    <Field label="SKU">
+                      <input className="input" value={singleSku} onChange={(e) => setSingleSku(e.target.value)} placeholder="SKU" />
+                    </Field>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {options.map((opt, oi) => (
+                    <div key={oi} className="rounded-xl border border-gray-200 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-700">Option {oi + 1}</p>
+                        {options.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setOptions(options.filter((_, i) => i !== oi))}
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Option Name</label>
+                        <input
+                          list={`opt-suggestions-${oi}`}
+                          className="input"
+                          value={opt.name}
+                          onChange={(e) => {
+                            const next = [...options];
+                            next[oi] = { ...next[oi], name: e.target.value };
+                            setOptions(next);
+                          }}
+                          placeholder="e.g. Color"
+                        />
+                        <datalist id={`opt-suggestions-${oi}`}>
+                          {VARIANT_NAME_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
+                        </datalist>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Values</label>
+                        {VARIANT_VALUE_PRESETS[opt.name] && (
+                          <div className="mb-2 flex flex-wrap gap-1">
+                            {VARIANT_VALUE_PRESETS[opt.name].map((v) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => {
+                                  const next = [...options];
+                                  const vals = next[oi].values;
+                                  next[oi] = {
+                                    ...next[oi],
+                                    values: vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v],
+                                  };
+                                  setOptions(next);
+                                }}
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  opt.values.includes(v) ? "bg-portal-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-portal-400"
+                                }`}
+                              >
+                                {v}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <CustomValueInput
+                          values={opt.values}
+                          onChange={(vals) => {
+                            const next = [...options];
+                            next[oi] = { ...next[oi], values: vals };
+                            setOptions(next);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setOptions([...options, { name: "", values: [] }])}
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
+                  >
+                    <Plus className="h-4 w-4" /> Add Option
+                  </button>
+
+                  {variantRows.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        {variantRows.length} Variant{variantRows.length !== 1 ? "s" : ""} — set price &amp; stock
+                      </h3>
+                      {variantRows.map((row, ri) => (
+                        <div key={ri} className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(row.combination).map(([k, v]) => (
+                              <span key={k} className="rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs text-gray-700">
+                                {k}: {v}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              placeholder="Price *"
+                              value={row.price}
+                              onChange={(e) => {
+                                const next = [...variantRows];
+                                next[ri] = { ...next[ri], price: e.target.value };
+                                setVariantRows(next);
+                              }}
+                              className="input text-sm"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="Stock"
+                              value={row.stock}
+                              onChange={(e) => {
+                                const next = [...variantRows];
+                                next[ri] = { ...next[ri], stock: e.target.value };
+                                setVariantRows(next);
+                              }}
+                              className="input text-sm"
+                            />
+                            <input
+                              placeholder="SKU"
+                              value={row.sku}
+                              onChange={(e) => {
+                                const next = [...variantRows];
+                                next[ri] = { ...next[ri], sku: e.target.value };
+                                setVariantRows(next);
+                              }}
+                              className="input text-sm"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── Step 2: Images ── */}
+        {step === 2 && (
+          <>
+            <h2 className="text-base font-semibold text-gray-800">Product Images</h2>
+            <Field label="Upload Images">
               <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
                 <Upload className="h-4 w-4" />
                 {uploading ? "Uploading…" : "Click to upload images"}
@@ -356,178 +524,7 @@ export default function NewProductPage() {
                 </div>
               )}
             </Field>
-          </>
-        )}
-
-        {/* ── Step 2: Variants ── */}
-        {step === 2 && (
-          <>
-            <h2 className="text-base font-semibold text-gray-800">Variants &amp; Pricing</h2>
-
-            <div className="flex items-center gap-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={hasVariants}
-                  onChange={(e) => { setHasVariants(e.target.checked); setVariantRows([]); }}
-                  className="h-4 w-4 rounded"
-                />
-                This product has multiple variants (Color, Size, etc.)
-              </label>
-            </div>
-
-            {!hasVariants ? (
-              // Single variant
-              <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-                <p className="text-sm font-medium text-gray-700">Single Variant</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="Price *">
-                    <input type="number" min={0} step={0.01} className="input" value={singlePrice} onChange={(e) => setSinglePrice(e.target.value)} placeholder="0.00" />
-                  </Field>
-                  <Field label="Stock">
-                    <input type="number" min={0} className="input" value={singleStock} onChange={(e) => setSingleStock(e.target.value)} placeholder="0" />
-                  </Field>
-                  <Field label="SKU">
-                    <input className="input" value={singleSku} onChange={(e) => setSingleSku(e.target.value)} placeholder="SKU" />
-                  </Field>
-                </div>
-              </div>
-            ) : (
-              // Multi-variant
-              <>
-                {options.map((opt, oi) => (
-                  <div key={oi} className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-gray-500">Option Name</label>
-                        <input
-                          list={`opt-suggestions-${oi}`}
-                          className="input"
-                          value={opt.name}
-                          onChange={(e) => {
-                            const next = [...options];
-                            next[oi] = { ...next[oi], name: e.target.value };
-                            setOptions(next);
-                          }}
-                          placeholder="e.g. Color"
-                        />
-                        <datalist id={`opt-suggestions-${oi}`}>
-                          {VARIANT_NAME_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
-                        </datalist>
-                      </div>
-                      {options.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setOptions(options.filter((_, i) => i !== oi))}
-                          className="mt-5 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-500">Values (click to add)</label>
-                      {VARIANT_VALUE_PRESETS[opt.name] && (
-                        <div className="mb-2 flex flex-wrap gap-1">
-                          {VARIANT_VALUE_PRESETS[opt.name].map((v) => (
-                            <button
-                              key={v}
-                              type="button"
-                              onClick={() => {
-                                const next = [...options];
-                                const vals = next[oi].values;
-                                next[oi] = {
-                                  ...next[oi],
-                                  values: vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v],
-                                };
-                                setOptions(next);
-                              }}
-                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                opt.values.includes(v) ? "bg-portal-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-portal-400"
-                              }`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <CustomValueInput
-                        values={opt.values}
-                        onChange={(vals) => {
-                          const next = [...options];
-                          next[oi] = { ...next[oi], values: vals };
-                          setOptions(next);
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => setOptions([...options, { name: "", values: [] }])}
-                  className="btn-secondary inline-flex items-center gap-1.5 text-sm"
-                >
-                  <Plus className="h-4 w-4" /> Add Option
-                </button>
-
-                {/* Variant rows */}
-                {variantRows.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-700">
-                      {variantRows.length} Variant{variantRows.length !== 1 ? "s" : ""}
-                    </h3>
-                    {variantRows.map((row, ri) => (
-                      <div key={ri} className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3">
-                        <div className="flex flex-wrap gap-1 flex-1">
-                          {Object.entries(row.combination).map(([k, v]) => (
-                            <span key={k} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                              {k}: {v}
-                            </span>
-                          ))}
-                        </div>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          placeholder="Price *"
-                          value={row.price}
-                          onChange={(e) => {
-                            const next = [...variantRows];
-                            next[ri] = { ...next[ri], price: e.target.value };
-                            setVariantRows(next);
-                          }}
-                          className="input w-24 text-sm"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="Stock"
-                          value={row.stock}
-                          onChange={(e) => {
-                            const next = [...variantRows];
-                            next[ri] = { ...next[ri], stock: e.target.value };
-                            setVariantRows(next);
-                          }}
-                          className="input w-20 text-sm"
-                        />
-                        <input
-                          placeholder="SKU"
-                          value={row.sku}
-                          onChange={(e) => {
-                            const next = [...variantRows];
-                            next[ri] = { ...next[ri], sku: e.target.value };
-                            setVariantRows(next);
-                          }}
-                          className="input w-24 text-sm"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            <p className="text-xs text-gray-400">Images are optional — you can add them later.</p>
           </>
         )}
 
