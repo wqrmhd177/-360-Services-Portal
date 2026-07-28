@@ -73,9 +73,14 @@ export default function NewProductPage() {
   const [description, setDescription] = useState("");
   const [packageIncludes, setPackageIncludes] = useState<string[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  // Shared images used when sameImageForAllVariants is true
+  const [sharedVariantImages, setSharedVariantImages] = useState<string[]>([]);
+  const [uploadingShared, setUploadingShared] = useState(false);
   // Per-variant upload tracking: index → true means that zone is uploading
   const [uploadingVariant, setUploadingVariant] = useState<Record<number, boolean>>({});
   const [uploading, setUploading] = useState(false);
+  // Whether all variants share the same images
+  const [sameImageForAllVariants, setSameImageForAllVariants] = useState(false);
 
   // Step 2: Variants
   const [hasVariants, setHasVariants] = useState(false);
@@ -153,6 +158,16 @@ export default function NewProductPage() {
     }
   }
 
+  async function handleSharedVariantImageUpload(files: FileList | null) {
+    setUploadingShared(true);
+    try {
+      const urls = await uploadFilesToStorage(files);
+      setSharedVariantImages((prev) => [...prev, ...urls]);
+    } finally {
+      setUploadingShared(false);
+    }
+  }
+
   // ── Validation ──
   function validateStep1() {
     if (!supplierId) { setError("Please select a supplier"); return false; }
@@ -204,15 +219,20 @@ export default function NewProductPage() {
 
       // Insert variants
       if (hasVariants && variantRows.length > 0) {
-        const variantInserts = variantRows.map((r) => ({
-          product_id: productId,
-          option_values: r.combination,
-          price: parseFloat(r.price) || 0,
-          stock: parseInt(r.stock) || 0,
-          sku: r.sku || null,
-          image: r.images.length > 0 ? r.images : null,
-          active: true,
-        }));
+        const variantInserts = variantRows.map((r) => {
+          const imgs = sameImageForAllVariants
+            ? sharedVariantImages
+            : r.images;
+          return {
+            product_id: productId,
+            option_values: r.combination,
+            price: parseFloat(r.price) || 0,
+            stock: parseInt(r.stock) || 0,
+            sku: r.sku || null,
+            image: imgs.length > 0 ? imgs : null,
+            active: true,
+          };
+        });
         const { error: varErr } = await supabase
           .from("pl_product_variants")
           .insert(variantInserts);
@@ -553,59 +573,44 @@ export default function NewProductPage() {
                 </Field>
               </>
             ) : (
-              /* Multi-variant — one upload zone per variant */
+              /* Multi-variant */
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">
-                  Upload images for each variant — each variant can have its own photos.
-                </p>
-                {variantRows.map((row, ri) => (
-                  <div key={ri} className="rounded-xl border border-gray-200 p-4 space-y-3">
-                    {/* Variant label pills */}
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(row.combination).map(([k, v]) => (
-                        <span
-                          key={k}
-                          className="rounded-full bg-portal-100 px-2.5 py-0.5 text-xs font-medium text-portal-700"
-                        >
-                          {k}: {v}
-                        </span>
-                      ))}
-                    </div>
+                {/* Same-images checkbox */}
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100">
+                  <input
+                    type="checkbox"
+                    checked={sameImageForAllVariants}
+                    onChange={(e) => setSameImageForAllVariants(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                  />
+                  All variants share the same images
+                </label>
 
-                    {/* Upload zone */}
-                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
+                {sameImageForAllVariants ? (
+                  /* Single shared upload zone */
+                  <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+                    <p className="text-xs text-gray-500">
+                      These images will be applied to all {variantRows.length} variant{variantRows.length !== 1 ? "s" : ""}.
+                    </p>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
                       <Upload className="h-4 w-4" />
-                      {uploadingVariant[ri] ? "Uploading…" : "Click to upload images"}
+                      {uploadingShared ? "Uploading…" : "Click to upload shared images"}
                       <input
                         type="file"
                         multiple
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleVariantImageUpload(ri, e.target.files)}
+                        onChange={(e) => handleSharedVariantImageUpload(e.target.files)}
                       />
                     </label>
-
-                    {/* Thumbnails */}
-                    {row.images.length > 0 && (
+                    {sharedVariantImages.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {row.images.map((url, ii) => (
-                          <div key={ii} className="relative">
-                            <img
-                              src={url}
-                              alt=""
-                              className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
-                            />
+                        {sharedVariantImages.map((url, i) => (
+                          <div key={i} className="relative">
+                            <img src={url} alt="" className="h-16 w-16 rounded-lg border border-gray-200 object-cover" />
                             <button
                               type="button"
-                              onClick={() =>
-                                setVariantRows((prev) =>
-                                  prev.map((r, i) =>
-                                    i === ri
-                                      ? { ...r, images: r.images.filter((_, j) => j !== ii) }
-                                      : r
-                                  )
-                                )
-                              }
+                              onClick={() => setSharedVariantImages((prev) => prev.filter((_, j) => j !== i))}
                               className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
                             >
                               <X className="h-3 w-3" />
@@ -615,7 +620,65 @@ export default function NewProductPage() {
                       </div>
                     )}
                   </div>
-                ))}
+                ) : (
+                  /* One upload zone per variant */
+                  variantRows.map((row, ri) => (
+                    <div key={ri} className="rounded-xl border border-gray-200 p-4 space-y-3">
+                      {/* Variant label pills */}
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(row.combination).map(([k, v]) => (
+                          <span
+                            key={k}
+                            className="rounded-full bg-portal-100 px-2.5 py-0.5 text-xs font-medium text-portal-700"
+                          >
+                            {k}: {v}
+                          </span>
+                        ))}
+                      </div>
+
+                      <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500 hover:border-portal-400 hover:text-portal-600">
+                        <Upload className="h-4 w-4" />
+                        {uploadingVariant[ri] ? "Uploading…" : "Click to upload images"}
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleVariantImageUpload(ri, e.target.files)}
+                        />
+                      </label>
+
+                      {row.images.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {row.images.map((url, ii) => (
+                            <div key={ii} className="relative">
+                              <img
+                                src={url}
+                                alt=""
+                                className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setVariantRows((prev) =>
+                                    prev.map((r, i) =>
+                                      i === ri
+                                        ? { ...r, images: r.images.filter((_, j) => j !== ii) }
+                                        : r
+                                    )
+                                  )
+                                }
+                                className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -645,10 +708,17 @@ export default function NewProductPage() {
               )}
               {!hasVariants && singlePrice && <ReviewRow label="Price" value={singlePrice} />}
               {hasVariants ? (
-                <ReviewRow
-                  label="Images"
-                  value={`${variantRows.reduce((s, r) => s + r.images.length, 0)} image${variantRows.reduce((s, r) => s + r.images.length, 0) !== 1 ? "s" : ""} across ${variantRows.length} variant${variantRows.length !== 1 ? "s" : ""}`}
-                />
+                sameImageForAllVariants ? (
+                  <ReviewRow
+                    label="Images"
+                    value={`${sharedVariantImages.length} shared image${sharedVariantImages.length !== 1 ? "s" : ""} → all ${variantRows.length} variants`}
+                  />
+                ) : (
+                  <ReviewRow
+                    label="Images"
+                    value={`${variantRows.reduce((s, r) => s + r.images.length, 0)} image${variantRows.reduce((s, r) => s + r.images.length, 0) !== 1 ? "s" : ""} across ${variantRows.length} variant${variantRows.length !== 1 ? "s" : ""}`}
+                  />
+                )
               ) : (
                 <ReviewRow label="Images" value={`${imageUrls.length} image${imageUrls.length !== 1 ? "s" : ""}`} />
               )}
