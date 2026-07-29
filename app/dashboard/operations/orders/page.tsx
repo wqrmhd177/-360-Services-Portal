@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { defaultOrdersSearchParams } from "@/components/operations/OrdersAnalyticsSection";
 import {
-  defaultOrdersSearchParams,
-  OrdersAnalyticsSection,
-} from "@/components/operations/OrdersAnalyticsSection";
+  OrdersChartsSection,
+  OrdersSlaSection,
+  OrdersStatusSection,
+} from "@/components/operations/OrdersKpiChartsSections";
 import { OrdersPageShell } from "@/components/operations/OrdersPageShell";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
 import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
@@ -48,9 +50,17 @@ export default async function OrdersPage({
       }}
       lastSyncedAt={lastSync?.synced_at ?? null}
     >
-      <Suspense fallback={<PortalPageLoading label="Loading operations analytics" />}>
-        <OrdersAnalyticsSection searchParams={sp} />
-      </Suspense>
+      <section className="space-y-6">
+        <Suspense fallback={<PortalPageLoading label="Loading status KPIs" />}>
+          <OrdersStatusSection searchParams={sp} />
+        </Suspense>
+        <Suspense fallback={<PortalPageLoading label="Loading SLA metrics" />}>
+          <OrdersSlaSection searchParams={sp} />
+        </Suspense>
+        <Suspense fallback={<PortalPageLoading label="Loading charts" />}>
+          <OrdersChartsSection searchParams={sp} />
+        </Suspense>
+      </section>
     </OrdersPageShell>
   );
 }

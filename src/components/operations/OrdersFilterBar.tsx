@@ -106,12 +106,12 @@ function OrdersFilterBarInner({
           showStoreFilter
             ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5"
             : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+          isPending && "opacity-70",
         )}
       >
         <FilterSelect
           label="Country"
           value={country}
-          disabled={isPending}
           onChange={(value) => updateParam("country", value)}
         >
           <option value="">All countries</option>
@@ -125,7 +125,6 @@ function OrdersFilterBarInner({
         <FilterSelect
           label="Bifurcation"
           value={bifurcation}
-          disabled={isPending}
           onChange={(value) => updateParam("bifurcation", value)}
         >
           <option value="">All bifurcations</option>
@@ -139,7 +138,6 @@ function OrdersFilterBarInner({
         {showStoreFilter ? (
           <StoreIdSearchSelect
             value={storeId}
-            disabled={isPending}
             onChange={(value) => updateParam("store_id", value)}
             options={
               options.storeOptions ??
@@ -159,8 +157,7 @@ function OrdersFilterBarInner({
           <button
             type="button"
             onClick={clearFacetFilters}
-            disabled={isPending}
-            className="text-xs font-medium text-teal-600 hover:underline disabled:opacity-50"
+            className="text-xs font-medium text-teal-600 hover:underline"
           >
             Clear filters
           </button>

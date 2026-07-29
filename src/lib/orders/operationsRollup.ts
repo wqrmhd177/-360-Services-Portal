@@ -23,6 +23,20 @@ import {
 import { fetchOrdersRollupRows } from "@/lib/orders/rollupQuery";
 import { getOpsDb } from "@/lib/operations/opsDb";
 
+async function fetchRollupSummaryRpc<T>(
+  rpcName: string,
+  filters: OrdersFilterParams,
+  fallback: () => Promise<T[]>,
+): Promise<T[]> {
+  const supabase = getOpsDb();
+  const { data, error } = await supabase.rpc(rpcName, toRpcFilterParams(filters));
+  if (!error && data != null) {
+    const rows = (Array.isArray(data) ? data : []) as T[];
+    return rows;
+  }
+  return fallback();
+}
+
 type StatusRollupDbRow = {
   status: string | null;
   order_count: number | null;
@@ -197,10 +211,15 @@ export function mapDeliveryPartnerRollupRows(
 export async function fetchDeliveryPartnerByCountry(
   filters: OrdersFilterParams,
 ): Promise<DeliveryPartnerByCountryData> {
-  const rows = await fetchOrdersRollupRows<DeliveryPartnerRollupRow>(
-    "ops_orders_delivery_partner_rollup",
+  const rows = await fetchRollupSummaryRpc<DeliveryPartnerRollupRow>(
+    "get_ops_orders_delivery_partner_summary",
     filters,
-    "country, delivery_partner, status, order_count, revenue_usd, units",
+    () =>
+      fetchOrdersRollupRows<DeliveryPartnerRollupRow>(
+        "ops_orders_delivery_partner_rollup",
+        filters,
+        "country, delivery_partner, status, order_count, revenue_usd, units",
+      ),
   );
   return mapDeliveryPartnerRollupRows(rows);
 }
@@ -357,12 +376,34 @@ export function mapRevenueLossRollupRows(rows: RevenueLossRollupRow[]): RevenueL
 export async function fetchRevenueLossBreakdown(
   filters: OrdersFilterParams,
 ): Promise<RevenueLossRow[]> {
-  const rows = await fetchOrdersRollupRows<RevenueLossRollupRow>(
-    "ops_orders_revenue_loss_rollup",
+  const rows = await fetchRollupSummaryRpc<RevenueLossRollupRow>(
+    "get_ops_orders_revenue_loss_summary",
     filters,
-    "tag, dispatch_label, order_count, revenue_usd, units",
+    () =>
+      fetchOrdersRollupRows<RevenueLossRollupRow>(
+        "ops_orders_revenue_loss_rollup",
+        filters,
+        "tag, dispatch_label, order_count, revenue_usd, units",
+      ),
   );
   return mapRevenueLossRollupRows(rows);
+}
+
+export async function fetchFulfillmentSlaFromDb(
+  filters: OrdersFilterParams,
+  sampleSize: number,
+): Promise<FulfillmentSLA> {
+  const rows = await fetchRollupSummaryRpc<SlaRollupRow>(
+    "get_ops_orders_sla_summary",
+    filters,
+    () =>
+      fetchOrdersRollupRows<SlaRollupRow>(
+        "ops_orders_sla_rollup",
+        filters,
+        "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
+      ),
+  );
+  return mapSlaRollupRows(rows, sampleSize);
 }
 
 type CountrySlaTotals = {
@@ -497,10 +538,5 @@ export async function fetchFulfillmentSla(
   filters: OrdersFilterParams,
   sampleSize: number,
 ): Promise<FulfillmentSLA> {
-  const rows = await fetchOrdersRollupRows<SlaRollupRow>(
-    "ops_orders_sla_rollup",
-    filters,
-    "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
-  );
-  return mapSlaRollupRows(rows, sampleSize);
+  return fetchFulfillmentSlaFromDb(filters, sampleSize);
 }

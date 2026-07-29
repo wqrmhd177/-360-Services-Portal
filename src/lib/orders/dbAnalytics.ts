@@ -8,75 +8,113 @@ import {
 import { parseDateRange, parseFilters, serializeDateRange } from "@/lib/orders/params";
 import {
   fetchDeliveryPartnerByCountry,
+  fetchFulfillmentSlaFromDb,
   fetchOperationsStatusCounts,
   fetchRevenueLossBreakdown,
-  mapSlaRollupRows,
 } from "@/lib/orders/operationsRollup";
-import { fetchOrdersRollupRows } from "@/lib/orders/rollupQuery";
 import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
 import { fetchStoreVisibilityTables } from "@/lib/orders/storeVisibilityRollup";
 import { getLastSync } from "@/lib/operations/opsDb";
 import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
-/** Orders page analytics — all widgets from materialized views (no line-item load). */
-export async function getOperationsAnalyticsFromDb(
+/** Fastest: status KPI cards only. */
+export async function getOperationsStatusKpisFromDb(
   searchParams: Record<string, string | string[] | undefined>,
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
 
-  type SlaRollupRow = {
-    country: string | null;
-    confirm_days_sum: number | null;
-    confirm_count: number | null;
-    deliver_days_sum: number | null;
-    deliver_count: number | null;
-    return_days_sum: number | null;
-    return_count: number | null;
-    ship_days_sum: number | null;
-    ship_count: number | null;
-    shipped_within_48h_count: number | null;
-  };
-
-  const [
-    counts,
-    operationsStatusCounts,
-    revenueLossBreakdown,
-    deliveryPartnerByCountry,
-    slaRows,
-    filterOptions,
-    lastSync,
-  ] = await Promise.all([
+  const [counts, operationsStatusCounts] = await Promise.all([
     fetchOrderCounts(dbFilters),
     fetchOperationsStatusCounts(dbFilters),
-    fetchRevenueLossBreakdown(dbFilters),
-    fetchDeliveryPartnerByCountry(dbFilters),
-    fetchOrdersRollupRows<SlaRollupRow>(
-      "ops_orders_sla_rollup",
-      dbFilters,
-      "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
-    ),
-    fetchCachedFilterOptionsFromDb(),
-    getLastSync("orders"),
   ]);
-
-  const fulfillmentSLA = mapSlaRollupRows(slaRows, counts.filteredCount);
-
-  const statusCounts = {
-    ...operationsStatusCounts,
-    totalOrders: counts.filteredCount,
-  };
 
   return {
     range,
     filters,
     filteredCount: counts.filteredCount,
-    lastSyncedAt: lastSync?.synced_at ?? null,
+    operationsStatusCounts: {
+      ...operationsStatusCounts,
+      totalOrders: counts.filteredCount,
+    },
+  };
+}
+
+/** SLA KPI cards (may be slower without summary RPC). */
+export async function getOperationsSlaFromDb(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const range = parseDateRange(searchParams);
+  const filters = parseFilters(searchParams);
+  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const counts = await fetchOrderCounts(dbFilters);
+  const fulfillmentSLA = await fetchFulfillmentSlaFromDb(
+    dbFilters,
+    counts.filteredCount,
+  );
+
+  return {
+    range,
+    filters,
+    filteredCount: counts.filteredCount,
     fulfillmentSLA,
-    operationsStatusCounts: statusCounts,
+  };
+}
+
+/** Fast path: SLA + status KPI cards. */
+export async function getOperationsKpisFromDb(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const [status, sla] = await Promise.all([
+    getOperationsStatusKpisFromDb(searchParams),
+    getOperationsSlaFromDb(searchParams),
+  ]);
+
+  return {
+    ...status,
+    fulfillmentSLA: sla.fulfillmentSLA,
+  };
+}
+
+/** Slower charts: delivery partner + revenue loss. */
+export async function getOperationsChartsFromDb(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const range = parseDateRange(searchParams);
+  const filters = parseFilters(searchParams);
+  const dbFilters = searchParamsToFilterParams(searchParams, range);
+
+  const [counts, revenueLossBreakdown, deliveryPartnerByCountry] = await Promise.all([
+    fetchOrderCounts(dbFilters),
+    fetchRevenueLossBreakdown(dbFilters),
+    fetchDeliveryPartnerByCountry(dbFilters),
+  ]);
+
+  return {
+    range,
+    filters,
+    filteredCount: counts.filteredCount,
     revenueLossBreakdown,
     deliveryPartnerByCountry,
+  };
+}
+
+/** Orders page analytics — combined (API route). */
+export async function getOperationsAnalyticsFromDb(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const [kpis, charts, filterOptions, lastSync] = await Promise.all([
+    getOperationsKpisFromDb(searchParams),
+    getOperationsChartsFromDb(searchParams),
+    fetchCachedFilterOptionsFromDb(),
+    getLastSync("orders"),
+  ]);
+
+  return {
+    ...kpis,
+    ...charts,
+    lastSyncedAt: lastSync?.synced_at ?? null,
     filterOptions: {
       countries: filterOptions.countries,
       bifurcations: filterOptions.bifurcations,

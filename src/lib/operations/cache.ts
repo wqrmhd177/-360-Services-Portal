@@ -1,5 +1,12 @@
 import { unstable_cache, revalidateTag } from "next/cache";
-import { getOperationsAnalyticsFromDb, getStoreVisibilityAnalyticsFromDb } from "@/lib/orders/dbAnalytics";
+import {
+  getOperationsAnalyticsFromDb,
+  getOperationsChartsFromDb,
+  getOperationsKpisFromDb,
+  getOperationsSlaFromDb,
+  getOperationsStatusKpisFromDb,
+  getStoreVisibilityAnalyticsFromDb,
+} from "@/lib/orders/dbAnalytics";
 import { getSkuPerformanceSummary } from "@/lib/operations/skuPerformance";
 import type { SkuPerformanceFilters } from "@/lib/operations/skuPerformance";
 import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
@@ -38,6 +45,54 @@ export async function getOperationsAnalyticsCached(
   const cached = unstable_cache(
     () => getOperationsAnalyticsFromDb(searchParams),
     ["ops-analytics", key],
+    { revalidate: 3600, tags: [OPS_DATA_TAG] },
+  );
+  return cached();
+}
+
+export async function getOperationsKpisCached(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const key = stableParamsKey(searchParams);
+  const cached = unstable_cache(
+    () => getOperationsKpisFromDb(searchParams),
+    ["ops-kpis", key],
+    { revalidate: 3600, tags: [OPS_DATA_TAG] },
+  );
+  return cached();
+}
+
+export async function getOperationsStatusKpisCached(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const key = stableParamsKey(searchParams);
+  const cached = unstable_cache(
+    () => getOperationsStatusKpisFromDb(searchParams),
+    ["ops-status-kpis", key],
+    { revalidate: 3600, tags: [OPS_DATA_TAG] },
+  );
+  return cached();
+}
+
+export async function getOperationsSlaCached(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const key = stableParamsKey(searchParams);
+  const cached = unstable_cache(
+    () => getOperationsSlaFromDb(searchParams),
+    ["ops-sla", key],
+    { revalidate: 3600, tags: [OPS_DATA_TAG] },
+  );
+  return cached();
+}
+
+export async function getOperationsChartsCached(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const key = stableParamsKey(searchParams);
+  const cached = unstable_cache(
+    () => getOperationsChartsFromDb(searchParams),
+    ["ops-charts", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
   return cached();

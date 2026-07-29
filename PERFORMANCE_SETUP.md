@@ -18,6 +18,7 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
    - Adds Finance / Growth / Procurement dashboard count RPCs
 
 4. **`patch_store_visibility_status_detail.sql`**
+5. **`patch_orders_rollup_summary_rpc.sql`** — SQL aggregation for SLA, delivery partner, revenue loss (fixes slow filter changes)
    - Adds `ops_orders_order_detail` and `ops_orders_product_rollup` MVs
    - Adds `get_ops_store_visibility_tables` and `get_ops_orders_status_detail` RPCs
    - Updates `refresh_ops_orders_summaries_simple()` to refresh the new MVs
