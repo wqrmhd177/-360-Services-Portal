@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
-import { isMovementsService } from "@/lib/serviceTypes";
+import { isMovementsService, isLogisticsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel, getRequestedQuantity } from "@/lib/qrPurchaseDetails";
 import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
 import PendingMovementSummary from "@/components/PendingMovementSummary";
@@ -248,13 +248,20 @@ export default function QuotationSummary({ qr, showMovementsActions = false, onQ
                                   })()}
                             </p>
                           </div>
-                          {detail.countryOfPurchase && (
-                            <div>
-                              <p className="text-gray-600">Purchase From</p>
-                              <p className="font-medium text-gray-900">
-                                {detail.countryOfPurchase}
-                              </p>
-                            </div>
+                          {isLogisticsService(qr?.service_needed ?? "") ? (
+                            detail.shipFrom ? (
+                              <div>
+                                <p className="text-gray-600">Ship From</p>
+                                <p className="font-medium text-gray-900">{detail.shipFrom}</p>
+                              </div>
+                            ) : null
+                          ) : (
+                            detail.countryOfPurchase ? (
+                              <div>
+                                <p className="text-gray-600">Purchase From</p>
+                                <p className="font-medium text-gray-900">{detail.countryOfPurchase}</p>
+                              </div>
+                            ) : null
                           )}
                           {detail.shipTo && (
                             <div className="col-span-2">

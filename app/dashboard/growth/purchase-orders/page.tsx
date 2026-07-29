@@ -138,7 +138,7 @@ export default function GrowthPurchaseOrdersPage() {
               <h3 className="text-lg font-semibold text-gray-900">{selectedPo.po_number || "Purchase Order"}</h3>
               <button type="button" onClick={() => setSelectedPo(null)} className="text-gray-400 hover:text-gray-600" aria-label="Close">✕</button>
             </div>
-            <PODetailCard po={selectedPo} />
+            <PODetailCard po={selectedPo} hidePaymentAmount hideFreight simplifiedImages />
           </div>
         </div>
       )}

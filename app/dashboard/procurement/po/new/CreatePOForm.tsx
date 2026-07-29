@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { createSupabaseClient } from "@/lib/supabaseClient";
 import type { PoProduct } from "@/types/workflows";
 
 const inputClass =
@@ -13,6 +14,7 @@ const emptyProductLine: PoProduct = {
   quantity: 0,
   rate: 0,
   amount: 0,
+  imageUrls: [],
 };
 
 export default function CreatePOForm({
@@ -24,6 +26,8 @@ export default function CreatePOForm({
   const [productLines, setProductLines] = useState<PoProduct[]>([{ ...emptyProductLine }]);
   const [supplierInvoiceFile, setSupplierInvoiceFile] = useState<File | null>(null);
   const [deliveryInvoiceFile, setDeliveryInvoiceFile] = useState<File | null>(null);
+  const [productImagePreviews, setProductImagePreviews] = useState<Record<number, string[]>>({});
+  const productImageFilesRef = useRef<Map<number, File[]>>(new Map());
   const supplierInvoiceRef = useRef<HTMLInputElement>(null);
   const deliveryInvoiceRef = useRef<HTMLInputElement>(null);
 
@@ -32,6 +36,18 @@ export default function CreatePOForm({
   }
 
   function removeProductLine(index: number) {
+    productImageFilesRef.current.delete(index);
+    setProductImagePreviews((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      // Reindex remaining keys
+      const reindexed: Record<number, string[]> = {};
+      Object.entries(next).forEach(([k, v]) => {
+        const ki = Number(k);
+        reindexed[ki > index ? ki - 1 : ki] = v;
+      });
+      return reindexed;
+    });
     setProductLines((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -48,6 +64,47 @@ export default function CreatePOForm({
     });
   }
 
+  function handleProductImageChange(lineIndex: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const current = productImageFilesRef.current.get(lineIndex) || [];
+    productImageFilesRef.current.set(lineIndex, [...current, ...files]);
+    setProductImagePreviews((prev) => ({
+      ...prev,
+      [lineIndex]: [...(prev[lineIndex] || []), ...files.map((f) => URL.createObjectURL(f))],
+    }));
+    e.target.value = "";
+  }
+
+  function removeProductImagePreview(lineIndex: number, imgIdx: number) {
+    const files = productImageFilesRef.current.get(lineIndex) || [];
+    productImageFilesRef.current.set(lineIndex, files.filter((_, i) => i !== imgIdx));
+    setProductImagePreviews((prev) => ({
+      ...prev,
+      [lineIndex]: (prev[lineIndex] || []).filter((_, i) => i !== imgIdx),
+    }));
+  }
+
+  async function uploadProductImages(): Promise<Record<number, string[]>> {
+    const supabase = createSupabaseClient();
+    const result: Record<number, string[]> = {};
+    for (const [lineIndex, files] of productImageFilesRef.current.entries()) {
+      if (!files.length) continue;
+      const urls: string[] = [];
+      for (const file of files) {
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `po-products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from("product-listing-images").upload(path, file, { upsert: false });
+        if (!error) {
+          const { data: urlData } = supabase.storage.from("product-listing-images").getPublicUrl(path);
+          urls.push(urlData.publicUrl);
+        }
+      }
+      if (urls.length) result[lineIndex] = urls;
+    }
+    return result;
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -61,15 +118,18 @@ export default function CreatePOForm({
         alert("Add at least one product line with name and quantity.");
         return;
       }
+      // Upload product images first
+      const uploadedUrls = await uploadProductImages();
       formData.set(
         "products",
         JSON.stringify(
-          validLines.map((p) => ({
+          validLines.map((p, i) => ({
             productName: p.productName.trim(),
             skuCode: p.skuCode?.trim() || undefined,
             quantity: Number(p.quantity),
             rate: Number(p.rate) || undefined,
             amount: Number(p.amount) || undefined,
+            imageUrls: uploadedUrls[i] || undefined,
           }))
         )
       );
@@ -204,6 +264,33 @@ export default function CreatePOForm({
                   >
                     Remove
                   </button>
+                </div>
+                {/* Per-product image upload */}
+                <div className="md:col-span-12 mt-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-600">Product Images</span>
+                    <label className="inline-flex cursor-pointer items-center rounded border border-gray-300 bg-white px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      Choose Files
+                      <input type="file" multiple accept="image/*" className="hidden"
+                        onChange={(e) => handleProductImageChange(index, e)} />
+                    </label>
+                  </div>
+                  {(productImagePreviews[index]?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {productImagePreviews[index].map((src, imgIdx) => (
+                        <div key={imgIdx} className="relative h-14 w-14 overflow-hidden rounded border border-gray-200 bg-gray-50">
+                          <img src={src} alt={`img ${imgIdx + 1}`} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeProductImagePreview(index, imgIdx)}
+                            className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                          >
+                            <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

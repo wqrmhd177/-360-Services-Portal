@@ -4,11 +4,20 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Qr } from "@/types/workflows";
 import { formatQrStatusLabel } from "@/lib/format";
-import { isMovementsService } from "@/lib/serviceTypes";
+import { isMovementsService, isLogisticsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import MovementsPostResponsePanel from "@/components/MovementsPostResponsePanel";
 import PendingMovementSummary from "@/components/PendingMovementSummary";
 import { qrHasPendingMovement } from "@/lib/qrPurchaseDetails";
+
+function ReadField({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`space-y-0.5 ${wide ? "sm:col-span-2 md:col-span-3" : ""}`}>
+      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <div className="text-sm text-gray-900">{value || "—"}</div>
+    </div>
+  );
+}
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -194,6 +203,138 @@ export default function GrowthQrViewPage({ params }: { params: { id: string } })
           <PendingMovementSummary qr={qr} />
         </div>
       )}
+
+      {/* QR Details — consolidated read-only view of all creation fields */}
+      {qr.purchase_details && Array.isArray(qr.purchase_details) && qr.purchase_details.length > 0 && (() => {
+        const isLogistics = isLogisticsService(qr.service_needed ?? "");
+        return (
+          <div className="card">
+            <h3 className="mb-4 text-sm font-semibold text-gray-900">QR Details</h3>
+            <div className="space-y-4">
+              {(qr.purchase_details as any[]).map((detail: any, index: number) => (
+                <div key={index} className={`${qr.purchase_details!.length > 1 ? "rounded-lg border border-gray-100 bg-gray-50/50 p-4" : ""}`}>
+                  {qr.purchase_details!.length > 1 && (
+                    <p className="mb-3 text-xs font-semibold text-gray-600 uppercase">Product {index + 1}</p>
+                  )}
+                  {isLogistics ? (
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                      {detail.productName && (
+                        <ReadField label="Product Name" value={detail.productName} />
+                      )}
+                      {detail.shipFrom && (
+                        <ReadField label="Ship From" value={detail.shipFrom} />
+                      )}
+                      {detail.shipTo && (
+                        <ReadField label="Ship To" value={detail.shipTo} />
+                      )}
+                      {detail.shippingType && (
+                        <ReadField label="Shipping Type" value={detail.shippingType} />
+                      )}
+                      {detail.productType && (
+                        <ReadField label="Product Type" value={detail.productType} />
+                      )}
+                      {detail.hasBrand && (
+                        <ReadField label="Brand" value={detail.hasBrand} />
+                      )}
+                      {detail.noOfCartons != null && (
+                        <ReadField label="No of Cartons" value={String(detail.noOfCartons)} />
+                      )}
+                      {detail.weightPerCarton != null && (
+                        <ReadField label="Weight per Carton" value={`${detail.weightPerCarton} kg`} />
+                      )}
+                      {(detail.cartonLength || detail.cartonWidth || detail.cartonHeight) && (
+                        <ReadField
+                          label="Carton Dimensions (L×W×H cm)"
+                          value={`${detail.cartonLength ?? "-"} × ${detail.cartonWidth ?? "-"} × ${detail.cartonHeight ?? "-"}`}
+                        />
+                      )}
+                      {detail.remarks && (
+                        <ReadField label="Remarks" value={detail.remarks} wide />
+                      )}
+                      {/* Packing list attachments */}
+                      {detail.imagePaths && Array.isArray(detail.imagePaths) && detail.imagePaths.length > 0 && (
+                        <div className="sm:col-span-2 md:col-span-3 space-y-1">
+                          <label className="text-xs font-medium text-gray-500">Packing List / Attachments</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(detail.imagePaths as string[]).map((path: string, ii: number) => {
+                              const url = path.startsWith("http") ? path : `${SUPABASE_URL}/storage/v1/object/public/qr-attachments/${path}`;
+                              const isDoc = !url.match(/\.(png|jpe?g|gif|webp)(\?|$)/i);
+                              return isDoc ? (
+                                <a key={ii} href={url} target="_blank" rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-100 px-2 py-1 text-xs text-gray-600 hover:bg-gray-200">
+                                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                  {path.split("/").pop()}
+                                </a>
+                              ) : (
+                                <button key={ii} type="button" onClick={() => window.open(url, "_blank")}
+                                  className="h-12 w-12 shrink-0 overflow-hidden rounded border border-gray-200 bg-gray-50 hover:opacity-90">
+                                  <img src={url} alt={`attachment ${ii + 1}`} className="h-full w-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                      {detail.productName && !isMovements && (
+                        <ReadField label="Product Name" value={detail.productName} />
+                      )}
+                      {isMovements && (
+                        <ReadField label="Movement" value={`${detail.fromSku ?? "-"} → ${detail.toSku ?? "-"}`} />
+                      )}
+                      {(detail.destinationCountries?.length || detail.destinationCountry) && (
+                        <ReadField
+                          label="Destination"
+                          value={detail.destinationCountries?.join(", ") ?? detail.destinationCountry}
+                        />
+                      )}
+                      {detail.countryDetails && Array.isArray(detail.countryDetails) && detail.countryDetails.length > 0
+                        ? detail.countryDetails.map((cd: any, ci: number) => (
+                            <ReadField
+                              key={ci}
+                              label={`${cd.country} — Qty / Target Price`}
+                              value={`${cd.quantity ?? 0} · ${formatTargetPrice(cd.targetPrice, cd.country, cd.currency)}`}
+                            />
+                          ))
+                        : detail.quantity != null && (
+                            <ReadField label="Qty / Target Price" value={`${detail.quantity} · ${formatTargetPrice(detail.targetPrice, detail.destinationCountry ?? "")}`} />
+                          )
+                      }
+                      {detail.shipToAddress && (
+                        <ReadField label="Ship To Address" value={detail.shipToAddress} wide />
+                      )}
+                      {detail.remarks && (
+                        <ReadField label="Remarks" value={detail.remarks} wide />
+                      )}
+                      {/* Reference images */}
+                      {detail.imagePaths && Array.isArray(detail.imagePaths) && detail.imagePaths.length > 0 && (
+                        <div className="sm:col-span-2 md:col-span-3 space-y-1">
+                          <label className="text-xs font-medium text-gray-500">Reference Images</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(detail.imagePaths as string[]).map((path: string, ii: number) => {
+                              const url = path.startsWith("http") ? path : `${SUPABASE_URL}/storage/v1/object/public/qr-attachments/${path}`;
+                              return (
+                                <button key={ii} type="button" onClick={() => window.open(url, "_blank")}
+                                  className="h-12 w-12 shrink-0 overflow-hidden rounded border border-gray-200 bg-gray-50 hover:opacity-90">
+                                  <img src={url} alt={`img ${ii + 1}`} className="h-full w-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Purchase Details - compact table: one row per product */}
       {qr.purchase_details && Array.isArray(qr.purchase_details) && qr.purchase_details.length > 0 && (

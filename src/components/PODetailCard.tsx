@@ -12,12 +12,21 @@ interface PODetailCardProps {
   po: Po;
   showFullDetails?: boolean;
   className?: string;
+  /** When true, hides supplier payment amount (used on supplier-facing view). */
+  hidePaymentAmount?: boolean;
+  /** When true, hides freight cost column in product table. */
+  hideFreight?: boolean;
+  /** When true, strips combination/routing labels from procurement images. */
+  simplifiedImages?: boolean;
 }
 
 export default function PODetailCard({
   po,
   showFullDetails = true,
   className = "",
+  hidePaymentAmount = false,
+  hideFreight = false,
+  simplifiedImages = false,
 }: PODetailCardProps) {
   const [userNames, setUserNames] = useState<Record<string, string>>({});
 
@@ -125,7 +134,7 @@ export default function PODetailCard({
         </div>
 
         {showFullDetails && (
-          <ProcurementImagesSection poId={po.id} />
+          <ProcurementImagesSection poId={po.id} simplified={simplifiedImages} />
         )}
 
         {/* Products / Line items (independent POs or when po.products is present) */}
@@ -138,6 +147,7 @@ export default function PODetailCard({
               <PoProductsTable
                 products={po.products}
                 isIndependent={!po.pr_id}
+                hideFreight={hideFreight}
               />
             </div>
           </div>
@@ -162,7 +172,7 @@ export default function PODetailCard({
                   {po.supplier_location}
                 </p>
               </div>
-              {po.supplier_payment_amount != null && (
+              {po.supplier_payment_amount != null && !hidePaymentAmount && (
                 <div>
                   <p className="text-sm text-gray-600">Payment Amount</p>
                   <p className="text-sm font-medium text-gray-900">

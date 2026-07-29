@@ -8,12 +8,15 @@ interface ProcurementImagesSectionProps {
   poId: string;
   className?: string;
   variant?: "card" | "inline";
+  /** When true, suppress combination/routing label text; show only the product name above images. */
+  simplified?: boolean;
 }
 
 export default function ProcurementImagesSection({
   poId,
   className = "",
   variant = "inline",
+  simplified = false,
 }: ProcurementImagesSectionProps) {
   const [groups, setGroups] = useState<ProcurementImageGroup[]>([]);
   const [qrNumber, setQrNumber] = useState<string | null>(null);
@@ -79,7 +82,9 @@ export default function ProcurementImagesSection({
         {groups.map((group, idx) => (
           <div key={`${group.productName}-${group.label}-${idx}`}>
             <p className="text-sm font-medium text-gray-900">{group.productName}</p>
-            <p className="text-xs text-gray-500 mb-2">{group.label}</p>
+            {!simplified && (
+              <p className="text-xs text-gray-500 mb-2">{group.label}</p>
+            )}
             <ImageGallery
               images={group.imageUrls}
               alt={`${group.productName} procurement`}

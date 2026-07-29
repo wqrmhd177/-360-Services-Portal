@@ -40,12 +40,27 @@ interface PoProductsTableProps {
   products: ProductRow[];
   isIndependent?: boolean;
   compact?: boolean;
+  /** When true, hides the Freight Cost column and excludes freight from line totals. */
+  hideFreight?: boolean;
+}
+
+function lineTotalProductOnly(item: ProductRow): number | null {
+  const qty = Number(item.quantity) || 0;
+  const product =
+    item.productCostAmount != null
+      ? Number(item.productCostAmount)
+      : item.productCostPerUnit != null
+        ? Number(item.productCostPerUnit) * qty
+        : 0;
+  if (product === 0 && item.amount == null && item.rate == null) return null;
+  return product;
 }
 
 export default function PoProductsTable({
   products,
   isIndependent,
   compact = false,
+  hideFreight = false,
 }: PoProductsTableProps) {
   if (!products.length) return null;
 
@@ -64,7 +79,7 @@ export default function PoProductsTable({
             {useCosts ? (
               <>
                 <th className={`${cellClass} font-medium`}>Product Cost</th>
-                <th className={`${cellClass} font-medium`}>Freight Cost</th>
+                {!hideFreight && <th className={`${cellClass} font-medium`}>Freight Cost</th>}
                 <th className={`${cellClass} font-medium`}>Line Total</th>
               </>
             ) : (
@@ -77,7 +92,7 @@ export default function PoProductsTable({
         </thead>
         <tbody>
           {products.map((item, idx) => {
-            const total = lineTotal(item);
+            const total = hideFreight ? lineTotalProductOnly(item) : lineTotal(item);
             return (
               <tr key={idx} className="border-b border-gray-100 last:border-0">
                 <td className={`${cellClass} font-medium text-gray-900`}>
@@ -88,7 +103,7 @@ export default function PoProductsTable({
                 {useCosts ? (
                   <>
                     <td className={cellClass}>{formatMoney(item.productCostPerUnit)}</td>
-                    <td className={cellClass}>{formatMoney(item.freightCostPerUnit)}</td>
+                    {!hideFreight && <td className={cellClass}>{formatMoney(item.freightCostPerUnit)}</td>}
                     <td className={cellClass}>
                       {total != null ? formatMoney(total) : "—"}
                     </td>

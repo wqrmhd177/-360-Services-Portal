@@ -107,7 +107,7 @@ export async function generatePoPdf(
   doc.text(`Location: ${po.supplier_location || "-"}`, margin, y);
   y += 5;
   doc.text(`Payment Status: ${po.supplier_payment_status || "-"}`, margin, y);
-  if (po.supplier_payment_amount) {
+  if (po.supplier_payment_amount && isInternal) {
     y += 5;
     doc.text(`Payment Amount: AED ${po.supplier_payment_amount.toFixed(2)}`, margin, y);
   }
@@ -162,18 +162,23 @@ export async function generatePoPdf(
       ];
     });
   } else {
-    tableHead = [["#", "Product Name", "SKU Code", "Qty", "Product Cost", "Freight Cost", "Total"]];
+    // Supplier PDF: hide freight cost column
+    tableHead = [["#", "Product Name", "SKU Code", "Qty", "Product Cost", "Total"]];
     tableRows = products.map((p, i) => {
       const pCurrency = (p as { currency?: string }).currency || currency;
-      const lineTotal = getSupplierLineTotal(p);
+      const productTotal =
+        p.productCostAmount != null
+          ? Number(p.productCostAmount)
+          : p.productCostPerUnit != null
+            ? Number(p.productCostPerUnit) * p.quantity
+            : 0;
       return [
         i + 1,
         p.productName || "-",
         p.skuCode || "-",
         p.quantity,
         formatMoney(pCurrency, p.productCostPerUnit),
-        formatMoney(pCurrency, p.freightCostPerUnit),
-        lineTotal > 0 ? formatMoney(pCurrency, lineTotal) : "-",
+        productTotal > 0 ? formatMoney(pCurrency, productTotal) : "-",
       ];
     });
   }
@@ -181,7 +186,7 @@ export async function generatePoPdf(
   if (tableRows.length === 0) {
     tableRows = isInternal
       ? [[1, "See linked PR for product details", "-", "-", "-", "-"]]
-      : [[1, "See linked PR for product details", "-", "-", "-", "-", "-"]];
+      : [[1, "See linked PR for product details", "-", "-", "-", "-"]];
   }
 
   autoTable(doc, {
@@ -191,20 +196,12 @@ export async function generatePoPdf(
     theme: "striped",
     headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: "bold", fontSize: 8 },
     bodyStyles: { fontSize: 7 },
-    columnStyles: isInternal
-      ? {
-          0: { cellWidth: 8 },
-          3: { halign: "center" },
-          4: { halign: "right" },
-          5: { halign: "right" },
-        }
-      : {
-          0: { cellWidth: 8 },
-          3: { halign: "center" },
-          4: { halign: "right" },
-          5: { halign: "right" },
-          6: { halign: "right" },
-        },
+    columnStyles: {
+      0: { cellWidth: 8 },
+      3: { halign: "center" },
+      4: { halign: "right" },
+      5: { halign: "right" },
+    },
     margin: { left: margin, right: margin },
   });
 
@@ -212,10 +209,17 @@ export async function generatePoPdf(
   let contentEndY = finalY;
 
   if (products.length > 0) {
-    const total = products.reduce(
-      (s, p) => s + (isInternal ? getInternalLineTotal(p) : getSupplierLineTotal(p)),
-      0
-    );
+    const total = products.reduce((s, p) => {
+      if (isInternal) return s + getInternalLineTotal(p);
+      // Supplier PDF: product cost only (freight hidden)
+      const productTotal =
+        p.productCostAmount != null
+          ? Number(p.productCostAmount)
+          : p.productCostPerUnit != null
+            ? Number(p.productCostPerUnit) * p.quantity
+            : 0;
+      return s + productTotal;
+    }, 0);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.text(`Total: ${currency} ${total.toFixed(2)}`, pageWidth - margin, finalY + 7, {
@@ -241,7 +245,8 @@ export async function generatePoPdf(
       procurementGroups,
       qrNumber,
       contentEndY,
-      margin
+      margin,
+      !isInternal
     );
   }
 

@@ -334,7 +334,7 @@ export default async function ProcurementPoDetailPage({ params }: { params: { id
 
       {canEditPo && <ProcurementPoEditForm po={po} />}
 
-      <ProcurementImagesSection poId={po.id} variant="card" />
+      <ProcurementImagesSection poId={po.id} variant="card" simplified />
 
       <PoPaymentAndInvoiceEditForm po={po} action={updatePoPaymentAndInvoices} />
 

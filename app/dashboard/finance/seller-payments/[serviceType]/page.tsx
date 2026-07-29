@@ -15,7 +15,13 @@ async function getSellerPaymentPRs(serviceType: string, isAdmin: boolean) {
     .order("created_at", { ascending: false });
 
   if (!isAdmin) {
-    query = query.eq("approval_status", "approved").neq("pr_status", "awaiting_payment");
+    // Movements PRs are shown at all statuses (no seller payment gating needed).
+    // All other services hide PRs that are already in awaiting_payment.
+    if (serviceType === "Movements") {
+      query = query.eq("approval_status", "approved");
+    } else {
+      query = query.eq("approval_status", "approved").neq("pr_status", "awaiting_payment");
+    }
   }
 
   const { data } = await query;

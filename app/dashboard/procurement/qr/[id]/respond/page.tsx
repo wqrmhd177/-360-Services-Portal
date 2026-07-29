@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Qr } from "@/types/workflows";
-import { isZambeelLikeService, isMovementsService } from "@/lib/serviceTypes";
+import { isZambeelLikeService, isMovementsService, isLogisticsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SkuSearchInput from "@/components/SkuSearchInput";
@@ -94,6 +94,8 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
   const [creatorName, setCreatorName] = useState<string | null>(null);
   /** Per combination row image previews (key: `${detailIndex}-${rowIndex}`). */
   const [combinationImagePreviews, setCombinationImagePreviews] = useState<Record<string, string[]>>({});
+  /** Logistics pricing basis per detail: per_kg | per_unit | lump_sum */
+  const [pricingBasisByDetail, setPricingBasisByDetail] = useState<Record<number, "per_kg" | "per_unit" | "lump_sum">>({});
   /** Per-detail inventory available (Movements only). */
   const [inventoryAvailableByDetail, setInventoryAvailableByDetail] = useState<
     Record<number, number | "">
@@ -277,9 +279,16 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
   function updateCost(index: number, field: "costPerUnit" | "freightCostPerUnit", value: number) {
     const updated = [...purchaseDetails];
     const row = { ...updated[index], [field]: value };
-    const cost = field === "costPerUnit" ? value : (row.costPerUnit ?? 0);
-    const freight = field === "freightCostPerUnit" ? value : (row.freightCostPerUnit ?? 0);
-    row.landedCostPerUnit = parseFloat((cost + freight).toFixed(2));
+    const isLogistics = isLogisticsService(qr?.service_needed ?? "");
+    if (isLogistics) {
+      // For logistics, landed = freight only (no product cost)
+      const freight = field === "freightCostPerUnit" ? value : (row.freightCostPerUnit ?? 0);
+      row.landedCostPerUnit = parseFloat(freight.toFixed(2));
+    } else {
+      const cost = field === "costPerUnit" ? value : (row.costPerUnit ?? 0);
+      const freight = field === "freightCostPerUnit" ? value : (row.freightCostPerUnit ?? 0);
+      row.landedCostPerUnit = parseFloat((cost + freight).toFixed(2));
+    }
     updated[index] = row;
     setPurchaseDetails(updated);
   }
@@ -408,6 +417,62 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
       return { ...prev, [detailIndex]: rows };
     });
     e.target.value = "";
+  }
+
+  function removeProcurementImagePreview(detailIndex: number, imgIdx: number) {
+    const files = procurementImageFilesRef.current.get(detailIndex) || [];
+    procurementImageFilesRef.current.set(detailIndex, files.filter((_, i) => i !== imgIdx));
+    setPurchaseDetails((prev) => {
+      const updated = [...prev];
+      const detail = { ...updated[detailIndex] };
+      detail.procurementImagePreviews = (detail.procurementImagePreviews || []).filter((_, i) => i !== imgIdx);
+      detail.procurementImages = procurementImageFilesRef.current.get(detailIndex) || [];
+      updated[detailIndex] = detail;
+      return updated;
+    });
+  }
+
+  function removeProcurementImagePath(detailIndex: number, imgIdx: number) {
+    setPurchaseDetails((prev) => {
+      const updated = [...prev];
+      const detail = { ...updated[detailIndex] };
+      detail.procurementImagePaths = (detail.procurementImagePaths || []).filter((_, i) => i !== imgIdx);
+      updated[detailIndex] = detail;
+      return updated;
+    });
+  }
+
+  function removeCombinationImagePreview(detailIndex: number, rowIndex: number, imgIdx: number) {
+    const key = `${detailIndex}-${rowIndex}`;
+    const files = combinationImageFilesRef.current.get(key) || [];
+    combinationImageFilesRef.current.set(key, files.filter((_, i) => i !== imgIdx));
+    setCombinationImagePreviews((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).filter((_, i) => i !== imgIdx),
+    }));
+  }
+
+  function removeWarehouseImagePreview(detailIndex: number, rowIndex: number, imgIdx: number) {
+    const key = `${detailIndex}-wh-${rowIndex}`;
+    const files = warehouseImageFilesRef.current.get(key) || [];
+    warehouseImageFilesRef.current.set(key, files.filter((_, i) => i !== imgIdx));
+    setWarehouseStockByDetail((prev) => {
+      const rows = [...(prev[detailIndex] || [])];
+      const row = { ...rows[rowIndex] };
+      row.procurementImagePreviews = (row.procurementImagePreviews || []).filter((_, i) => i !== imgIdx);
+      rows[rowIndex] = row;
+      return { ...prev, [detailIndex]: rows };
+    });
+  }
+
+  function removeWarehouseImagePath(detailIndex: number, rowIndex: number, imgIdx: number) {
+    setWarehouseStockByDetail((prev) => {
+      const rows = [...(prev[detailIndex] || [])];
+      const row = { ...rows[rowIndex] };
+      row.procurementImagePaths = (row.procurementImagePaths || []).filter((_, i) => i !== imgIdx);
+      rows[rowIndex] = row;
+      return { ...prev, [detailIndex]: rows };
+    });
   }
 
   function handleProcurementImageChange(index: number, e: React.ChangeEvent<HTMLInputElement>) {
@@ -1076,8 +1141,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                           {(combinationImagePreviews[`${index}-${rowIndex}`]?.length ?? 0) > 0 && (
                             <div className="grid grid-cols-4 gap-2 mt-1">
                               {combinationImagePreviews[`${index}-${rowIndex}`].map((src, imgIdx) => (
-                                <div key={`preview-${rowIndex}-${imgIdx}`} className="h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                                <div key={`preview-${rowIndex}-${imgIdx}`} className="relative h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
                                   <img src={src} alt={`New ${imgIdx + 1}`} className="h-full w-full object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCombinationImagePreview(index, rowIndex, imgIdx)}
+                                    className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                                  >
+                                    <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -1105,6 +1177,21 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                                         target.onerror = null;
                                       }}
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCombinationRows((prev) => {
+                                          const rows = [...(prev[index] || [])];
+                                          const r = { ...rows[rowIndex] };
+                                          r.procurementImagePaths = (r.procurementImagePaths || []).filter((_, i) => i !== imgIdx);
+                                          rows[rowIndex] = r;
+                                          return { ...prev, [index]: rows };
+                                        });
+                                      }}
+                                      className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                                    >
+                                      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                    </button>
                                   </div>
                                 );
                               })}
@@ -1126,59 +1213,99 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                   </div>
                 ) : (
                   <>
-                    <div className="grid gap-3 md:grid-cols-[1fr,1fr,1fr,auto]">
-                      <div className="space-y-1">
-                        <label className="block text-xs font-medium text-gray-700">Cost per Unit <span className="text-red-600">*</span></label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={currentCostPerUnit}
-                          onChange={(e) => updateCost(index, "costPerUnit", Number(e.target.value) || 0)}
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-xs font-medium text-gray-700">Freight Cost per Unit <span className="text-red-600">*</span></label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={currentFreightCostPerUnit}
-                          onChange={(e) => updateCost(index, "freightCostPerUnit", Number(e.target.value) || 0)}
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-xs font-medium text-gray-700">Landed Cost per Unit <span className="text-gray-400 font-normal">(auto)</span></label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={currentLandedCostPerUnit}
-                          readOnly
-                          className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-600 cursor-not-allowed outline-none"
-                          placeholder="Cost + Freight"
-                        />
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {isSubmitted && savedResponse?.submittedAt && (
-                          <div className="text-[10px] text-gray-500 text-right">
-                            Submitted {new Date(savedResponse.submittedAt).toLocaleString()}
+                    {(() => {
+                      const isLogistics = isLogisticsService(qr?.service_needed ?? "");
+                      const basis = pricingBasisByDetail[index] ?? "per_unit";
+                      const isLumpSum = basis === "lump_sum";
+                      const basisLabel = basis === "per_kg" ? "per KG" : basis === "lump_sum" ? "(lump sum)" : "per Unit";
+                      return (
+                        <>
+                          {isLogistics && (
+                            <div className="mb-3 space-y-1">
+                              <label className="block text-xs font-medium text-gray-700">Pricing Basis <span className="text-red-600">*</span></label>
+                              <select
+                                value={basis}
+                                onChange={(e) => setPricingBasisByDetail((prev) => ({ ...prev, [index]: e.target.value as "per_kg" | "per_unit" | "lump_sum" }))}
+                                className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                              >
+                                <option value="per_unit">Per Unit</option>
+                                <option value="per_kg">Per KG</option>
+                                <option value="lump_sum">Lump Sum</option>
+                              </select>
+                            </div>
+                          )}
+                          <div className="grid gap-3 md:grid-cols-[1fr,1fr,1fr,auto]">
+                            {!isLogistics && (
+                              <div className="space-y-1">
+                                <label className="block text-xs font-medium text-gray-700">Cost per Unit <span className="text-red-600">*</span></label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={currentCostPerUnit}
+                                  onChange={(e) => updateCost(index, "costPerUnit", Number(e.target.value) || 0)}
+                                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            )}
+                            <div className="space-y-1">
+                              <label className="block text-xs font-medium text-gray-700">
+                                {isLogistics ? `Freight Cost ${basisLabel}` : "Freight Cost per Unit"} <span className="text-red-600">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={currentFreightCostPerUnit}
+                                onChange={(e) => updateCost(index, "freightCostPerUnit", Number(e.target.value) || 0)}
+                                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            {!isLumpSum && (
+                              <div className="space-y-1">
+                                <label className="block text-xs font-medium text-gray-700">
+                                  {isLogistics ? "Total Freight Cost" : "Landed Cost per Unit"} <span className="text-gray-400 font-normal">(auto)</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  value={isLogistics
+                                    ? (() => {
+                                        const rate = Number(currentFreightCostPerUnit) || 0;
+                                        const multiplier = basis === "per_kg"
+                                          ? ((detail as any).weightPerCarton ?? 0) * ((detail as any).noOfCartons ?? 0)
+                                          : (detail as any).quantity ?? 0;
+                                        return parseFloat((rate * multiplier).toFixed(2));
+                                      })()
+                                    : currentLandedCostPerUnit}
+                                  readOnly
+                                  className="w-full rounded-xl border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-600 cursor-not-allowed outline-none"
+                                  placeholder={isLogistics ? "Rate × Qty/Weight" : "Cost + Freight"}
+                                />
+                              </div>
+                            )}
+                            <div className="flex flex-col items-end gap-2">
+                              {isSubmitted && savedResponse?.submittedAt && (
+                                <div className="text-[10px] text-gray-500 text-right">
+                                  Submitted {new Date(savedResponse.submittedAt).toLocaleString()}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => submitCombination(index, !!isSubmitted)}
+                                disabled={submitting === index}
+                                className="btn-primary whitespace-nowrap"
+                              >
+                                {submitting === index ? "Submitting..." : isSubmitted ? "Update" : "Submit"}
+                              </button>
+                            </div>
                           </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => submitCombination(index, !!isSubmitted)}
-                          disabled={submitting === index}
-                          className="btn-primary whitespace-nowrap"
-                        >
-                          {submitting === index ? "Submitting..." : isSubmitted ? "Update" : "Submit"}
-                        </button>
-                      </div>
-                    </div>
+                        </>
+                      );
+                    })()}
                     <div className="mt-3 grid gap-3 md:grid-cols-[0.5fr,1.5fr]">
                       {isMovements && (
                         <div className="space-y-1 md:col-span-2">
@@ -1240,8 +1367,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                       {(detail.procurementImagePreviews?.length ?? 0) > 0 && (
                         <div className="grid grid-cols-4 gap-2 mt-1">
                           {detail.procurementImagePreviews?.map((src, imgIdx) => (
-                            <div key={`preview-${index}-${imgIdx}`} className="h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                            <div key={`preview-${index}-${imgIdx}`} className="relative h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
                               <img src={src} alt={`New ${imgIdx + 1}`} className="h-full w-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeProcurementImagePreview(index, imgIdx)}
+                                className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                              >
+                                <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -1264,6 +1398,13 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                                       target.onerror = null;
                                     }}
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeProcurementImagePath(index, imgIdx)}
+                                    className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                                  >
+                                    <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                  </button>
                                 </div>
                               );
                             })}
@@ -1382,8 +1523,15 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                             {(row.procurementImagePreviews?.length ?? 0) > 0 && (
                               <div className="grid grid-cols-4 gap-2 mt-1">
                                 {row.procurementImagePreviews?.map((src, imgIdx) => (
-                                  <div key={`wh-preview-${rowIndex}-${imgIdx}`} className="h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                                  <div key={`wh-preview-${rowIndex}-${imgIdx}`} className="relative h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
                                     <img src={src} alt={`New ${imgIdx + 1}`} className="h-full w-full object-cover" />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeWarehouseImagePreview(index, rowIndex, imgIdx)}
+                                      className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                                    >
+                                      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                    </button>
                                   </div>
                                 ))}
                               </div>
@@ -1393,7 +1541,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                                 {row.procurementImagePaths.map((imagePath: string, imgIdx: number) => {
                                   const imageUrl = imagePath.startsWith("http") ? imagePath : `${SUPABASE_URL}/storage/v1/object/public/qr-attachments/${imagePath}`;
                                   return (
-                                    <div key={`wh-saved-${rowIndex}-${imgIdx}`} className="h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                                    <div key={`wh-saved-${rowIndex}-${imgIdx}`} className="relative h-16 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
                                       <img
                                         src={imageUrl}
                                         alt={`Saved ${imgIdx + 1}`}
@@ -1404,6 +1552,13 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                                           target.onerror = null;
                                         }}
                                       />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeWarehouseImagePath(index, rowIndex, imgIdx)}
+                                        className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                                      >
+                                        <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                      </button>
                                     </div>
                                   );
                                 })}

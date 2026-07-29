@@ -40,7 +40,8 @@ export async function appendProcurementImagesToPdf(
   groups: ProcurementImageGroup[],
   qrNumber: string | null,
   startY: number,
-  margin: number
+  margin: number,
+  simplified = false
 ): Promise<number> {
   if (groups.length === 0) return startY;
 
@@ -60,10 +61,10 @@ export async function appendProcurementImagesToPdf(
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0);
-  doc.text("Procurement Images", margin, y);
+  doc.text("Product Images", margin, y);
   y += 5;
 
-  if (qrNumber) {
+  if (!simplified && qrNumber) {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
@@ -86,13 +87,15 @@ export async function appendProcurementImagesToPdf(
     doc.text(group.productName, margin, y);
     y += 4;
 
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80);
-    const labelLines = doc.splitTextToSize(group.label, contentWidth) as string[];
-    doc.text(labelLines, margin, y);
-    y += labelLines.length * 3.5 + 2;
-    doc.setTextColor(0);
+    if (!simplified) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(80);
+      const labelLines = doc.splitTextToSize(group.label, contentWidth) as string[];
+      doc.text(labelLines, margin, y);
+      y += labelLines.length * 3.5 + 2;
+      doc.setTextColor(0);
+    }
 
     let col = 0;
     let rowMaxHeight = 0;

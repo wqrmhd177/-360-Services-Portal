@@ -14,6 +14,7 @@ export default function ProcurementPurchaseRequestsPage() {
   const [prs, setPrs] = useState<Pr[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all");
   const [selectedPr, setSelectedPr] = useState<Pr | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -35,7 +36,11 @@ export default function ProcurementPurchaseRequestsPage() {
     }
   }
 
-  const filteredPrs =
+  const serviceTypeOptions = Array.from(
+    new Set(prs.map((pr) => pr.seller_service_type).filter(Boolean))
+  ).sort() as string[];
+
+  const baseFiltered =
     statusFilter === "all"
       ? prs
       : statusFilter === "pending"
@@ -50,6 +55,11 @@ export default function ProcurementPurchaseRequestsPage() {
       : statusFilter === "po_created"
       ? prs.filter((pr) => !!pr.po_created)
       : prs;
+
+  const filteredPrs =
+    serviceTypeFilter === "all"
+      ? baseFiltered
+      : baseFiltered.filter((pr) => pr.seller_service_type === serviceTypeFilter);
 
   function handleSelectAll() {
     setSelectedIds(
@@ -123,7 +133,21 @@ export default function ProcurementPurchaseRequestsPage() {
           </button>
         }
         filters={
-          <StatusFilterPills options={filterOptions} activeKey={statusFilter} onChange={setStatusFilter} />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusFilterPills options={filterOptions} activeKey={statusFilter} onChange={setStatusFilter} />
+            {serviceTypeOptions.length > 0 && (
+              <select
+                value={serviceTypeFilter}
+                onChange={(e) => setServiceTypeFilter(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm focus:border-portal-400 focus:outline-none"
+              >
+                <option value="all">All Service Types</option>
+                {serviceTypeOptions.map((st) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+            )}
+          </div>
         }
       />
 

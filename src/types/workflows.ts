@@ -209,6 +209,8 @@ export interface PoProduct {
   /** Freight cost per unit. Used on Supplier PO PDF. */
   freightCostPerUnit?: number;
   freightCostAmount?: number;
+  /** Optional product images (public URLs) uploaded during PO creation. */
+  imageUrls?: string[];
 }
 
 export interface Po {
