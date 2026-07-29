@@ -1,8 +1,19 @@
 import { OrdersChartSelector } from "@/components/orders/orders-chart-selector";
 import { OrdersKpiGrid } from "@/components/orders/orders-kpi-grid";
-import type { getStoresAnalytics } from "@/lib/orders/data";
+import type {
+  BreakdownRow,
+  CountryDeliveryRow,
+  OrderKPIs,
+  TrendPoint,
+} from "@/lib/analytics/orders";
 
-type OrdersOverviewData = Awaited<ReturnType<typeof getStoresAnalytics>>;
+type OrdersOverviewData = {
+  kpis: OrderKPIs;
+  trends: TrendPoint[];
+  statusBreakdown: BreakdownRow[];
+  countryDeliveryRatios: CountryDeliveryRow[];
+  accountManagerBreakdown: BreakdownRow[];
+};
 
 export function OrdersOverviewSection({
   data,

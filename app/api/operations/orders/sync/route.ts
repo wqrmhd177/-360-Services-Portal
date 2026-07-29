@@ -86,6 +86,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { invalidateOpsDataCache } = await import("@/lib/operations/cache");
+    invalidateOpsDataCache();
+
     return NextResponse.json({
       ok: true,
       jobId,

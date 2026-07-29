@@ -1,8 +1,8 @@
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import type { Po } from "@/types/workflows";
 
-/** Fetches all POs enriched with product names and creator (same logic as dashboard and API). */
-export async function getProcurementPOs(): Promise<Po[]> {
+/** Fetches POs enriched with product names and creator (same logic as dashboard and API). */
+export async function getProcurementPOs(limit = 100): Promise<Po[]> {
   try {
     const supabase = createSupabaseClient();
 
@@ -14,7 +14,8 @@ export async function getProcurementPOs(): Promise<Po[]> {
     supabase
       .from("po")
       .select("id, po_number, pr_id, supplier_name, delivery_partner, status, created_at, created_by_email")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(limit),
     supabase
       .from("pr")
       .select("id, product_name, products, created_by_email"),

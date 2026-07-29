@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { getLastSync } from "@/lib/operations/opsDb";
-import { getOperationsAnalytics } from "@/lib/orders/analyticsData";
+import { getOperationsAnalyticsCached } from "@/lib/operations/cache";
 import { serializeDateRange } from "@/lib/orders/params";
 
 export const maxDuration = 60;
@@ -23,13 +22,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const params = searchParamsToObject(request);
-    const data = await getOperationsAnalytics(params);
-    const lastSync = await getLastSync("orders");
+    const data = await getOperationsAnalyticsCached(params);
     const { from, to } = serializeDateRange(data.range);
 
     return NextResponse.json({
       ok: true,
-      lastSyncedAt: lastSync?.synced_at ?? null,
+      lastSyncedAt: data.lastSyncedAt,
       rangeLabel: `${from} – ${to}`,
       fulfillmentSLA: data.fulfillmentSLA,
       operationsStatusCounts: data.operationsStatusCounts,
@@ -37,7 +35,6 @@ export async function GET(request: NextRequest) {
       deliveryPartnerByCountry: data.deliveryPartnerByCountry,
       filterOptions: data.filterOptions,
       filteredCount: data.filteredCount,
-      allCount: data.allCount,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analytics failed";

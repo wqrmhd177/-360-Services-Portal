@@ -1,20 +1,11 @@
-import { computeOperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
-import { computeStoreVisibilityTables } from "@/lib/analytics/store-visibility";
-import {
-  computeAccountManagerBreakdown,
-  computeCountryDeliveryRatios,
-  computeKPIs,
-  computeStatusBreakdown,
-  computeTitleBreakdown,
-  computeTitleDeliveryBreakdownForAccountManager,
-  computeTrends,
-} from "@/lib/analytics/orders";
+import { computeTitleDeliveryBreakdownForAccountManager } from "@/lib/analytics/orders";
 import {
   fetchFilteredOrderLineItems,
   fetchOrderCounts,
   fetchCachedFilterOptionsFromDb,
   searchParamsToFilterParams,
 } from "@/lib/orders/filteredItems";
+import { parseDateRange, parseFilters, serializeDateRange } from "@/lib/orders/params";
 import {
   fetchDeliveryPartnerByCountry,
   fetchOperationsStatusCounts,
@@ -22,8 +13,10 @@ import {
   mapSlaRollupRows,
 } from "@/lib/orders/operationsRollup";
 import { fetchOrdersRollupRows } from "@/lib/orders/rollupQuery";
-import { parseDateRange, parseFilters } from "@/lib/orders/params";
-import { getOperationsStatusGroup } from "@/lib/operations/status-kpi-groups";
+import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
+import { fetchStoreVisibilityTables } from "@/lib/orders/storeVisibilityRollup";
+import { getLastSync } from "@/lib/operations/opsDb";
+import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
 /** Orders page analytics — all widgets from materialized views (no line-item load). */
 export async function getOperationsAnalyticsFromDb(
@@ -53,6 +46,7 @@ export async function getOperationsAnalyticsFromDb(
     deliveryPartnerByCountry,
     slaRows,
     filterOptions,
+    lastSync,
   ] = await Promise.all([
     fetchOrderCounts(dbFilters),
     fetchOperationsStatusCounts(dbFilters),
@@ -64,6 +58,7 @@ export async function getOperationsAnalyticsFromDb(
       "country, confirm_days_sum, confirm_count, deliver_days_sum, deliver_count, return_days_sum, return_count, ship_days_sum, ship_count, shipped_within_48h_count",
     ),
     fetchCachedFilterOptionsFromDb(),
+    getLastSync("orders"),
   ]);
 
   const fulfillmentSLA = mapSlaRollupRows(slaRows, counts.filteredCount);
@@ -76,8 +71,8 @@ export async function getOperationsAnalyticsFromDb(
   return {
     range,
     filters,
-    allCount: counts.allCount,
     filteredCount: counts.filteredCount,
+    lastSyncedAt: lastSync?.synced_at ?? null,
     fulfillmentSLA,
     operationsStatusCounts: statusCounts,
     revenueLossBreakdown,
@@ -95,23 +90,28 @@ export async function getStoreVisibilityAnalyticsFromDb(
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
-  const [items, counts, operationsStatusCounts, filterOptions] = await Promise.all([
-    fetchFilteredOrderLineItems(dbFilters),
-    fetchOrderCounts(dbFilters),
-    fetchOperationsStatusCounts(dbFilters),
-    fetchCachedFilterOptionsFromDb(),
-  ]);
+  const [storeTables, counts, operationsStatusCounts, filterOptions, lastSync] =
+    await Promise.all([
+      fetchStoreVisibilityTables(dbFilters),
+      fetchOrderCounts(dbFilters),
+      fetchOperationsStatusCounts(dbFilters),
+      fetchCachedFilterOptionsFromDb(),
+      getLastSync("orders"),
+    ]);
 
   const statusCounts = {
     ...operationsStatusCounts,
     totalOrders: counts.filteredCount,
   };
 
+  const { from, to } = serializeDateRange(range);
+
   return {
     range,
     filters,
-    allCount: counts.allCount,
     filteredCount: counts.filteredCount,
+    lastSyncedAt: lastSync?.synced_at ?? null,
+    rangeLabel: `${from} – ${to}`,
     operationsStatusCounts: statusCounts,
     filterOptions: {
       countries: filterOptions.countries,
@@ -119,13 +119,7 @@ export async function getStoreVisibilityAnalyticsFromDb(
       storeIds: filterOptions.storeIds,
       storeOptions: filterOptions.storeOptions,
     },
-    storeTables: computeStoreVisibilityTables(items),
-    kpis: computeKPIs(items),
-    trends: computeTrends(items, range),
-    statusBreakdown: computeStatusBreakdown(items),
-    countryDeliveryRatios: computeCountryDeliveryRatios(items),
-    accountManagerBreakdown: computeAccountManagerBreakdown(items),
-    titleBreakdown: computeTitleBreakdown(items),
+    storeTables,
   };
 }
 
@@ -133,15 +127,12 @@ export async function getOperationsStatusDetailFromDb(
   searchParams: Record<string, string | string[] | undefined>,
   groupId: string,
 ) {
-  const group = getOperationsStatusGroup(groupId);
-  if (!group) {
-    throw new Error(`Unknown group: ${groupId}`);
-  }
-
   const range = parseDateRange(searchParams);
   const dbFilters = searchParamsToFilterParams(searchParams, range);
-  const items = await fetchFilteredOrderLineItems(dbFilters);
-  const detail = computeOperationsStatusOrderDetail(items, group);
+  const detail = await fetchOperationsStatusDetail(
+    dbFilters,
+    groupId as OperationsStatusGroupId,
+  );
 
   return { group: groupId, range, detail };
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
+import { fetchGrowthDashboardCounts } from "@/lib/workflowCounts";
 import type { Pr, Qr } from "@/types/workflows";
 import GrowthDashboardWrapper from "@/components/GrowthDashboardWrapper";
 
@@ -31,16 +32,16 @@ function canConvertQrToPr(qr: Qr): boolean {
   return today < eligibleFrom;
 }
 
-async function getGrowthData(session: { email: string; isAdmin?: boolean }) {
+async function getGrowthLists(session: { email: string; isAdmin?: boolean }) {
   const supabase = createSupabaseClient();
   const filterByEmail = !session.isAdmin;
 
   const qrChain = filterByEmail
-    ? supabase.from("qr").select("id, qr_number, purchase_details, countries, shipping_type, procurement_response, status, created_at, updated_at").eq("created_by_email", session.email).order("created_at", { ascending: false })
-    : supabase.from("qr").select("id, qr_number, purchase_details, countries, shipping_type, procurement_response, status, created_at, updated_at").order("created_at", { ascending: false });
+    ? supabase.from("qr").select("id, qr_number, purchase_details, countries, shipping_type, procurement_response, status, created_at, updated_at").eq("created_by_email", session.email).order("created_at", { ascending: false }).limit(100)
+    : supabase.from("qr").select("id, qr_number, purchase_details, countries, shipping_type, procurement_response, status, created_at, updated_at").order("created_at", { ascending: false }).limit(100);
   const prChain = filterByEmail
-    ? supabase.from("pr").select("id, pr_number, product_name, amount, approval_status, finance_verification_status, created_at").eq("created_by_email", session.email).order("created_at", { ascending: false })
-    : supabase.from("pr").select("id, pr_number, product_name, amount, approval_status, finance_verification_status, created_at").order("created_at", { ascending: false });
+    ? supabase.from("pr").select("id, pr_number, product_name, amount, approval_status, finance_verification_status, created_at").eq("created_by_email", session.email).order("created_at", { ascending: false }).limit(100)
+    : supabase.from("pr").select("id, pr_number, product_name, amount, approval_status, finance_verification_status, created_at").order("created_at", { ascending: false }).limit(100);
 
   const [{ data: qrsData }, { data: prsData }] = await Promise.all([qrChain, prChain]);
 
@@ -56,18 +57,18 @@ export default async function GrowthDashboardPage() {
     redirect("/auth/login");
   }
 
-  const { qrs, prs } = await getGrowthData(session);
+  const [{ qrs, prs }, counts] = await Promise.all([
+    getGrowthLists(session),
+    fetchGrowthDashboardCounts(session.isAdmin ? null : session.email),
+  ]);
 
-  const qrOpen = qrs.filter((q) => q.status === "open").length;
-  const qrResponded = qrs.filter((q) => q.status === "responded").length;
-  const qrConverted = qrs.filter((q) => q.status === "converted_to_pr").length;
-
-  const prPendingApproval = prs.filter((p) => p.approval_status === "pending").length;
-  const prApproved = prs.filter((p) => p.approval_status === "approved").length;
-  const prPendingFinance = prs.filter(
-    (p) => p.approval_status === "approved" && p.finance_verification_status === "pending"
-  ).length;
-  const prFinanceVerified = prs.filter((p) => p.finance_verification_status === "verified").length;
+  const qrOpen = counts.qrOpen;
+  const qrResponded = counts.qrResponded;
+  const qrConverted = counts.qrConverted;
+  const prPendingApproval = counts.prPendingApproval;
+  const prApproved = counts.prApproved;
+  const prPendingFinance = counts.prFinancePending;
+  const prFinanceVerified = counts.prFinanceVerified;
 
   const qrReadyForPr = qrs.filter((q) => q.status === "responded");
 

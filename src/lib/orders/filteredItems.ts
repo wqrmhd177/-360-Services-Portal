@@ -256,7 +256,6 @@ function buildStoreOptionsFromItems(items: OrderLineItem[]): StoreFilterOption[]
 }
 
 export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
-  allCount: number;
   filteredCount: number;
 }> {
   const supabase = getOpsDb();
@@ -266,17 +265,14 @@ export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
   );
 
   if (!error && data) {
-    const payload = data as { allCount?: number; filteredCount?: number };
+    const payload = data as { filteredCount?: number; allCount?: number };
     return {
-      allCount: Number(payload.allCount ?? 0),
-      filteredCount: Number(payload.filteredCount ?? 0),
+      filteredCount: Number(payload.filteredCount ?? payload.allCount ?? 0),
     };
   }
 
-  const allItems = await getAllOrderLineItems();
-  const allCount = groupByOrder(allItems).size;
   const items = await fetchFilteredOrderLineItems(filters);
-  return { allCount, filteredCount: groupByOrder(items).size };
+  return { filteredCount: groupByOrder(items).size };
 }
 
 /** Debug: compare raw DB orders vs portal facet filters in a date range. */
@@ -492,7 +488,7 @@ export async function fetchFilterOptionsFromDb(): Promise<{
 export const fetchCachedFilterOptionsFromDb = unstable_cache(
   async () => fetchFilterOptionsFromDb(),
   ["ops-orders-filter-options"],
-  { revalidate: 3600, tags: ["ops-orders-filter-options"] },
+  { revalidate: 3600, tags: ["ops-orders-filter-options", "ops-data"] },
 );
 
 export function searchParamsToFilterParams(

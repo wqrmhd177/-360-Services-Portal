@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getProcurementPOs } from "@/lib/procurementPos";
 import { getPortalSession } from "@/lib/session";
-import type { Qr, Pr, Po, PoStatus } from "@/types/workflows";
+import { fetchProcurementDashboardCounts } from "@/lib/workflowCounts";
 import ProcurementDashboardWrapper from "@/components/ProcurementDashboardWrapper";
 
-async function getProcurementData() {
+async function getProcurementLists() {
   const supabase = createSupabaseClient();
 
   const [
@@ -18,58 +18,41 @@ async function getProcurementData() {
       .from("qr")
       .select("id, qr_number, purchase_details, countries, shipping_type, status, created_at, created_by_email")
       .eq("status", "open")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(50),
     supabase
       .from("pr")
       .select("id, pr_number, product_name, products, created_by_email, finance_verification_status, po_created, created_at")
       .eq("finance_verification_status", "verified")
       .eq("po_created", false)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(50),
     supabase
       .from("profiles")
       .select("email, full_name")
   ]);
 
-  // Single source of truth: same PO list as "Purchase Orders" sidebar page
-  const allPos = await getProcurementPOs();
+  const allPos = await getProcurementPOs(100);
 
-  // Create a map of email to full name
   const emailToNameMap = new Map(
-    (profiles ?? []).map((p: any) => [p.email, p.full_name])
+    (profiles ?? []).map((p: { email: string; full_name?: string }) => [p.email, p.full_name])
   );
 
-  // Add full names to QRs and PRs
-  const enrichedQrs = (openQrs ?? []).map((qr: any) => ({
+  const enrichedQrs = (openQrs ?? []).map((qr) => ({
     ...qr,
     creator_name: emailToNameMap.get(qr.created_by_email) || qr.created_by_email
   }));
 
-  const enrichedPrs = (verifiedPrs ?? []).map((pr: any) => ({
+  const enrichedPrs = (verifiedPrs ?? []).map((pr) => ({
     ...pr,
     creator_name: emailToNameMap.get(pr.created_by_email) || pr.created_by_email
   }));
 
   return {
-    openQrs: enrichedQrs as Qr[],
-    verifiedPrs: enrichedPrs as Pr[],
+    openQrs: enrichedQrs,
+    verifiedPrs: enrichedPrs,
     allPos
   };
-}
-
-function getPoStatusCounts(pos: Po[]) {
-  const statuses: PoStatus[] = [
-    "order_placed",
-    "shipment_at_supplier",
-    "shipment_received_at_lp_warehouse",
-    "shipment_received_at_destination_city",
-    "shipment_received_at_destination_warehouse",
-    "delivered",
-    "canceled"
-  ];
-  return statuses.reduce((acc, status) => {
-    acc[status] = pos.filter((po) => po.status === status).length;
-    return acc;
-  }, {} as Record<PoStatus, number>);
 }
 
 export default async function ProcurementDashboardPage() {
@@ -78,8 +61,10 @@ export default async function ProcurementDashboardPage() {
     redirect("/auth/login");
   }
 
-  const { openQrs, verifiedPrs, allPos } = await getProcurementData();
-  const statusCounts = getPoStatusCounts(allPos);
+  const [counts, { openQrs, verifiedPrs, allPos }] = await Promise.all([
+    fetchProcurementDashboardCounts(),
+    getProcurementLists(),
+  ]);
 
   return (
     <ProcurementDashboardWrapper>
@@ -105,7 +90,7 @@ export default async function ProcurementDashboardPage() {
               Open QRs
             </div>
           </div>
-          <div className="text-4xl font-bold text-blue-600">{openQrs.length}</div>
+          <div className="text-4xl font-bold text-blue-600">{counts.openQrs}</div>
           <p className="mt-2 text-sm text-gray-600">Awaiting response</p>
         </div>
         <div className="card border-l-4 border-green-500 hover:shadow-lg transition-all">
@@ -117,7 +102,7 @@ export default async function ProcurementDashboardPage() {
               Verified PRs
             </div>
           </div>
-          <div className="text-4xl font-bold text-green-600">{verifiedPrs.length}</div>
+          <div className="text-4xl font-bold text-green-600">{counts.verifiedPrsReadyForPo}</div>
           <p className="mt-2 text-sm text-gray-600">Ready for PO conversion</p>
         </div>
         <div className="card border-l-4 border-purple-500 hover:shadow-lg transition-all">
@@ -129,7 +114,7 @@ export default async function ProcurementDashboardPage() {
               Order Placed
             </div>
           </div>
-          <div className="text-4xl font-bold text-purple-600">{statusCounts.order_placed}</div>
+          <div className="text-4xl font-bold text-purple-600">{counts.poOrderPlaced}</div>
           <p className="mt-2 text-sm text-gray-600">POs at initial stage</p>
         </div>
         <div className="card border-l-4 border-amber-500 hover:shadow-lg transition-all">
@@ -141,12 +126,7 @@ export default async function ProcurementDashboardPage() {
               In Transit
             </div>
           </div>
-          <div className="text-4xl font-bold text-amber-600">
-            {statusCounts.shipment_at_supplier +
-              statusCounts.shipment_received_at_lp_warehouse +
-              statusCounts.shipment_received_at_destination_city +
-              statusCounts.shipment_received_at_destination_warehouse}
-          </div>
+          <div className="text-4xl font-bold text-amber-600">{counts.poInTransit}</div>
           <p className="mt-2 text-sm text-gray-600">POs in shipment</p>
         </div>
         <div className="card border-l-4 border-emerald-500 hover:shadow-lg transition-all">
@@ -156,7 +136,7 @@ export default async function ProcurementDashboardPage() {
             </svg>
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-600">Delivered</div>
           </div>
-          <div className="text-4xl font-bold text-emerald-600">{statusCounts.delivered}</div>
+          <div className="text-4xl font-bold text-emerald-600">{counts.poDelivered}</div>
           <p className="mt-2 text-sm text-gray-600">Completed POs</p>
         </div>
       </div>

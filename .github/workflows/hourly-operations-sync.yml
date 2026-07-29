@@ -129,6 +129,25 @@ jobs:
             -d "{}"
           echo "Order materialized views refreshed."
 
+      - name: Invalidate portal operations cache (optional)
+        continue-on-error: true
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Skipping cache revalidation — set VERCEL_PRODUCTION_URL and CRON_SECRET to enable"
+            exit 0
+          fi
+          BASE="${VERCEL_URL%/}"
+          echo "Calling ${BASE}/api/operations/revalidate"
+          curl -sf -X POST \
+            "${BASE}/api/operations/revalidate" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 60
+          echo "Operations cache invalidated."
+
       - name: Full operations sync via Vercel cron (optional)
         continue-on-error: true
         env:

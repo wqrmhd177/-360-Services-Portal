@@ -1,13 +1,19 @@
 import { createSupabaseClient, createSupabaseServiceClient } from "@/lib/supabaseClient";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type OpsSource = "inventory" | "channel_list" | "orders";
 
+let _opsDb: SupabaseClient | null = null;
+
 export function getOpsDb() {
-  try {
-    return createSupabaseServiceClient();
-  } catch {
-    return createSupabaseClient();
+  if (!_opsDb) {
+    try {
+      _opsDb = createSupabaseServiceClient();
+    } catch {
+      _opsDb = createSupabaseClient();
+    }
   }
+  return _opsDb;
 }
 
 export function getOpsServiceDb() {

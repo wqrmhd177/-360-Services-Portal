@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { getSkuPerformanceSummary } from "@/lib/operations/skuPerformance";
+import { getSkuPerformanceSummaryCached } from "@/lib/operations/cache";
 
 export const maxDuration = 60;
 
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
 
   try {
-    const result = await getSkuPerformanceSummary({
+    const result = await getSkuPerformanceSummaryCached({
       filters: {
         country: sp.get("country"),
         bifurcation: sp.get("bifurcation"),

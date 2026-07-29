@@ -192,28 +192,28 @@ export async function getSkuPerformanceSummary(params: {
   }));
 
   let inventoryWarning: string | null = null;
-  try {
-    const inventoryMap = await fetchInventoryBySkus(
-      rows.map((r) => r.sku),
-      rpcFilters.p_country,
-    );
-    for (const row of rows) {
-      const key = normalizeSkuForMatch(row.sku);
-      row.available_inventory = inventoryMap.has(key)
-        ? Math.max(0, inventoryMap.get(key)!)
-        : null;
-    }
-  } catch (err) {
-    inventoryWarning =
-      err instanceof Error
-        ? err.message
-        : "Inventory data temporarily unavailable";
-    for (const row of rows) {
-      row.available_inventory = null;
-    }
+  const pageSkus = rows.map((r) => r.sku);
+
+  const inventoryPromise = fetchInventoryBySkus(pageSkus, rpcFilters.p_country).catch(
+    (err: unknown) => {
+      inventoryWarning =
+        err instanceof Error ? err.message : "Inventory data temporarily unavailable";
+      return new Map<string, number>();
+    },
+  );
+
+  const [inventoryMap, inventorySync] = await Promise.all([
+    inventoryPromise,
+    getLastSync("inventory"),
+  ]);
+
+  for (const row of rows) {
+    const key = normalizeSkuForMatch(row.sku);
+    row.available_inventory = inventoryMap.has(key)
+      ? Math.max(0, inventoryMap.get(key)!)
+      : null;
   }
 
-  const inventorySync = await getLastSync("inventory");
   const totalRecords = Number(payload.total_records) || 0;
 
   return {

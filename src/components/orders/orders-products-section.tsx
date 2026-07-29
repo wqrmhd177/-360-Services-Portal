@@ -1,7 +1,9 @@
 import { ProductPerformanceTable } from "@/components/orders/product-performance-table";
-import type { getStoresAnalytics } from "@/lib/orders/data";
+import type { TitleBreakdownRow } from "@/lib/analytics/orders";
 
-type OrdersProductsData = Awaited<ReturnType<typeof getStoresAnalytics>>;
+type OrdersProductsData = {
+  titleBreakdown: TitleBreakdownRow[];
+};
 
 export function OrdersProductsSection({ data }: { data: OrdersProductsData }) {
   return (

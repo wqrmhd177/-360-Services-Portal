@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { getLastSync } from "@/lib/operations/opsDb";
-import { getStoreVisibilityAnalytics } from "@/lib/orders/analyticsData";
+import { getStoreVisibilityAnalyticsCached } from "@/lib/operations/cache";
 import { serializeDateRange } from "@/lib/orders/params";
 
 export const maxDuration = 60;
@@ -23,15 +22,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const params = searchParamsToObject(request);
-    const data = await getStoreVisibilityAnalytics(params);
-    const lastSync = await getLastSync("orders");
+    const data = await getStoreVisibilityAnalyticsCached(params);
     const { from, to } = serializeDateRange(data.range);
 
     return NextResponse.json({
       ok: true,
-      lastSyncedAt: lastSync?.synced_at ?? null,
-      rangeLabel: `${from} – ${to}`,
       ...data,
+      rangeLabel: data.rangeLabel ?? `${from} – ${to}`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analytics failed";

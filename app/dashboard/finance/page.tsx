@@ -2,30 +2,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
-import type { Pr, Po } from "@/types/workflows";
+import { fetchFinanceDashboardCounts } from "@/lib/workflowCounts";
+import type { Pr } from "@/types/workflows";
 
-async function getFinanceData() {
+async function getFinanceTableData() {
   const supabase = createSupabaseClient();
 
-  const [{ data: prsPendingVerification }, { data: allPrs }, { data: allPos }] = await Promise.all([
-    supabase
-      .from("pr")
-      .select("*")
-      .eq("approval_status", "approved")
-      .neq("pr_status", "awaiting_payment")
-      .eq("finance_verification_status", "pending")
-      .order("created_at", { ascending: false }),
-    supabase.from("pr").select("id, finance_verification_status").then((r) => r),
-    supabase
-      .from("po")
-      .select("*")
-      .order("created_at", { ascending: false })
-  ]);
+  const { data: prsPendingVerification } = await supabase
+    .from("pr")
+    .select("*")
+    .eq("approval_status", "approved")
+    .neq("pr_status", "awaiting_payment")
+    .eq("finance_verification_status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   return {
     prsPendingVerification: (prsPendingVerification ?? []) as Pr[],
-    allPrs: (allPrs ?? []) as Pr[],
-    allPos: (allPos ?? []) as Po[]
   };
 }
 
@@ -35,15 +28,10 @@ export default async function FinanceDashboardPage() {
     redirect("/auth/login");
   }
 
-  const { prsPendingVerification, allPrs, allPos } = await getFinanceData();
-
-  const verifiedCount = allPrs.filter((p) => p.finance_verification_status === "verified").length;
-  const pendingVerificationCount = prsPendingVerification.length;
-
-  const unpaidSupplierPos = allPos.filter((po) => po.supplier_payment_status === "unpaid").length;
-  const unpaidDeliveryPos = allPos.filter(
-    (po) => po.delivery_partner_payment_status === "unpaid"
-  ).length;
+  const [counts, { prsPendingVerification }] = await Promise.all([
+    fetchFinanceDashboardCounts(),
+    getFinanceTableData(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -65,7 +53,7 @@ export default async function FinanceDashboardPage() {
               Pending Verification
             </div>
           </div>
-          <div className="text-4xl font-bold text-blue-600">{pendingVerificationCount}</div>
+          <div className="text-4xl font-bold text-blue-600">{counts.pendingVerification}</div>
           <p className="mt-2 text-sm text-gray-600">PRs awaiting payment verification</p>
         </div>
         <div className="card border-l-4 border-green-500 hover:shadow-lg transition-all">
@@ -77,7 +65,7 @@ export default async function FinanceDashboardPage() {
               Verified PRs
             </div>
           </div>
-          <div className="text-4xl font-bold text-green-600">{verifiedCount}</div>
+          <div className="text-4xl font-bold text-green-600">{counts.verifiedPrs}</div>
           <p className="mt-2 text-sm text-gray-600">Total verified PRs</p>
         </div>
         <div className="card border-l-4 border-amber-500 hover:shadow-lg transition-all">
@@ -89,7 +77,7 @@ export default async function FinanceDashboardPage() {
               Unpaid Suppliers
             </div>
           </div>
-          <div className="text-4xl font-bold text-amber-600">{unpaidSupplierPos}</div>
+          <div className="text-4xl font-bold text-amber-600">{counts.unpaidSupplierPos}</div>
           <p className="mt-2 text-sm text-gray-600">POs with unpaid supplier invoices</p>
         </div>
         <div className="card border-l-4 border-purple-500 hover:shadow-lg transition-all">
@@ -101,7 +89,7 @@ export default async function FinanceDashboardPage() {
               Unpaid Delivery Partners
             </div>
           </div>
-          <div className="text-4xl font-bold text-purple-600">{unpaidDeliveryPos}</div>
+          <div className="text-4xl font-bold text-purple-600">{counts.unpaidDeliveryPos}</div>
           <p className="mt-2 text-sm text-gray-600">POs with unpaid delivery invoices</p>
         </div>
       </div>
@@ -187,39 +175,30 @@ export default async function FinanceDashboardPage() {
               Quick view of payment statuses across all Purchase Orders.
             </p>
           </div>
-          {allPos.length === 0 ? (
-            <p className="text-xs text-gray-400">No Purchase Orders yet.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="mb-2 text-xs font-medium text-gray-500">Total POs</div>
-                <div className="text-lg font-semibold text-gray-900">{allPos.length}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-gray-200 bg-white p-2">
-                  <div className="text-[10px] text-gray-500">Supplier Paid</div>
-                  <div className="text-sm font-semibold text-green-600">
-                    {allPos.filter((po) => po.supplier_payment_status === "paid").length}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-2">
-                  <div className="text-[10px] text-gray-500">Delivery Paid</div>
-                  <div className="text-sm font-semibold text-green-600">
-                    {allPos.filter((po) => po.delivery_partner_payment_status === "paid").length}
-                  </div>
-                </div>
-              </div>
-              <Link
-                href="/dashboard/finance/po-payments/supplier"
-                className="block text-center text-xs font-medium text-gray-900 hover:text-gray-700"
-              >
-                View All PO Payments →
-              </Link>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-2 text-xs font-medium text-gray-500">Total POs</div>
+              <div className="text-lg font-semibold text-gray-900">{counts.totalPos}</div>
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-2">
+                <div className="text-[10px] text-gray-500">Supplier Paid</div>
+                <div className="text-sm font-semibold text-green-600">{counts.supplierPaidPos}</div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white p-2">
+                <div className="text-[10px] text-gray-500">Delivery Paid</div>
+                <div className="text-sm font-semibold text-green-600">{counts.deliveryPaidPos}</div>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/finance/po-payments/supplier"
+              className="block text-center text-xs font-medium text-gray-900 hover:text-gray-700"
+            >
+              View All PO Payments →
+            </Link>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

@@ -1,320 +1,56 @@
-"use client";
-
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { DeliveryPartnerChartCard } from "@/components/orders/delivery-partner-chart-card";
-import { OperationsSlaKpis } from "@/components/orders/operations-sla-kpis";
-import { OperationsStatusKpis } from "@/components/orders/operations-status-kpis";
-import { RevenueLossTable } from "@/components/orders/revenue-loss-table";
-import OrdersFilterBar, {
-  useDefaultOrdersDateRange,
-} from "@/components/operations/OrdersFilterBar";
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import {
+  defaultOrdersSearchParams,
+  OrdersAnalyticsSection,
+} from "@/components/operations/OrdersAnalyticsSection";
+import { OrdersPageShell } from "@/components/operations/OrdersPageShell";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
-import { formatPortalTimestamp } from "@/lib/portalTimezone";
-import type {
-  DeliveryPartnerByCountryData,
-  FulfillmentSLA,
-  RevenueLossRow,
-} from "@/lib/analytics/orders";
-import type { OperationsStatusCounts } from "@/lib/analytics/operations-status-detail";
+import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
+import { getLastSync } from "@/lib/operations/opsDb";
+import { getPortalSession } from "@/lib/session";
 
-interface FilterOptions {
-  countries: string[];
-  bifurcations: string[];
-}
-
-interface AnalyticsPayload {
-  rangeLabel: string;
-  fulfillmentSLA: FulfillmentSLA;
-  operationsStatusCounts: OperationsStatusCounts;
-  revenueLossBreakdown: RevenueLossRow[];
-  deliveryPartnerByCountry: DeliveryPartnerByCountryData;
-  filterOptions?: FilterOptions;
-  lastSyncedAt: string | null;
-}
-
-type SyncJobStatus = "pending" | "running" | "success" | "failed";
-
-function OrdersOperationsContent() {
-  const sp = useSearchParams();
-  useDefaultOrdersDateRange();
-  const country = sp.get("country") ?? "";
-  const bifurcation = sp.get("bifurcation") ?? "";
-  const from = sp.get("from") ?? "";
-  const to = sp.get("to") ?? "";
-
-  const [filterOpts, setFilterOpts] = useState<FilterOptions>({
-    countries: [],
-    bifurcations: [],
-  });
-  const [data, setData] = useState<AnalyticsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [syncJobId, setSyncJobId] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncJobStatus | null>(null);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const syncing = syncStatus === "pending" || syncStatus === "running";
-  const dateRangeReady = Boolean(from && to);
-
-  const loadFilterOptions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/operations/orders/filter-options", {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setFilterOpts({
-          countries: json.countries ?? [],
-          bifurcations: json.bifurcations ?? [],
-        });
-      }
-    } catch {
-      /* fallback: options also arrive with analytics payload */
-    }
-  }, []);
-
-  const loadAnalytics = useCallback(async () => {
-    if (!dateRangeReady) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (country) params.set("country", country);
-      if (bifurcation) params.set("bifurcation", bifurcation);
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
-
-      const res = await fetch(`/api/operations/orders/analytics?${params}`, {
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to load analytics");
-      if (json.filteredCount === 0 && json.allCount === 0) {
-        setError("empty");
-        setData(null);
-        return;
-      }
-
-      if (json.filterOptions) {
-        setFilterOpts({
-          countries: json.filterOptions.countries ?? [],
-          bifurcations: json.filterOptions.bifurcations ?? [],
-        });
-      }
-
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load analytics");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [country, bifurcation, from, to, dateRangeReady]);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const pollSyncProgress = useCallback(
-    (jobId?: string | null) => {
-      stopPolling();
-      pollRef.current = setInterval(async () => {
-        try {
-          const url = jobId
-            ? `/api/operations/orders/sync?jobId=${encodeURIComponent(jobId)}`
-            : "/api/operations/orders/sync";
-          const res = await fetch(url);
-          const json = await res.json();
-          const job = json.job;
-          if (!job) return;
-
-          setSyncJobId(job.id);
-          setSyncStatus(job.status);
-
-          if (job.progressMessage) {
-            setSyncMessage(job.progressMessage);
-          }
-
-          if (job.status === "failed" && job.error) {
-            setSyncMessage(job.error);
-            setError(job.error);
-            stopPolling();
-          }
-
-          if (job.status === "success") {
-            stopPolling();
-            setSyncMessage(
-              `Sync complete — ${job.rowCount?.toLocaleString() ?? 0} rows`,
-            );
-            void loadFilterOptions();
-            void loadAnalytics();
-          }
-        } catch {
-          /* keep polling */
-        }
-      }, 3000);
-    },
-    [stopPolling, loadFilterOptions, loadAnalytics],
-  );
-
-  const runSync = async () => {
-    setSyncStatus("running");
-    setSyncMessage("Starting orders sync…");
-    setError(null);
-
-    try {
-      const res = await fetch("/api/operations/orders/sync", { method: "POST" });
-      const json = await res.json();
-
-      if (res.status === 409 && json.jobId) {
-        setSyncJobId(json.jobId);
-        setSyncStatus("running");
-        setSyncMessage(json.error ?? "A sync is already in progress.");
-        pollSyncProgress(json.jobId);
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(json.error ?? "Sync failed");
-      }
-
-      setSyncJobId(json.jobId ?? null);
-
-      if (json.dispatched) {
-        setSyncMessage(
-          json.message ??
-            "Sync running on GitHub Actions — this usually takes 2–5 minutes.",
-        );
-        pollSyncProgress(json.jobId);
-        return;
-      }
-
-      setSyncStatus("success");
-      setSyncMessage(`Sync complete — ${json.rowCount?.toLocaleString() ?? 0} rows`);
-      await loadFilterOptions();
-      await loadAnalytics();
-    } catch (e) {
-      stopPolling();
-      setSyncStatus("failed");
-      const msg = e instanceof Error ? e.message : "Sync failed";
-      setError(msg);
-      setSyncMessage(msg);
-    }
+function mergeSearchParams(
+  raw: Record<string, string | string[] | undefined>,
+): Record<string, string | string[] | undefined> {
+  const defaults = defaultOrdersSearchParams();
+  return {
+    ...defaults,
+    ...raw,
+    from: typeof raw.from === "string" && raw.from ? raw.from : defaults.from,
+    to: typeof raw.to === "string" && raw.to ? raw.to : defaults.to,
   };
-
-  useEffect(() => {
-    if (!dateRangeReady) return;
-    loadAnalytics();
-  }, [loadAnalytics, dateRangeReady]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/operations/orders/sync");
-        const json = await res.json();
-        const job = json.job;
-        if (!job) return;
-        if (job.status === "running" || job.status === "pending") {
-          setSyncStatus(job.status);
-          setSyncJobId(job.id);
-          setSyncMessage(
-            job.progressMessage ??
-              "A sync is already in progress on GitHub Actions.",
-          );
-          pollSyncProgress(job.id);
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, [pollSyncProgress]);
-
-  useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--foreground)]">Operations — Orders</h1>
-          {data?.lastSyncedAt ? (
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              Last synced: {formatPortalTimestamp(data.lastSyncedAt)}
-            </p>
-          ) : null}
-          {syncMessage ? (
-            <p
-              className={`text-xs mt-0.5 ${
-                syncStatus === "failed" ? "text-red-600" : "text-teal-600"
-              }`}
-            >
-              {syncMessage}
-              {syncing ? " — do not close this tab." : ""}
-            </p>
-          ) : null}
-        </div>
-        <button
-          onClick={runSync}
-          disabled={syncing}
-          className="btn-primary disabled:opacity-60"
-        >
-          {syncing ? "Syncing…" : "Sync Data"}
-        </button>
-      </div>
-
-      <OrdersFilterBar
-        options={filterOpts}
-        country={country}
-        bifurcation={bifurcation}
-        from={from}
-        to={to}
-      />
-
-      {loading ? <PortalPageLoading label="Loading operations analytics" /> : null}
-
-      {!loading && error === "empty" ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
-          <p className="text-sm font-medium text-amber-900">
-            No orders data yet. Click Sync Data to load from Metabase.
-          </p>
-          <button onClick={runSync} disabled={syncing} className="btn-primary mt-4">
-            {syncing ? "Syncing…" : "Sync Now"}
-          </button>
-        </div>
-      ) : null}
-
-      {!loading && error && error !== "empty" ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      {!loading && data ? (
-        <section className="space-y-6">
-          <OperationsSlaKpis sla={data.fulfillmentSLA} rangeLabel={data.rangeLabel} />
-          <OperationsStatusKpis
-            counts={data.operationsStatusCounts}
-            rangeLabel={data.rangeLabel}
-          />
-          <DeliveryPartnerChartCard data={data.deliveryPartnerByCountry} />
-          <RevenueLossTable title="Revenue Loss" rows={data.revenueLossBreakdown} />
-        </section>
-      ) : null}
-    </div>
-  );
 }
 
-export default function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const session = getPortalSession();
+  if (!session?.email) {
+    redirect("/auth/login");
+  }
+
+  const sp = mergeSearchParams(await searchParams);
+
+  const [filterOptions, lastSync] = await Promise.all([
+    fetchCachedFilterOptionsFromDb(),
+    getLastSync("orders"),
+  ]);
+
   return (
-    <Suspense fallback={<PortalPageLoading label="Loading" />}>
-      <OrdersOperationsContent />
-    </Suspense>
+    <OrdersPageShell
+      searchParams={sp}
+      filterOptions={{
+        countries: filterOptions.countries,
+        bifurcations: filterOptions.bifurcations,
+      }}
+      lastSyncedAt={lastSync?.synced_at ?? null}
+    >
+      <Suspense fallback={<PortalPageLoading label="Loading operations analytics" />}>
+        <OrdersAnalyticsSection searchParams={sp} />
+      </Suspense>
+    </OrdersPageShell>
   );
 }

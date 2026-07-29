@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOperationsStatusDetailFromDb } from "@/lib/orders/dbAnalytics";
+import { getOperationsStatusDetailCached } from "@/lib/operations/cache";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { serializeDateRange } from "@/lib/orders/params";
+import { serializeDateRange, parseDateRange } from "@/lib/orders/params";
+import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
 export const maxDuration = 60;
 
@@ -29,13 +30,17 @@ export async function GET(request: NextRequest) {
     const paramsObj = searchParamsToObject(request);
     delete paramsObj.group;
 
-    const payload = await getOperationsStatusDetailFromDb(paramsObj, groupId);
-    const { from, to } = serializeDateRange(payload.range);
+    const range = parseDateRange(paramsObj);
+    const detail = await getOperationsStatusDetailCached(
+      paramsObj,
+      groupId as OperationsStatusGroupId,
+    );
+    const { from, to } = serializeDateRange(range);
 
     return NextResponse.json({
-      group: payload.group,
+      group: groupId,
       range: { from, to },
-      detail: payload.detail,
+      detail,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to load status details";

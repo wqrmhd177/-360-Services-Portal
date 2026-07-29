@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
   try {
     const result = await syncAllOperations();
     const ok = result.inventory.ok && result.channelList.ok && result.orders.ok;
+    if (ok) {
+      const { invalidateOpsDataCache } = await import("@/lib/operations/cache");
+      invalidateOpsDataCache();
+    }
     return NextResponse.json({
       ok,
       syncedAt: new Date().toISOString(),
