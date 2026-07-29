@@ -121,46 +121,78 @@ function OrdersOperationsContent() {
     }
   }, []);
 
-  const pollSyncProgress = useCallback(() => {
-    stopPolling();
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch("/api/operations/orders/sync");
-        const json = await res.json();
-        const job = json.job;
-        if (!job) return;
+  const pollSyncProgress = useCallback(
+    (jobId?: string | null) => {
+      stopPolling();
+      pollRef.current = setInterval(async () => {
+        try {
+          const url = jobId
+            ? `/api/operations/orders/sync?jobId=${encodeURIComponent(jobId)}`
+            : "/api/operations/orders/sync";
+          const res = await fetch(url);
+          const json = await res.json();
+          const job = json.job;
+          if (!job) return;
 
-        setSyncJobId(job.id);
-        setSyncStatus(job.status);
+          setSyncJobId(job.id);
+          setSyncStatus(job.status);
 
-        if (job.progressMessage) {
-          setSyncMessage(job.progressMessage);
+          if (job.progressMessage) {
+            setSyncMessage(job.progressMessage);
+          }
+
+          if (job.status === "failed" && job.error) {
+            setSyncMessage(job.error);
+            setError(job.error);
+            stopPolling();
+          }
+
+          if (job.status === "success") {
+            stopPolling();
+            setSyncMessage(
+              `Sync complete — ${job.rowCount?.toLocaleString() ?? 0} rows`,
+            );
+            void loadFilterOptions();
+            void loadAnalytics();
+          }
+        } catch {
+          /* keep polling */
         }
-
-        if (job.status === "failed" && job.error) {
-          setSyncMessage(job.error);
-        }
-      } catch {
-        /* keep polling */
-      }
-    }, 2000);
-  }, [stopPolling]);
+      }, 3000);
+    },
+    [stopPolling, loadFilterOptions, loadAnalytics],
+  );
 
   const runSync = async () => {
     setSyncStatus("running");
-    setSyncMessage(
-      "Syncing from Metabase… this usually takes 2–5 minutes. Please keep this tab open.",
-    );
+    setSyncMessage("Starting orders sync…");
     setError(null);
-    pollSyncProgress();
 
     try {
       const res = await fetch("/api/operations/orders/sync", { method: "POST" });
       const json = await res.json();
-      stopPolling();
+
+      if (res.status === 409 && json.jobId) {
+        setSyncJobId(json.jobId);
+        setSyncStatus("running");
+        setSyncMessage(json.error ?? "A sync is already in progress.");
+        pollSyncProgress(json.jobId);
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(json.error ?? "Sync failed");
+      }
+
+      setSyncJobId(json.jobId ?? null);
+
+      if (json.dispatched) {
+        setSyncMessage(
+          json.message ??
+            "Sync running on GitHub Actions — this usually takes 2–5 minutes.",
+        );
+        pollSyncProgress(json.jobId);
+        return;
       }
 
       setSyncStatus("success");
@@ -168,6 +200,7 @@ function OrdersOperationsContent() {
       await loadFilterOptions();
       await loadAnalytics();
     } catch (e) {
+      stopPolling();
       setSyncStatus("failed");
       const msg = e instanceof Error ? e.message : "Sync failed";
       setError(msg);
@@ -189,16 +222,18 @@ function OrdersOperationsContent() {
         if (!job) return;
         if (job.status === "running" || job.status === "pending") {
           setSyncStatus(job.status);
+          setSyncJobId(job.id);
           setSyncMessage(
             job.progressMessage ??
-              "A sync is already in progress. Wait or click Sync Data to retry.",
+              "A sync is already in progress on GitHub Actions.",
           );
+          pollSyncProgress(job.id);
         }
       } catch {
         /* ignore */
       }
     })();
-  }, []);
+  }, [pollSyncProgress]);
 
   useEffect(() => {
     return () => stopPolling();

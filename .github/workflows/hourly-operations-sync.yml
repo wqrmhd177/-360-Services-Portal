@@ -21,6 +21,11 @@ on:
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
+    inputs:
+      job_id:
+        description: "ops_sync_jobs UUID — set when triggered from the portal Sync Data button"
+        required: false
+        type: string
 
 concurrency:
   group: hourly-operations-sync
@@ -91,12 +96,18 @@ jobs:
             unset DATABASE_URL || true
           fi
           echo "Metabase URL: ${METABASE_ORDERS_API_URL}"
+          JOB_ID="${{ inputs.job_id }}"
+          JOB_ARGS=""
+          if [ -n "${JOB_ID}" ]; then
+            echo "Portal job id: ${JOB_ID}"
+            JOB_ARGS="--job-id ${JOB_ID}"
+          fi
           if [ -n "${DATABASE_URL:-}" ]; then
             echo "Using Postgres upsert (DATABASE_URL set)"
-            python scripts/sync_orders.py --batch-size 10000 --workers 4
+            python scripts/sync_orders.py --batch-size 10000 --workers 4 ${JOB_ARGS}
           else
             echo "Using REST upsert (no DATABASE_URL)"
-            python scripts/sync_orders.py --rest --batch-size 1000 --workers 2
+            python scripts/sync_orders.py --rest --batch-size 1000 --workers 2 ${JOB_ARGS}
           fi
 
       - name: Refresh order materialized views

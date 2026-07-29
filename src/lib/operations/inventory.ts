@@ -26,9 +26,32 @@ export function skuFamilyToken(value: string): string {
   return dash === -1 ? norm : norm.slice(0, dash);
 }
 
+export function parseMetabaseInventoryPayload(raw: unknown): Record<string, unknown>[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((row): row is Record<string, unknown> => !!row && typeof row === "object");
+  }
+
+  if (raw && typeof raw === "object") {
+    const envelope = raw as {
+      data?: { rows?: unknown[][]; cols?: Array<{ name?: string }> };
+    };
+    const rows = envelope.data?.rows;
+    const cols = envelope.data?.cols;
+    if (Array.isArray(rows) && Array.isArray(cols) && cols.length > 0) {
+      return rows.map((row) =>
+        Object.fromEntries(
+          cols.map((col, index) => [String(col.name ?? `col_${index}`), row[index]]),
+        ),
+      );
+    }
+  }
+
+  return [];
+}
+
 export function normalizeInventoryRows(raw: unknown): InventoryRow[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
+  const records = parseMetabaseInventoryPayload(raw);
+  return records
     .map((row) => {
       if (!row || typeof row !== "object") return null;
       const r = row as Record<string, unknown>;

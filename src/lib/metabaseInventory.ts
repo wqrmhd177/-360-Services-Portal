@@ -18,6 +18,12 @@ let cachedInventory: InventorySku[] | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
+/** Clear in-memory SKU cache after a fresh inventory sync. */
+export function clearInventorySkuCache() {
+  cachedInventory = null;
+  cacheExpiry = 0;
+}
+
 function rowToSku(row: InventoryRow): InventorySku {
   return {
     sku: row.sku,

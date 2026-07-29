@@ -13,7 +13,8 @@ export type SyncJobRecord = {
   error_message: string | null;
 };
 
-const STUCK_JOB_MS = 8 * 60 * 1000;
+/** GitHub Actions sync can run up to ~45 min; allow extra buffer before marking stuck. */
+const STUCK_JOB_MS = 50 * 60 * 1000;
 
 export async function createSyncJob(source: "orders"): Promise<string> {
   const supabase = getOpsServiceDb();
