@@ -32,9 +32,10 @@ export async function dispatchOrdersSyncWorkflow(jobId: string): Promise<{
 
   const { owner, repo } = parsed;
   const ref = process.env.GITHUB_WORKFLOW_REF?.trim() || "main";
+  const repoPath = `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 
   const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${ORDERS_WORKFLOW_FILE}/dispatches`,
+    `https://api.github.com/repos/${repoPath}/actions/workflows/${ORDERS_WORKFLOW_FILE}/dispatches`,
     {
       method: "POST",
       headers: {
@@ -52,6 +53,20 @@ export async function dispatchOrdersSyncWorkflow(jobId: string): Promise<{
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
+    if (response.status === 401) {
+      return {
+        ok: false,
+        error:
+          "GitHub rejected the token (401 Bad credentials). Create a new PAT with Actions read/write on this repo and update GITHUB_TOKEN in Vercel.",
+      };
+    }
+    if (response.status === 403) {
+      return {
+        ok: false,
+        error:
+          "GitHub token lacks permission to dispatch workflows (403). Ensure the PAT has Actions: Read and write for wqrmhd177/-360-Services-Portal.",
+      };
+    }
     return {
       ok: false,
       error: `GitHub workflow dispatch failed (${response.status})${detail ? `: ${detail.slice(0, 200)}` : ""}`,

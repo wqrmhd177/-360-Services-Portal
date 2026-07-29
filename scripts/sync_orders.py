@@ -450,7 +450,53 @@ def row_to_tuple(row: dict[str, Any], synced_at: datetime) -> tuple[Any, ...]:
     )
 
 
-def fetch_metabase(url: str, max_attempts: int = 3) -> list[Any]:
+def _debug_log(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
+    # #region agent log
+    try:
+        log_path = ROOT / "debug-75f7fa.log"
+        entry = {
+            "sessionId": "75f7fa",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
+def _metabase_error_detail(resp: requests.Response) -> str:
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            err = body.get("error") or body.get("message")
+            err_type = body.get("error_type")
+            if err:
+                return f"{err_type}: {err}" if err_type else str(err)
+    except (ValueError, json.JSONDecodeError):
+        pass
+    snippet = (resp.text or "").strip()
+    return snippet[:240] if snippet else f"HTTP {resp.status_code}"
+
+
+def _is_retryable_metabase_failure(status: int, detail: str) -> bool:
+    lowered = detail.lower()
+    if status in (429, 502, 503, 504):
+        return True
+    if status == 400 and (
+        "invalid-query" in lowered
+        or "error occurred while running the query" in lowered
+        or "timeout" in lowered
+    ):
+        return True
+    return False
+
+
+def fetch_metabase(url: str, max_attempts: int = 6) -> list[Any]:
     print("Fetching Metabase data...", flush=True)
     t0 = time.perf_counter()
     last_err: Exception | None = None
@@ -458,16 +504,55 @@ def fetch_metabase(url: str, max_attempts: int = 3) -> list[Any]:
     for attempt in range(1, max_attempts + 1):
         try:
             if attempt > 1:
-                wait = 10 * attempt
+                wait = min(30 * (2 ** (attempt - 2)), 180)
                 print(f"  Retry {attempt}/{max_attempts} after {wait}s...", flush=True)
                 time.sleep(wait)
             # connect 60s, read up to 20 min (large Metabase exports can be slow)
             resp = requests.get(url, timeout=(60, 1200))
-            resp.raise_for_status()
+            detail = _metabase_error_detail(resp)
+            # #region agent log
+            _debug_log(
+                "B",
+                "sync_orders.py:fetch_metabase",
+                "metabase fetch attempt",
+                {
+                    "attempt": attempt,
+                    "status": resp.status_code,
+                    "requestUrl": url,
+                    "finalUrl": resp.url,
+                    "detail": detail,
+                    "retryable": _is_retryable_metabase_failure(resp.status_code, detail),
+                },
+            )
+            # #endregion
+
+            if not resp.ok:
+                if _is_retryable_metabase_failure(resp.status_code, detail):
+                    raise requests.HTTPError(
+                        f"{resp.status_code} Client Error: {detail} for url: {resp.url}",
+                        response=resp,
+                    )
+                resp.raise_for_status()
+
             data = resp.json()
+            if isinstance(data, dict) and data.get("status") == "failed":
+                detail = _metabase_error_detail(resp)
+                if _is_retryable_metabase_failure(400, detail):
+                    raise ValueError(f"Metabase query failed: {detail}")
+                raise ValueError(f"Metabase query failed: {detail}")
+
             if not isinstance(data, list):
-                raise ValueError("Metabase response is not a JSON array")
+                raise ValueError(f"Metabase response is not a JSON array: {detail}")
+
             print(f"  -> {len(data):,} rows in {time.perf_counter() - t0:.1f}s", flush=True)
+            # #region agent log
+            _debug_log(
+                "B",
+                "sync_orders.py:fetch_metabase",
+                "metabase fetch success",
+                {"attempt": attempt, "rowCount": len(data), "elapsedSec": round(time.perf_counter() - t0, 1)},
+            )
+            # #endregion
             return data
         except (requests.RequestException, ValueError) as exc:
             last_err = exc
@@ -906,6 +991,14 @@ def run_sync(
             update_job(job_id, status="running", error_message="Fetching data from Metabase...")
 
         print(f"Metabase URL: {metabase_url}", flush=True)
+        # #region agent log
+        _debug_log(
+            "A",
+            "sync_orders.py:run_sync",
+            "sync starting",
+            {"metabaseUrl": metabase_url, "useRest": use_rest, "jobId": job_id},
+        )
+        # #endregion
         raw = fetch_metabase(metabase_url)
         rows = normalize_rows(raw)
 
