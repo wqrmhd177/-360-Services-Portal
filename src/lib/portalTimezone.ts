@@ -143,5 +143,26 @@ export function formatPortalTimestamp(iso: string | null): string {
   }
 }
 
+/** Format a portal yyyy-MM-dd calendar day in PST/PDT (not browser local or UTC). */
+export function formatPortalYmdLabel(
+  ymd: string,
+  options: Intl.DateTimeFormatOptions,
+  locale = "en-GB",
+): string {
+  const instant = new Date(zonedDayStartMs(ymd));
+  return new Intl.DateTimeFormat(locale, {
+    ...options,
+    timeZone: PORTAL_TIMEZONE,
+  }).format(instant);
+}
+
+export function formatPortalYmdShort(ymd: string): string {
+  return formatPortalYmdLabel(ymd, { month: "short", day: "numeric" });
+}
+
+export function formatPortalYmdMedium(ymd: string): string {
+  return formatPortalYmdLabel(ymd, { dateStyle: "medium" });
+}
+
 /** @deprecated Use formatPortalTimestamp */
 export const formatPstTimestamp = formatPortalTimestamp;

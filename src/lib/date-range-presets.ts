@@ -1,11 +1,13 @@
-import { parseISO } from "date-fns";
 import { dateRangeFromParamStrings } from "@/lib/calendar-range";
 import {
   addPortalCalendarDays,
+  formatPortalYmdLabel,
   portalCalendarDay,
   portalMonthStartYmd,
   previousPortalMonthRange,
   todayInPortalTz,
+  zonedDateTimeParts,
+  zonedDayStartMs,
 } from "@/lib/portalTimezone";
 import type { DateRange } from "@/lib/types/order";
 
@@ -109,8 +111,12 @@ const DISPLAY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   year: "2-digit",
 };
 
+function portalDayFromYmd(ymd: string) {
+  return zonedDateTimeParts(new Date(zonedDayStartMs(ymd))).day;
+}
+
 export function formatDisplayDateFromYmd(ymd: string) {
-  return new Intl.DateTimeFormat("en-GB", DISPLAY_DATE_FORMAT).format(parseISO(ymd));
+  return formatPortalYmdLabel(ymd, DISPLAY_DATE_FORMAT);
 }
 
 export function formatRangeLabelFromStrings(fromDate: string, toDate: string) {
@@ -118,12 +124,12 @@ export function formatRangeLabelFromStrings(fromDate: string, toDate: string) {
 }
 
 export function formatCompactRangeLabelFromStrings(fromDate: string, toDate: string) {
-  const from = parseISO(fromDate);
-  const to = parseISO(toDate);
   const sameMonth = fromDate.slice(0, 7) === toDate.slice(0, 7);
   if (sameMonth) {
-    const month = new Intl.DateTimeFormat("en-GB", { month: "short" }).format(from);
-    return `${month} ${from.getUTCDate()}–${to.getUTCDate()}`;
+    const month = formatPortalYmdLabel(fromDate, { month: "short" });
+    const fromDay = portalDayFromYmd(fromDate);
+    const toDay = portalDayFromYmd(toDate);
+    return `${month} ${fromDay}–${toDay}`;
   }
   return `${formatDisplayDateFromYmd(fromDate)} – ${formatDisplayDateFromYmd(toDate)}`;
 }

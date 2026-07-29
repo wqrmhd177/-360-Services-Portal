@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import { formatPortalYmdMedium, formatPortalYmdShort } from "@/lib/portalTimezone";
 import { ChartCardShell } from "@/components/charts/chart-card-shell";
 import { RevenueUsdInfoContent } from "@/components/orders/revenue-usd-info-content";
 import type { TrendPoint } from "@/lib/analytics/orders";
@@ -70,7 +70,7 @@ export function LineChartCard({
               axisLine={{ stroke: chartTheme.axisStroke }}
               tickFormatter={(v) => {
                 try {
-                  return format(parseISO(String(v)), "MMM d");
+                  return formatPortalYmdShort(String(v));
                 } catch {
                   return String(v);
                 }
@@ -93,7 +93,7 @@ export function LineChartCard({
               }}
               labelFormatter={(v) => {
                 try {
-                  return format(parseISO(String(v)), "PP");
+                  return formatPortalYmdMedium(String(v));
                 } catch {
                   return String(v);
                 }
