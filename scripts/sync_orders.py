@@ -10,10 +10,11 @@ Usage:
   python scripts/sync_orders.py --job-id <uuid>
   python scripts/sync_orders.py --batch-size 10000 --workers 4
 
-Requires in .env.local:
-  DATABASE_URL          - Supabase Postgres URI (Settings -> Database -> Connection string)
-  SUPABASE_SERVICE_ROLE_KEY - fallback REST upsert if DATABASE_URL missing
+Requires in .env.local (or GitHub Actions secrets):
   NEXT_PUBLIC_SUPABASE_URL
+  SUPABASE_SERVICE_ROLE_KEY
+  SUPABASE_DB_PASSWORD   - Database password only (easiest; auto-builds IPv4 pooler URL)
+  DATABASE_URL           - Optional full Postgres URI (session pooler preferred over direct db.* host)
 """
 
 from __future__ import annotations
@@ -543,26 +544,144 @@ def normalize_pg_url(url: str) -> str:
     )
 
 
-def get_database_url() -> str:
-    raw = (os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL") or "").strip()
-    if not raw:
-        raise RuntimeError(
-            "DATABASE_URL is required for fast Postgres upsert. "
-            "Format: postgresql://postgres:PASSWORD@db.uengcejyjagdcqecnlkr.supabase.co:5432/postgres"
-        )
-    if raw.count("postgresql://") > 1 or "[YOUR-PASSWORD]" in raw or "postgres.[ref]" in raw:
-        raise RuntimeError(
-            "DATABASE_URL is malformed (duplicate URI or placeholder). "
-            "Use: postgresql://postgres:YOUR_DB_PASSWORD@db.uengcejyjagdcqecnlkr.supabase.co:5432/postgres"
-        )
-    if "YOUR_DB_PASSWORD" in raw:
-        raise RuntimeError(
-            "Replace YOUR_DB_PASSWORD in DATABASE_URL with your Supabase database password."
-        )
-    raw = normalize_pg_url(raw)
+# Supabase shared pooler regions (IPv4-safe for GitHub Actions; auto-probed when password-only).
+POOLER_AWS_REGIONS = (
+    "ap-south-1",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "eu-central-1",
+    "eu-central-2",
+    "eu-north-1",
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+    "ca-central-1",
+    "sa-east-1",
+    "af-south-1",
+    "me-south-1",
+)
+
+_resolved_database_url: str | None = None
+
+
+def supabase_project_ref() -> str:
+    url = supabase_url()
+    if not url:
+        raise RuntimeError("NEXT_PUBLIC_SUPABASE_URL is required.")
+    host = urlparse(url).hostname or ""
+    if host.endswith(".supabase.co"):
+        ref = host.split(".", 1)[0]
+        if ref:
+            return ref
+    raise RuntimeError(
+        "Could not parse Supabase project ref from NEXT_PUBLIC_SUPABASE_URL. "
+        "Expected https://xxxx.supabase.co"
+    )
+
+
+def has_postgres_config() -> bool:
+    return bool(
+        env_value("DATABASE_URL", "SUPABASE_DB_URL", "SUPABASE_DB_PASSWORD")
+    )
+
+
+def build_pooler_url(project_ref: str, password: str, pooler_host: str, port: int = 5432) -> str:
+    encoded_password = quote(password, safe="")
+    return (
+        f"postgresql://postgres.{project_ref}:{encoded_password}"
+        f"@{pooler_host}:{port}/postgres?sslmode=require"
+    )
+
+
+def _ensure_sslmode(url: str) -> str:
+    raw = normalize_pg_url(url)
     if "sslmode=" not in raw:
         raw += "&sslmode=require" if "?" in raw else "?sslmode=require"
     return raw
+
+
+def _probe_postgres(url: str, timeout: int = 8) -> bool:
+    if psycopg2 is None:
+        return False
+    try:
+        conn = psycopg2.connect(url, connect_timeout=timeout)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        finally:
+            conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def resolve_database_url() -> str:
+    """Resolve a working Supabase Postgres URI (prefers IPv4 session pooler)."""
+    global _resolved_database_url
+    if _resolved_database_url:
+        return _resolved_database_url
+
+    raw = env_value("DATABASE_URL", "SUPABASE_DB_URL") or ""
+    password = env_value("SUPABASE_DB_PASSWORD") or ""
+    region_hint = env_value("SUPABASE_DB_REGION") or ""
+
+    if raw:
+        parsed = urlparse(raw)
+        if parsed.password and not password:
+            password = parsed.password
+
+    if raw and "pooler.supabase.com" in raw:
+        _resolved_database_url = _ensure_sslmode(raw)
+        return _resolved_database_url
+
+    if raw and ("db." in raw and ".supabase.co" in raw):
+        print(
+            "  NOTE: Direct db.*.supabase.co URLs use IPv6 and fail on GitHub Actions. "
+            "Using Supabase session pooler instead.",
+            flush=True,
+        )
+
+    if not password:
+        raise RuntimeError(
+            "Postgres connection requires SUPABASE_DB_PASSWORD. "
+            "In Supabase: Project Settings → Database → Database password. "
+            "Add it as GitHub secret SUPABASE_DB_PASSWORD (password only, no URL)."
+        )
+
+    project_ref = supabase_project_ref()
+    pooler_hosts: list[str] = []
+    if region_hint:
+        pooler_hosts.append(f"aws-0-{region_hint}.pooler.supabase.com")
+        pooler_hosts.append(f"aws-{region_hint}.pooler.supabase.com")
+    for region in POOLER_AWS_REGIONS:
+        pooler_hosts.append(f"aws-0-{region}.pooler.supabase.com")
+
+    seen: set[str] = set()
+    for host in pooler_hosts:
+        if host in seen:
+            continue
+        seen.add(host)
+        candidate = build_pooler_url(project_ref, password, host)
+        if _probe_postgres(candidate):
+            print(f"  Postgres via Supabase pooler ({host})", flush=True)
+            _resolved_database_url = candidate
+            return candidate
+
+    raise RuntimeError(
+        "Could not connect to Supabase Postgres via session pooler. "
+        "Check SUPABASE_DB_PASSWORD. Optional: set SUPABASE_DB_REGION "
+        "(e.g. ap-south-1) from Supabase → Connect → Session pooler."
+    )
+
+
+def get_database_url() -> str:
+    return resolve_database_url()
 
 
 def pg_connect():
@@ -867,8 +986,42 @@ def log_sync(row_count: int, status: str, error: str | None = None) -> None:
             print(f"  WARN sync log write failed: {exc}", flush=True)
 
 
+def queue_mv_refresh_via_rest() -> bool:
+    """Queue MV refresh inside Supabase (fast REST call; pg_cron processes within ~1 min)."""
+    url = supabase_url()
+    key = supabase_service_key()
+    if not url or not key:
+        return False
+    try:
+        resp = requests.post(
+            f"{url}/rest/v1/rpc/queue_ops_mv_refresh",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=30,
+        )
+        if resp.ok:
+            print(
+                "  Materialized views refresh queued in Supabase (runs within ~1 min via pg_cron).",
+                flush=True,
+            )
+            return True
+        if resp.status_code == 404:
+            print(
+                "  WARN queue_ops_mv_refresh not found — run patch_ops_mv_refresh_queue.sql in Supabase.",
+                flush=True,
+            )
+            return False
+        print(
+            f"  ERROR MV refresh queue failed ({resp.status_code}): {resp.text[:300]}",
+            flush=True,
+        )
+        return False
+    except Exception as exc:
+        print(f"  ERROR MV refresh queue failed: {exc}", flush=True)
+        return False
+
+
 def refresh_summaries() -> bool:
-    """Refresh order materialized views. Returns True on success."""
+    """Refresh order materialized views. Returns True on success or successful queue."""
     try:
         conn = pg_connect()
         try:
@@ -899,14 +1052,15 @@ def refresh_summaries() -> bool:
                 print("  Materialized views refreshed (REST).", flush=True)
                 return True
             print(
-                f"  ERROR MV refresh REST failed ({resp.status_code}): {resp.text[:500]}",
+                f"  WARN MV refresh REST failed ({resp.status_code}): {resp.text[:300]}",
                 flush=True,
             )
-            return False
         except Exception as exc:
-            print(f"  ERROR MV refresh failed: {exc}", flush=True)
-            return False
-    print("  ERROR MV refresh skipped: no DATABASE_URL or Supabase credentials.", flush=True)
+            print(f"  WARN MV refresh REST failed: {exc}", flush=True)
+
+        return queue_mv_refresh_via_rest()
+
+    print("  ERROR MV refresh skipped: no Postgres or Supabase credentials.", flush=True)
     return False
 
 
@@ -980,7 +1134,7 @@ def run_sync(
                 error_message=f"Upserting {total:,} rows (batch={batch_size}, workers={workers})...",
             )
 
-        has_pg = bool(os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL"))
+        has_pg = has_postgres_config()
         if use_rest or not has_pg:
             upsert_rest(enriched, synced_at, batch_size, workers)
         else:
@@ -1007,7 +1161,7 @@ def run_sync(
         if not refresh_summaries():
             raise RuntimeError(
                 "Orders synced but materialized view refresh failed. "
-                "Run patch_fix_refresh_summaries.sql in Supabase and ensure DATABASE_URL is set in GitHub secrets."
+                "Run patch_fix_refresh_summaries.sql and patch_ops_mv_refresh_queue.sql in Supabase."
             )
 
         log_sync(total, "success")

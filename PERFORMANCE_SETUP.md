@@ -19,10 +19,8 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 
 4. **`patch_store_visibility_status_detail.sql`**
 5. **`patch_orders_rollup_summary_rpc.sql`**
-6. **`patch_fix_refresh_summaries.sql`** — extends MV refresh timeout; required for hourly GitHub sync — SQL aggregation for SLA, delivery partner, revenue loss (fixes slow filter changes)
-   - Adds `ops_orders_order_detail` and `ops_orders_product_rollup` MVs
-   - Adds `get_ops_store_visibility_tables` and `get_ops_orders_status_detail` RPCs
-   - Updates `refresh_ops_orders_summaries_simple()` to refresh the new MVs
+6. **`patch_fix_refresh_summaries.sql`** — extends MV refresh timeout; required for hourly GitHub sync
+7. **`patch_ops_mv_refresh_queue.sql`** — queues MV refresh inside Supabase (no GitHub DATABASE_URL needed)
 
 Then refresh materialized views once:
 
@@ -45,7 +43,12 @@ In **GitHub → Settings → Secrets and variables → Actions**, ensure:
 | `VERCEL_PRODUCTION_URL` | e.g. `https://360-portal-beige.vercel.app` |
 | `CRON_SECRET` | Same value as Vercel env var `CRON_SECRET` |
 
-Optional: `DATABASE_URL` (Postgres session pooler URI) makes sync faster.
+**Easiest optional secret (faster sync):** `SUPABASE_DB_PASSWORD` — your Supabase **database password only** (not a URL).  
+The sync script auto-builds the IPv4 pooler connection. You can **delete** the `DATABASE_URL` secret if you have one.
+
+Optional: `SUPABASE_DB_REGION` if auto-detect is slow.
+
+After patch 7, MV refresh runs inside Supabase even without `SUPABASE_DB_PASSWORD`.
 
 ## 4. Verify
 
