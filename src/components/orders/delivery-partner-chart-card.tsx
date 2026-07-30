@@ -66,6 +66,8 @@ export function DeliveryPartnerChartCard({
         {formatNumber(orderCount)} orders assigned
         {" · "}
         Labels show volume and % delivered (status = Delivered)
+        {" · "}
+        Blank = tracking without courier name; Unknown = tracking with unknown courier; Unassigned = no tracking yet
       </p>
 
       <BarChartCard

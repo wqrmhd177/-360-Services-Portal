@@ -20,6 +20,7 @@ type DbOrderRow = {
   tag: string | null;
   bifurcation: string | null;
   delivery_partner: string | null;
+  courier_tracking_id: string | null;
   platform: string | null;
   order_date: string | null;
   approved_date: string | null;
@@ -67,7 +68,7 @@ export function mapDbRowToOrderLineItem(row: DbOrderRow): OrderLineItem | null {
     accountManager,
     deliveryPartner: row.delivery_partner ?? "",
     undeliveredTag: null,
-    courierTrackingId: "",
+    courierTrackingId: row.courier_tracking_id ?? "",
     orderDate,
     deliveredDate: parseDate(row.delivered_date),
     shipmentDate: parseDate(row.shipment_date),

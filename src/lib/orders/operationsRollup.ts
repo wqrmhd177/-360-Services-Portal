@@ -8,6 +8,7 @@ import {
   type RevenueLossRow,
 } from "@/lib/analytics/orders";
 import { normalizeOrderCountry } from "@/lib/country-normalization";
+import { DELIVERY_PARTNER_CHART_UNASSIGNED } from "@/lib/delivery-partner-chart-label";
 import {
   OPERATIONS_STATUS_KPI_GROUPS,
   type OperationsStatusGroupId,
@@ -138,7 +139,7 @@ function buildDeliveryPartnerRows(
   >();
 
   for (const row of rows) {
-    const name = row.delivery_partner?.trim() || "Unknown";
+    const name = row.delivery_partner?.trim() || DELIVERY_PARTNER_CHART_UNASSIGNED;
     const orders = Number(row.order_count ?? 0);
     const revenue = Number(row.revenue_usd ?? 0);
     const units = Number(row.units ?? 0);

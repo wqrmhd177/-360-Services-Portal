@@ -9,6 +9,7 @@ import { isInstantInCalendarRange } from "@/lib/calendar-range";
 import { convertToUsd } from "@/lib/order-currency";
 import { formatDateParam } from "@/lib/orders/params";
 import { getResolvedPayable } from "@/lib/analytics/revenue-imputation";
+import { resolveDeliveryPartnerChartLabel } from "@/lib/delivery-partner-chart-label";
 import {
   getRevenueLossTagGroupHeading,
   REVENUE_LOSS_TAG_GROUPS,
@@ -641,7 +642,10 @@ export function computeDeliveryPartnerBreakdown(
   >();
 
   for (const item of items) {
-    const key = item.deliveryPartner?.trim() || "Unknown";
+    const key = resolveDeliveryPartnerChartLabel(
+      item.deliveryPartner,
+      item.courierTrackingId,
+    );
     if (!agg.has(key)) {
       agg.set(key, { orders: new Set(), delivered: new Set(), revenue: 0, units: 0 });
     }
@@ -650,7 +654,10 @@ export function computeDeliveryPartnerBreakdown(
 
   for (const [orderKey, lines] of byOrder) {
     const line = orderRepresentativeLine(lines);
-    const key = line.deliveryPartner?.trim() || "Unknown";
+    const key = resolveDeliveryPartnerChartLabel(
+      line.deliveryPartner,
+      line.courierTrackingId,
+    );
     if (!agg.has(key)) {
       agg.set(key, { orders: new Set(), delivered: new Set(), revenue: 0, units: 0 });
     }

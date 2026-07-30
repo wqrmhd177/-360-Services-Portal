@@ -23,7 +23,7 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 7. **`patch_ops_mv_refresh_queue.sql`** — queues MV refresh inside Supabase (no GitHub DATABASE_URL needed)
 8. **`patch_return_sla_final_action_date.sql`** — syncs return-request date; fixes Avg return request → returned KPI
 9. **`patch_country_normalization.sql`** — clubs UAE/United Arab Emirates and KSA/Saudi Arabia in filters and KPIs
-10. **`patch_delivery_partner_live_rpc.sql`** — delivery partner chart reads live synced rows (run after Metabase delivery_partner fix, then sync)
+10. **`patch_delivery_partner_live_rpc.sql`** — delivery partner chart: Blank / Unknown / Unassigned labels using tracking id + courier name (re-run after deploy, then sync)
 
 Then refresh materialized views once:
 

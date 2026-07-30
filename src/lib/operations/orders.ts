@@ -20,6 +20,7 @@ export interface OrderRow {
   tag: string;
   bifurcation: string;
   deliveryPartner: string;
+  courierTrackingId: string;
   platform: string;
   orderDate: Date | null;
   approvedDate: Date | null;
@@ -79,6 +80,13 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
         "Delivery Partner",
         "delivery partner",
       ),
+      courierTrackingId: metabaseString(
+        r,
+        "Courier_tracking_id",
+        "courier_tracking_id",
+        "System_gen_tracking_id",
+        "system_gen_tracking_id",
+      ),
       platform: String(r.platform ?? r.PLATFORM ?? ""),
       orderDate: parseDate(r.Order_date as string | null),
       approvedDate: parseDate(r.approved_date as string | null),
@@ -117,6 +125,7 @@ export function normalizeDbOrderRows(rows: unknown[]): OrderRow[] {
       tag: String(r.tag ?? ""),
       bifurcation: String(r.bifurcation ?? ""),
       deliveryPartner: String(r.delivery_partner ?? ""),
+      courierTrackingId: String(r.courier_tracking_id ?? ""),
       platform: String(r.platform ?? r.PLATFORM ?? ""),
       orderDate: r.order_date ? new Date(String(r.order_date)) : null,
       approvedDate: r.approved_date ? new Date(String(r.approved_date)) : null,

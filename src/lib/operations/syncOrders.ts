@@ -173,6 +173,7 @@ async function syncOrdersRestFallback(
         tag: r.tag,
         bifurcation: r.bifurcation,
         delivery_partner: r.deliveryPartner,
+        courier_tracking_id: r.courierTrackingId,
         platform: r.platform,
         order_date: r.orderDate?.toISOString() ?? null,
         approved_date: r.approvedDate?.toISOString() ?? null,

@@ -42,7 +42,7 @@ export function enrichOrderRows(rows: OrderRow[]): Array<OrderRow & {
       accountManager: accountManagerKey(r),
       deliveryPartner: r.deliveryPartner,
       undeliveredTag: null,
-      courierTrackingId: "",
+      courierTrackingId: r.courierTrackingId,
       orderDate: r.orderDate!,
       deliveredDate: r.deliveredDate,
       shipmentDate: r.shipmentDate,

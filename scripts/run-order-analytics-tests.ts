@@ -8,6 +8,12 @@ import {
 } from "../src/lib/analytics/orders";
 import { mapStatusRollupRows } from "../src/lib/orders/operationsRollup";
 import { computeStoreVisibilityTables } from "../src/lib/analytics/store-visibility";
+import {
+  DELIVERY_PARTNER_CHART_BLANK,
+  DELIVERY_PARTNER_CHART_UNASSIGNED,
+  DELIVERY_PARTNER_CHART_UNKNOWN,
+  resolveDeliveryPartnerChartLabel,
+} from "../src/lib/delivery-partner-chart-label";
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -142,6 +148,25 @@ function testStoreVisibilityTables() {
   );
 }
 
+function testDeliveryPartnerChartLabels() {
+  assert(
+    resolveDeliveryPartnerChartLabel("", "TRK-1") === DELIVERY_PARTNER_CHART_BLANK,
+    "tracking + blank courier → Blank",
+  );
+  assert(
+    resolveDeliveryPartnerChartLabel("Unknown", "TRK-1") === DELIVERY_PARTNER_CHART_UNKNOWN,
+    "tracking + Unknown courier → Unknown",
+  );
+  assert(
+    resolveDeliveryPartnerChartLabel("", "") === DELIVERY_PARTNER_CHART_UNASSIGNED,
+    "no tracking + blank courier → Unassigned",
+  );
+  assert(
+    resolveDeliveryPartnerChartLabel("Tawseel", "TRK-1") === "Tawseel",
+    "tracking + named courier → courier name",
+  );
+}
+
 function run() {
   const tests = [
     ["same order_number different ids", testSameOrderNumberDifferentIds],
@@ -149,6 +174,7 @@ function run() {
     ["country normalization", testCountryNormalization],
     ["status counts from rollup", testStatusCountsFromRollup],
     ["store visibility tables", testStoreVisibilityTables],
+    ["delivery partner chart labels", testDeliveryPartnerChartLabels],
   ];
 
   for (const [name, fn] of tests as [string, () => void][]) {

@@ -1,6 +1,36 @@
--- Delivery partner chart: read live from ops_orders_items (not stale MV).
--- Run after Metabase delivery_partner column is updated, then re-sync orders.
+-- Delivery partner chart: live aggregates + tracking-aware Blank / Unknown / Unassigned labels.
+-- Run after deploying sync code, then re-sync orders from Metabase.
 -- Requires patch_country_normalization.sql (normalize_ops_country / ops_country_matches).
+
+ALTER TABLE ops_orders_items
+  ADD COLUMN IF NOT EXISTS courier_tracking_id TEXT;
+
+COMMENT ON COLUMN ops_orders_items.courier_tracking_id IS
+  'Courier or system tracking id from Metabase (Courier_tracking_id / System_gen_tracking_id).';
+
+CREATE OR REPLACE FUNCTION resolve_ops_delivery_partner_chart_label(
+  p_delivery_partner TEXT,
+  p_courier_tracking_id TEXT
+)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN NULLIF(TRIM(p_courier_tracking_id), '') IS NOT NULL THEN
+      CASE
+        WHEN NULLIF(TRIM(p_delivery_partner), '') IS NULL THEN 'Blank'
+        WHEN LOWER(TRIM(p_delivery_partner)) = 'unknown' THEN 'Unknown'
+        ELSE TRIM(p_delivery_partner)
+      END
+    ELSE
+      CASE
+        WHEN NULLIF(TRIM(p_delivery_partner), '') IS NULL THEN 'Unassigned'
+        WHEN LOWER(TRIM(p_delivery_partner)) = 'unknown' THEN 'Unknown'
+        ELSE TRIM(p_delivery_partner)
+      END
+  END;
+$$;
 
 CREATE OR REPLACE FUNCTION get_ops_orders_delivery_partner_summary(
   p_country     TEXT DEFAULT NULL,
@@ -63,7 +93,10 @@ AS $$
         normalize_ops_country(country) AS country,
         COALESCE(bifurcation, '') AS bifurcation,
         COALESCE(store_id, 0) AS store_id,
-        COALESCE(NULLIF(TRIM((ARRAY_AGG(delivery_partner ORDER BY id))[1]), ''), 'Unknown') AS delivery_partner,
+        resolve_ops_delivery_partner_chart_label(
+          (ARRAY_AGG(delivery_partner ORDER BY id))[1],
+          (ARRAY_AGG(courier_tracking_id ORDER BY id))[1]
+        ) AS delivery_partner,
         COALESCE(NULLIF(TRIM((ARRAY_AGG(status ORDER BY id))[1]), ''), 'Unknown') AS status,
         SUM(COALESCE(usd_revenue, 0))::NUMERIC(14, 4) AS revenue_usd,
         SUM(COALESCE(quantity, 0))::INTEGER AS units
@@ -84,4 +117,4 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION get_ops_orders_delivery_partner_summary IS
-  'Live delivery partner aggregates from ops_orders_items (accurate right after sync).';
+  'Live delivery partner chart: Blank = tracking without courier name; Unknown = tracking + unknown courier; Unassigned = no tracking yet.';
