@@ -10,6 +10,8 @@
 #                                   empty value — delete it entirely to use the
 #                                   built-in default Metabase URL.
 #   DATABASE_URL                  — Supabase Postgres URI (Session pooler). Faster sync.
+#                                   Strongly recommended — MV refresh needs direct Postgres
+#                                   to avoid Supabase REST statement timeout (~8s).
 #   VERCEL_PRODUCTION_URL         — e.g. https://360-portal-beige.vercel.app
 #   CRON_SECRET                   — Same value as Vercel CRON_SECRET
 #
@@ -109,25 +111,6 @@ jobs:
             echo "Using REST upsert (no DATABASE_URL)"
             python scripts/sync_orders.py --rest --batch-size 1000 --workers 2 ${JOB_ARGS}
           fi
-
-      - name: Refresh order materialized views
-        if: success()
-        env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-          case "${SUPABASE_URL}" in
-            http://*|https://*) BASE="${SUPABASE_URL%/}" ;;
-            *) BASE="https://${SUPABASE_URL#/}" ;;
-          esac
-          curl -sf -X POST \
-            "${BASE}/rest/v1/rpc/refresh_ops_orders_summaries_simple" \
-            -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{}"
-          echo "Order materialized views refreshed."
 
       - name: Invalidate portal operations cache (optional)
         continue-on-error: true

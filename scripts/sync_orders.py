@@ -867,32 +867,47 @@ def log_sync(row_count: int, status: str, error: str | None = None) -> None:
             print(f"  WARN sync log write failed: {exc}", flush=True)
 
 
-def refresh_summaries() -> None:
+def refresh_summaries() -> bool:
+    """Refresh order materialized views. Returns True on success."""
     try:
         conn = pg_connect()
         try:
             with conn.cursor() as cur:
+                cur.execute("SET statement_timeout = '600s'")
                 cur.execute("SELECT refresh_ops_orders_summaries_simple()")
             conn.commit()
+            print("  Materialized views refreshed.", flush=True)
+            return True
         except Exception as exc:
-            print(f"  WARN MV refresh failed (data saved): {exc}", flush=True)
+            print(f"  ERROR MV refresh failed (data saved): {exc}", flush=True)
+            return False
         finally:
             conn.close()
-        return
-    except Exception:
-        pass
+    except Exception as pg_err:
+        print(f"  WARN Postgres refresh unavailable ({pg_err}); trying REST...", flush=True)
 
     url = supabase_url()
     key = supabase_service_key()
     if url and key:
         try:
-            requests.post(
+            resp = requests.post(
                 f"{url}/rest/v1/rpc/refresh_ops_orders_summaries_simple",
                 headers={"apikey": key, "Authorization": f"Bearer {key}"},
-                timeout=120,
+                timeout=600,
             )
+            if resp.ok:
+                print("  Materialized views refreshed (REST).", flush=True)
+                return True
+            print(
+                f"  ERROR MV refresh REST failed ({resp.status_code}): {resp.text[:500]}",
+                flush=True,
+            )
+            return False
         except Exception as exc:
-            print(f"  WARN MV refresh failed: {exc}", flush=True)
+            print(f"  ERROR MV refresh failed: {exc}", flush=True)
+            return False
+    print("  ERROR MV refresh skipped: no DATABASE_URL or Supabase credentials.", flush=True)
+    return False
 
 
 def update_job(job_id: str, **fields: Any) -> None:
@@ -987,8 +1002,15 @@ def run_sync(
             update_job(job_id, error_message="Removing stale rows...")
         delete_stale(synced_at)
 
+        if job_id:
+            update_job(job_id, error_message="Refreshing materialized views...")
+        if not refresh_summaries():
+            raise RuntimeError(
+                "Orders synced but materialized view refresh failed. "
+                "Run patch_fix_refresh_summaries.sql in Supabase and ensure DATABASE_URL is set in GitHub secrets."
+            )
+
         log_sync(total, "success")
-        refresh_summaries()
 
         elapsed = time.perf_counter() - t_total
         print(f"\nOK Synced {total:,} rows in {elapsed:.1f}s ({total / max(elapsed, 0.1):,.0f} rows/s)", flush=True)
