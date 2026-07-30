@@ -8,8 +8,14 @@ IMMUTABLE
 AS $$
   SELECT CASE
     WHEN raw IS NULL OR TRIM(raw) = '' THEN 'Unknown'
-    WHEN LOWER(TRIM(raw)) IN ('uae', 'united arab emirates', 'u.a.e.', 'u.a.e') THEN 'United Arab Emirates'
-    WHEN LOWER(TRIM(raw)) IN ('ksa', 'saudi arabia', 'saudia arabia', 'kingdom of saudi arabia')
+    WHEN LOWER(REGEXP_REPLACE(TRIM(raw), '\s+', ' ', 'g')) IN (
+      'uae', 'united arab emirates', 'u.a.e.', 'u.a.e'
+    ) THEN 'United Arab Emirates'
+    WHEN LOWER(REGEXP_REPLACE(TRIM(raw), '\s+', ' ', 'g')) IN (
+      'ksa', 'saudi arabia', 'saudia arabia', 'kingdom of saudi arabia'
+    )
+      OR LOWER(REGEXP_REPLACE(TRIM(raw), '\s+', ' ', 'g')) LIKE '%saudi arabia%'
+      OR LOWER(REGEXP_REPLACE(TRIM(raw), '\s+', ' ', 'g')) LIKE '%saudia arabia%'
       THEN 'Saudi Arabia'
     ELSE TRIM(raw)
   END;

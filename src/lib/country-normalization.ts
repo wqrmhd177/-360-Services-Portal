@@ -27,11 +27,38 @@ const ALIAS_TO_CANONICAL = new Map<string, string>(
   ),
 );
 
+function collapseWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 /** Normalize raw Metabase / DB country to a canonical label for filters and rollups. */
 export function normalizeOrderCountry(raw: string | undefined | null): string {
-  const trimmed = raw?.trim();
+  const trimmed = collapseWhitespace(raw ?? "");
   if (!trimmed) return "Unknown";
-  return ALIAS_TO_CANONICAL.get(trimmed.toLowerCase()) ?? trimmed;
+
+  const key = trimmed.toLowerCase();
+  const exact = ALIAS_TO_CANONICAL.get(key);
+  if (exact) return exact;
+
+  // Fuzzy fallbacks for minor typos / spacing variants in Metabase exports.
+  if (
+    key === "uae" ||
+    key.includes("united arab emirates") ||
+    key.replace(/\./g, "") === "uae"
+  ) {
+    return "United Arab Emirates";
+  }
+
+  if (
+    key === "ksa" ||
+    key.includes("saudi arabia") ||
+    key.includes("saudia arabia") ||
+    key.includes("kingdom of saudi arabia")
+  ) {
+    return "Saudi Arabia";
+  }
+
+  return trimmed;
 }
 
 /** All DB values that should match a filter selection (for PostgREST `.in()`). */

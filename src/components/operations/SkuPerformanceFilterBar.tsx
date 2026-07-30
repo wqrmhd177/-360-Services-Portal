@@ -1,8 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DateRangePicker } from "@/components/layout/date-range-picker";
+import {
+  dedupeCountryFilterOptions,
+  normalizeCountryFilterParam,
+} from "@/lib/country-normalization";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +63,11 @@ function SkuPerformanceFilterBarInner({ options }: SkuPerformanceFilterBarProps)
   const [bifurcation, setBifurcation] = useState(searchParams.get("bifurcation") ?? "");
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
 
+  const countries = useMemo(
+    () => dedupeCountryFilterOptions(options.countries),
+    [options.countries],
+  );
+
   useEffect(() => {
     setCountry(searchParams.get("country") ?? "");
     setBifurcation(searchParams.get("bifurcation") ?? "");
@@ -67,7 +76,8 @@ function SkuPerformanceFilterBarInner({ options }: SkuPerformanceFilterBarProps)
 
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
-    if (country) params.set("country", country);
+    const canonicalCountry = normalizeCountryFilterParam(country);
+    if (canonicalCountry) params.set("country", canonicalCountry);
     else params.delete("country");
     if (bifurcation) params.set("bifurcation", bifurcation);
     else params.delete("bifurcation");
@@ -98,12 +108,14 @@ function SkuPerformanceFilterBarInner({ options }: SkuPerformanceFilterBarProps)
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         <FilterSelect
           label="Country"
-          value={country}
+          value={normalizeCountryFilterParam(country) ?? country}
           disabled={isPending}
-          onChange={setCountry}
+          onChange={(value) =>
+            setCountry(normalizeCountryFilterParam(value) ?? value)
+          }
         >
           <option value="">All countries</option>
-          {options.countries.map((c) => (
+          {countries.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>

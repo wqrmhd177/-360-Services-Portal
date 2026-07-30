@@ -495,7 +495,7 @@ export async function fetchFilterOptionsFromDb(): Promise<{
 /** Cached filter options — countries/bifurcations change only after sync. */
 export const fetchCachedFilterOptionsFromDb = unstable_cache(
   async () => fetchFilterOptionsFromDb(),
-  ["ops-orders-filter-options"],
+  ["ops-orders-filter-options-v2"],
   { revalidate: 3600, tags: ["ops-orders-filter-options", "ops-data"] },
 );
 
@@ -512,7 +512,7 @@ export function searchParamsToFilterParams(
   const storeId = storeRaw ? Number(storeRaw) : null;
 
   return {
-    country: normalizeOptionalFilter(country),
+    country: normalizeCountryFilterParam(normalizeOptionalFilter(country)),
     bifurcation: normalizeOptionalFilter(bifurcation),
     storeId: storeId && Number.isFinite(storeId) ? storeId : null,
     fromDate: range.fromDate,

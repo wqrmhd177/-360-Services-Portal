@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DateRangePicker } from "@/components/layout/date-range-picker";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
@@ -8,6 +8,10 @@ import {
   StoreIdSearchSelect,
   type StoreOption,
 } from "@/components/operations/StoreIdSearchSelect";
+import {
+  dedupeCountryFilterOptions,
+  normalizeCountryFilterParam,
+} from "@/lib/country-normalization";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +78,24 @@ function OrdersFilterBarInner({
   const { push: navigate } = usePortalNavigation();
   const [isPending, startTransition] = useTransition();
 
+  const countries = useMemo(
+    () => dedupeCountryFilterOptions(options.countries),
+    [options.countries],
+  );
+
+  const countryValue = normalizeCountryFilterParam(country) ?? country;
+
+  // Rewrite legacy alias values in the URL (e.g. ?country=UAE → United Arab Emirates).
+  useEffect(() => {
+    const canonical = normalizeCountryFilterParam(country);
+    if (!country || !canonical || canonical === country) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("country", canonical);
+    startTransition(() => {
+      navigate(`${pathname}?${params.toString()}`);
+    });
+  }, [country, navigate, pathname, searchParams]);
+
   const updateParam = useCallback(
     (key: string, value: string) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -111,11 +133,13 @@ function OrdersFilterBarInner({
       >
         <FilterSelect
           label="Country"
-          value={country}
-          onChange={(value) => updateParam("country", value)}
+          value={countryValue}
+          onChange={(value) =>
+            updateParam("country", normalizeCountryFilterParam(value) ?? value)
+          }
         >
           <option value="">All countries</option>
-          {options.countries.map((c) => (
+          {countries.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
