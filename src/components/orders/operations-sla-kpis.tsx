@@ -177,7 +177,7 @@ export function OperationsSlaKpis({
     },
     {
       metric: "return",
-      title: "Avg order → return",
+      title: "Avg return request → returned",
       value:
         sla.avgOrderToReturnDays != null
           ? `${sla.avgOrderToReturnDays.toFixed(1)} days`

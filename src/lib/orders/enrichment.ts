@@ -51,6 +51,7 @@ export function enrichOrderRows(rows: OrderRow[]): Array<OrderRow & {
       undeliveredDate: r.undeliveredDate,
       rescheduleDate: null,
       returnedDate: r.returnedDate,
+      finalActionDateUndelivered: r.finalActionDateUndelivered,
       updateUser: null,
       storeId: r.storeId,
       currencyCode: r.currency?.trim() || undefined,

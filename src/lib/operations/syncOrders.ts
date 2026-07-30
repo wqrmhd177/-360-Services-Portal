@@ -181,6 +181,7 @@ async function syncOrdersRestFallback(
         delivered_date: r.deliveredDate?.toISOString() ?? null,
         returned_date: r.returnedDate?.toISOString() ?? null,
         undelivered_date: r.undeliveredDate?.toISOString() ?? null,
+        final_action_date_undelivered: r.finalActionDateUndelivered?.toISOString() ?? null,
         resolved_payable: r.resolvedPayable,
         payable_estimated: r.payableEstimated,
         usd_revenue: r.usdRevenue,

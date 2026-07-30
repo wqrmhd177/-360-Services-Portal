@@ -28,6 +28,7 @@ type DbOrderRow = {
   delivered_date: string | null;
   returned_date: string | null;
   undelivered_date: string | null;
+  final_action_date_undelivered: string | null;
 };
 
 function parseDate(raw: string | null): Date | null {
@@ -75,6 +76,7 @@ export function mapDbRowToOrderLineItem(row: DbOrderRow): OrderLineItem | null {
     undeliveredDate: parseDate(row.undelivered_date),
     rescheduleDate: null,
     returnedDate: parseDate(row.returned_date),
+    finalActionDateUndelivered: parseDate(row.final_action_date_undelivered),
     updateUser: null,
     storeId: Number(row.store_id ?? 0),
     currencyCode: row.currency?.trim() || undefined,

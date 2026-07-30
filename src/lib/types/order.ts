@@ -75,6 +75,8 @@ export interface OrderLineItem {
   undeliveredDate: Date | null;
   rescheduleDate: Date | null;
   returnedDate: Date | null;
+  /** When return was requested (Metabase Final_action_date_undelivered). */
+  finalActionDateUndelivered: Date | null;
   updateUser: string | null;
   storeId: number;
   /** ISO currency code from Metabase when available */

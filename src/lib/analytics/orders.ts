@@ -109,6 +109,15 @@ export function orderRepresentativeLine(lines: OrderLineItem[]): OrderLineItem {
   return lines.find((l) => l.orderDate) ?? lines[0];
 }
 
+function earliestDate(dates: Array<Date | null | undefined>): Date | null {
+  let min: Date | null = null;
+  for (const date of dates) {
+    if (!date || Number.isNaN(date.getTime())) continue;
+    if (!min || date < min) min = date;
+  }
+  return min;
+}
+
 /**
  * Facet rules per Metabase id (each row is one order):
  * - All countries / bifurcations → field is populated on this id
@@ -1105,10 +1114,14 @@ export function computeFulfillmentSLA(items: OrderLineItem[]): FulfillmentSLA {
       deliverDays.push(days);
       bucket.deliverDays.push(days);
     }
-    if (o.returnedDate) {
-      const days = differenceInDays(o.returnedDate, o.orderDate);
-      returnDays.push(days);
-      bucket.returnDays.push(days);
+    const returnedDate = earliestDate(lines.map((l) => l.returnedDate));
+    const finalActionDate = earliestDate(lines.map((l) => l.finalActionDateUndelivered));
+    if (returnedDate && finalActionDate) {
+      const days = differenceInDays(returnedDate, finalActionDate);
+      if (days >= 0) {
+        returnDays.push(days);
+        bucket.returnDays.push(days);
+      }
     }
     if (o.shipmentDate) {
       const d = differenceInDays(o.shipmentDate, o.orderDate);

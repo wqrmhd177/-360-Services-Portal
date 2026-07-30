@@ -85,6 +85,7 @@ WITH per_order AS (
     MIN(approved_date) AS approved_date,
     MIN(delivered_date) AS delivered_date,
     MIN(returned_date) AS returned_date,
+    MIN(final_action_date_undelivered) AS final_action_date_undelivered,
     MIN(shipment_date) AS shipment_date
   FROM ops_orders_items
   WHERE order_id IS NOT NULL AND order_date_day IS NOT NULL
@@ -105,8 +106,10 @@ sla_days AS (
       THEN (delivered_date::date - order_date::date)
     END AS deliver_days,
     CASE
-      WHEN returned_date IS NOT NULL AND order_date IS NOT NULL
-      THEN (returned_date::date - order_date::date)
+      WHEN returned_date IS NOT NULL
+        AND final_action_date_undelivered IS NOT NULL
+        AND returned_date::date >= final_action_date_undelivered::date
+      THEN (returned_date::date - final_action_date_undelivered::date)
     END AS return_days,
     CASE
       WHEN shipment_date IS NOT NULL AND order_date IS NOT NULL

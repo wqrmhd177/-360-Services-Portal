@@ -112,6 +112,7 @@ COLUMNS = [
     "delivered_date",
     "returned_date",
     "undelivered_date",
+    "final_action_date_undelivered",
     "resolved_payable",
     "payable_estimated",
     "usd_revenue",
@@ -148,6 +149,7 @@ ON CONFLICT (order_id, sku) DO UPDATE SET
   delivered_date = EXCLUDED.delivered_date,
   returned_date = EXCLUDED.returned_date,
   undelivered_date = EXCLUDED.undelivered_date,
+  final_action_date_undelivered = EXCLUDED.final_action_date_undelivered,
   resolved_payable = EXCLUDED.resolved_payable,
   payable_estimated = EXCLUDED.payable_estimated,
   usd_revenue = EXCLUDED.usd_revenue,
@@ -350,6 +352,9 @@ def normalize_rows(raw: list[Any]) -> list[dict[str, Any]]:
                 "delivered_date": parse_date(r.get("delivered_date")),
                 "returned_date": parse_date(r.get("Returned_date")),
                 "undelivered_date": parse_date(r.get("Undelivered_date")),
+                "final_action_date_undelivered": parse_date(
+                    r.get("Final_action_date_undelivered")
+                ),
             }
         )
     return rows
@@ -442,6 +447,7 @@ def row_to_tuple(row: dict[str, Any], synced_at: datetime) -> tuple[Any, ...]:
         row.get("delivered_date"),
         row.get("returned_date"),
         row.get("undelivered_date"),
+        row.get("final_action_date_undelivered"),
         float(row.get("resolved_payable") or 0),
         bool(row.get("payable_estimated")),
         float(row.get("usd_revenue") or 0),
@@ -746,6 +752,7 @@ def upsert_postgres_copy(rows: list[dict[str, Any]], synced_at: datetime) -> Non
       NULLIF(delivered_date, '')::TIMESTAMPTZ,
       NULLIF(returned_date, '')::TIMESTAMPTZ,
       NULLIF(undelivered_date, '')::TIMESTAMPTZ,
+      NULLIF(final_action_date_undelivered, '')::TIMESTAMPTZ,
       NULLIF(resolved_payable, '')::NUMERIC,
       CASE WHEN payable_estimated IN ('true', 't', '1') THEN TRUE ELSE FALSE END,
       NULLIF(usd_revenue, '')::NUMERIC,
@@ -882,6 +889,11 @@ def upsert_rest(rows: list[dict[str, Any]], synced_at: datetime, batch_size: int
             "delivered_date": row["delivered_date"].isoformat() if row.get("delivered_date") else None,
             "returned_date": row["returned_date"].isoformat() if row.get("returned_date") else None,
             "undelivered_date": row["undelivered_date"].isoformat() if row.get("undelivered_date") else None,
+            "final_action_date_undelivered": (
+                row["final_action_date_undelivered"].isoformat()
+                if row.get("final_action_date_undelivered")
+                else None
+            ),
             "resolved_payable": row.get("resolved_payable"),
             "payable_estimated": row.get("payable_estimated"),
             "usd_revenue": row.get("usd_revenue"),
