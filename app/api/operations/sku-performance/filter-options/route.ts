@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
+import { dedupeCountryFilterOptions } from "@/lib/country-normalization";
 import { getOpsDb } from "@/lib/operations/opsDb";
 import { OPS_FILTER_OPTIONS_TAG } from "@/lib/operations/cache";
 
@@ -11,7 +12,7 @@ const fetchFilterOptions = unstable_cache(
     if (error) throw new Error(error.message);
     const payload = (data ?? {}) as { countries?: string[]; bifurcations?: string[] };
     return {
-      countries: payload.countries ?? [],
+      countries: dedupeCountryFilterOptions(payload.countries ?? []),
       bifurcations: payload.bifurcations ?? [],
     };
   },

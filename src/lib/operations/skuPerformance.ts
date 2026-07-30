@@ -1,5 +1,6 @@
 import { getLastSync, getOpsDb } from "@/lib/operations/opsDb";
 import { normalizeSkuForMatch, normalizeSku } from "@/lib/operations/inventory";
+import { normalizeCountryFilterParam } from "@/lib/country-normalization";
 import { normalizeOptionalFilter } from "@/lib/orders/filteredItems";
 
 export type SkuPerformanceFilters = {
@@ -46,7 +47,7 @@ type RpcSellersPayload = {
 
 function toSummaryRpcFilters(filters: SkuPerformanceFilters) {
   return {
-    p_country: normalizeOptionalFilter(filters.country),
+    p_country: normalizeCountryFilterParam(filters.country),
     p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
     p_from_date: normalizeOptionalFilter(filters.fromDate),
     p_to_date: normalizeOptionalFilter(filters.toDate),
@@ -56,7 +57,7 @@ function toSummaryRpcFilters(filters: SkuPerformanceFilters) {
 
 function toSellerRpcFilters(filters: SkuPerformanceFilters) {
   return {
-    p_country: normalizeOptionalFilter(filters.country),
+    p_country: normalizeCountryFilterParam(filters.country),
     p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
     p_from_date: normalizeOptionalFilter(filters.fromDate),
     p_to_date: normalizeOptionalFilter(filters.toDate),

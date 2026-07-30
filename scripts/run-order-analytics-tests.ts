@@ -80,6 +80,8 @@ function testFacetAllVsSpecific() {
 
 function testCountryNormalization() {
   assert(normalizeOrderCountry("UAE") === "United Arab Emirates", "UAE alias");
+  assert(normalizeOrderCountry("KSA") === "Saudi Arabia", "KSA alias");
+  assert(normalizeOrderCountry("Saudia Arabia") === "Saudi Arabia", "Saudia Arabia typo");
   const lines = [line({ metabaseId: 1, orderNumber: "X", country: "UAE" })];
   assert(orderMatchesFacetFilters(lines, { country: "United Arab Emirates" }), "UAE matches UAE full name filter");
 }

@@ -22,6 +22,7 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 6. **`patch_fix_refresh_summaries.sql`** — extends MV refresh timeout; required for hourly GitHub sync
 7. **`patch_ops_mv_refresh_queue.sql`** — queues MV refresh inside Supabase (no GitHub DATABASE_URL needed)
 8. **`patch_return_sla_final_action_date.sql`** — syncs return-request date; fixes Avg return request → returned KPI
+9. **`patch_country_normalization.sql`** — clubs UAE/United Arab Emirates and KSA/Saudi Arabia in filters and KPIs
 
 Then refresh materialized views once:
 

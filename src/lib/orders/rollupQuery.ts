@@ -1,4 +1,5 @@
 import { getOpsDb } from "@/lib/operations/opsDb";
+import { countryFilterVariants } from "@/lib/country-normalization";
 import {
   type OrdersFilterParams,
   normalizeOptionalFilter,
@@ -47,6 +48,7 @@ type RollupQueryBuilder = {
   lte: (column: string, value: string) => RollupQueryBuilder;
   eq: (column: string, value: string | number) => RollupQueryBuilder;
   neq: (column: string, value: string) => RollupQueryBuilder;
+  in: (column: string, values: string[]) => RollupQueryBuilder;
 };
 
 function applyRollupFilters<T>(query: T, filters: OrdersFilterParams): T {
@@ -62,7 +64,7 @@ function applyRollupFilters<T>(query: T, filters: OrdersFilterParams): T {
   if (filters.storeId != null) q = q.eq("store_id", filters.storeId);
 
   if (country) {
-    q = q.eq("country", country);
+    q = q.in("country", countryFilterVariants(country));
   } else {
     q = q.neq("country", "Unknown").neq("country", "");
   }

@@ -1,6 +1,10 @@
 import { dateRangeFromParamStrings } from "@/lib/calendar-range";
 import { filterOrders, applyOrderLevelFacetFilters, groupByOrder } from "@/lib/analytics/orders";
 import { applyRevenueImputation } from "@/lib/analytics/revenue-imputation";
+import {
+  dedupeCountryFilterOptions,
+  normalizeCountryFilterParam,
+} from "@/lib/country-normalization";
 import { getOpsDb } from "@/lib/operations/opsDb";
 import { getAllOrderLineItems } from "@/lib/orders/lineItems";
 import type { OrderLineItem } from "@/lib/types/order";
@@ -23,7 +27,7 @@ export function normalizeOptionalFilter(value?: string | null): string | null {
 
 export function toRpcFilterParams(filters: OrdersFilterParams) {
   return {
-    p_country: normalizeOptionalFilter(filters.country),
+    p_country: normalizeCountryFilterParam(filters.country),
     p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
     p_store_id: filters.storeId ?? null,
     p_from_date: normalizeOptionalFilter(filters.fromDate),
@@ -471,7 +475,7 @@ export async function fetchFilterOptionsFromDb(): Promise<{
         : storeIds.map((id) => ({ id, label: String(id) }));
 
     return {
-      countries: payload.countries ?? [],
+      countries: dedupeCountryFilterOptions(payload.countries ?? []),
       bifurcations: payload.bifurcations ?? [],
       storeIds,
       storeOptions,
@@ -479,7 +483,9 @@ export async function fetchFilterOptionsFromDb(): Promise<{
   }
 
   const allItems = applyRevenueImputation(await getAllOrderLineItems());
-  const countries = [...new Set(allItems.map((i) => i.country).filter(Boolean))].sort();
+  const countries = dedupeCountryFilterOptions(
+    [...new Set(allItems.map((i) => i.country).filter(Boolean))],
+  );
   const bifurcations = [...new Set(allItems.map((i) => i.bifurcation).filter(Boolean))].sort();
   const storeOptions = buildStoreOptionsFromItems(allItems);
   const storeIds = storeOptions.map((opt) => opt.id);

@@ -52,12 +52,12 @@ export function filterOrders(
   });
 }
 
+import { normalizeOrderCountry } from "@/lib/country-normalization";
+
 export type OrderGroupKey = string;
 export type OrderGroupMap = Map<OrderGroupKey, OrderLineItem[]>;
 
-const COUNTRY_ALIASES: Record<string, string> = {
-  uae: "United Arab Emirates",
-};
+export { normalizeOrderCountry };
 
 /** Metabase `id` — the unique order key for all counting and analytics (DB: order_id). */
 export function getOrderGroupKey(item: OrderLineItem): OrderGroupKey {
@@ -67,13 +67,6 @@ export function getOrderGroupKey(item: OrderLineItem): OrderGroupKey {
 /** Metabase `id` (same as getOrderGroupKey numeric value). */
 export function getLineId(item: OrderLineItem): number {
   return item.metabaseId;
-}
-
-export function normalizeOrderCountry(raw: string | undefined | null): string {
-  const trimmed = raw?.trim();
-  if (!trimmed) return "Unknown";
-  const alias = COUNTRY_ALIASES[trimmed.toLowerCase()];
-  return alias ?? trimmed;
 }
 
 export function groupByOrder(items: OrderLineItem[]): OrderGroupMap {

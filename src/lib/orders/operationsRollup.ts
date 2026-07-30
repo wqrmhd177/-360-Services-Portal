@@ -7,6 +7,7 @@ import {
   type FulfillmentSlaMetric,
   type RevenueLossRow,
 } from "@/lib/analytics/orders";
+import { normalizeOrderCountry } from "@/lib/country-normalization";
 import {
   OPERATIONS_STATUS_KPI_GROUPS,
   type OperationsStatusGroupId,
@@ -178,7 +179,7 @@ export function mapDeliveryPartnerRollupRows(
   const orderCountByCountry: Record<string, number> = {};
 
   for (const row of rows) {
-    const country = row.country?.trim() || "Unknown";
+    const country = normalizeOrderCountry(row.country);
     const orders = Number(row.order_count ?? 0);
     allOrders += orders;
     orderCountByCountry[country] = (orderCountByCountry[country] ?? 0) + orders;
@@ -487,7 +488,7 @@ export function mapSlaRollupRows(
   const byCountry = new Map<string, CountrySlaTotals>();
 
   for (const row of rows) {
-    const country = row.country?.trim() || "Unknown";
+    const country = normalizeOrderCountry(row.country);
     const countryBucket = byCountry.get(country) ?? emptyCountrySlaTotals();
 
     const confirmCount = Number(row.confirm_count ?? 0);

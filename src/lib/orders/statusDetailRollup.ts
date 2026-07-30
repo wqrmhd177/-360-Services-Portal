@@ -1,4 +1,5 @@
 import type { OperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
+import { normalizeOrderCountry } from "@/lib/country-normalization";
 import {
   getOperationsStatusGroup,
   type OperationsStatusGroupId,
@@ -12,6 +13,50 @@ import {
 function asNumberArray(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   return value.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+}
+
+function mergeCountryTagGroups(
+  groups: Array<{
+    country: string;
+    orders: number;
+    tags: Array<{ tag: string; orders: number; pct: number; orderIds: number[] }>;
+  }>,
+) {
+  const merged = new Map<
+    string,
+    { orders: number; tags: Map<string, { orders: number; orderIds: Set<number> }> }
+  >();
+
+  for (const group of groups) {
+    const country = normalizeOrderCountry(group.country);
+    const bucket = merged.get(country) ?? { orders: 0, tags: new Map() };
+    bucket.orders += group.orders;
+
+    for (const tagRow of group.tags) {
+      const tagBucket = bucket.tags.get(tagRow.tag) ?? { orders: 0, orderIds: new Set<number>() };
+      tagBucket.orders += tagRow.orders;
+      for (const id of tagRow.orderIds) tagBucket.orderIds.add(id);
+      bucket.tags.set(tagRow.tag, tagBucket);
+    }
+
+    merged.set(country, bucket);
+  }
+
+  return [...merged.entries()]
+    .map(([country, bucket]) => ({
+      country,
+      orders: bucket.orders,
+      tags: [...bucket.tags.entries()].map(([tag, tagBucket]) => {
+        const orderIds = [...tagBucket.orderIds].sort((a, b) => a - b);
+        return {
+          tag,
+          orders: orderIds.length,
+          pct: bucket.orders > 0 ? orderIds.length / bucket.orders : 0,
+          orderIds,
+        };
+      }),
+    }))
+    .sort((a, b) => b.orders - a.orders || a.country.localeCompare(b.country));
 }
 
 export function mapStatusDetailFromRpc(
@@ -60,7 +105,7 @@ export function mapStatusDetailFromRpc(
     return {
       ...base,
       layout: "countryTag",
-      countryGroups,
+      countryGroups: mergeCountryTagGroups(countryGroups),
     };
   }
 
