@@ -41,6 +41,14 @@ function parseDate(raw: string | null | undefined): Date | null {
   }
 }
 
+function metabaseString(row: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const val = row[key];
+    if (val != null && String(val).trim()) return String(val).trim();
+  }
+  return "";
+}
+
 export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((r_) => {
@@ -64,7 +72,13 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
       substatus: String(r.substatus ?? ""),
       tag: String(r.tag ?? ""),
       bifurcation: String(r.bifurcation ?? ""),
-      deliveryPartner: String(r.delivery_partner ?? ""),
+      deliveryPartner: metabaseString(
+        r,
+        "delivery_partner",
+        "Delivery_partner",
+        "Delivery Partner",
+        "delivery partner",
+      ),
       platform: String(r.platform ?? r.PLATFORM ?? ""),
       orderDate: parseDate(r.Order_date as string | null),
       approvedDate: parseDate(r.approved_date as string | null),

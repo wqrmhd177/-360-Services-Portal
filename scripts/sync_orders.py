@@ -317,6 +317,14 @@ def convert_to_usd(amount: float, country: str, sku: str = "", currency_override
     return amount * rates.get(currency, 1.0)
 
 
+def metabase_str(row: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        val = row.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return ""
+
+
 def normalize_rows(raw: list[Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for r_ in raw:
@@ -343,7 +351,13 @@ def normalize_rows(raw: list[Any]) -> list[dict[str, Any]]:
                 "substatus": str(r.get("substatus") or ""),
                 "tag": str(r.get("tag") or ""),
                 "bifurcation": str(r.get("bifurcation") or ""),
-                "delivery_partner": str(r.get("delivery_partner") or ""),
+                "delivery_partner": metabase_str(
+                    r,
+                    "delivery_partner",
+                    "Delivery_partner",
+                    "Delivery Partner",
+                    "delivery partner",
+                ),
                 "platform": str(r.get("platform") or r.get("PLATFORM") or ""),
                 "order_date": order_date,
                 "approved_date": parse_date(r.get("approved_date")),
