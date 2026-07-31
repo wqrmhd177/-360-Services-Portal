@@ -100,7 +100,7 @@ function CountrySidebar({
   onSelect: (c: string) => void;
 }) {
   return (
-    <div className="flex w-36 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto">
+    <div className="flex w-52 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto">
       {countries.map(({ country, orders }) => {
         const active = selected === country;
         return (
@@ -109,13 +109,13 @@ function CountrySidebar({
             type="button"
             onClick={() => onSelect(country)}
             className={cn(
-              "flex items-center justify-between gap-2 px-3 py-2.5 text-left text-xs transition-colors border-b border-[var(--card-border)] last:border-0",
+              "flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left text-xs transition-colors border-b border-[var(--card-border)] last:border-0",
               active
                 ? "bg-teal-600 text-white font-semibold"
                 : "text-[var(--foreground)] hover:bg-[var(--table-header)]",
             )}
           >
-            <span className="min-w-0 truncate">{country}</span>
+            <span className="min-w-0 flex-1 break-words leading-snug">{country}</span>
             <span
               className={cn(
                 "shrink-0 tabular-nums font-medium",

@@ -6,6 +6,7 @@ import {
   type OrderGroupMap,
 } from "@/lib/analytics/orders";
 import { STATUS_DISPATCH_EXCLUDED } from "@/lib/constants";
+import { normalizeOrderCountry } from "@/lib/country-normalization";
 import type { OrderLineItem } from "@/lib/types/order";
 
 export type StatusProductRow = {
@@ -61,11 +62,6 @@ export type StandardStatusDetail = {
 };
 
 export type StatusDetailResponse = DeliveredStatusDetail | StandardStatusDetail;
-
-function normalizeCountry(raw: string): string {
-  const trimmed = raw?.trim();
-  return trimmed || "Unknown";
-}
 
 function normalizeProduct(raw: string): string {
   const trimmed = raw?.trim();
@@ -186,7 +182,7 @@ export function computeDeliveredStatusDetail(
     const keysOnOrder = new Set<string>();
     for (const line of lines) {
       const key = bucketKey(
-        normalizeCountry(line.country),
+        normalizeOrderCountry(line.country),
         normalizeProduct(line.title),
       );
       keysOnOrder.add(key);
@@ -202,7 +198,7 @@ export function computeDeliveredStatusDetail(
     if (isDelivered) {
       for (const line of lines) {
         const key = bucketKey(
-          normalizeCountry(line.country),
+          normalizeOrderCountry(line.country),
           normalizeProduct(line.title),
         );
         getBucket(key).units += line.quantity;
@@ -258,7 +254,7 @@ export function computeDeliveredStatusDetail(
     if (orderStatusFromLines(lines) !== "Delivered") continue;
     const countriesOnOrder = new Set<string>();
     for (const line of lines) {
-      countriesOnOrder.add(normalizeCountry(line.country));
+      countriesOnOrder.add(normalizeOrderCountry(line.country));
     }
     for (const country of countriesOnOrder) {
       if (!countryDeliveredOrders.has(country)) {
@@ -329,7 +325,7 @@ export function computeStandardStatusDetail(
     const status = orderStatusFromLines(lines);
     if (status !== statusName) continue;
 
-    const country = normalizeCountry(line.country);
+    const country = normalizeOrderCountry(line.country);
     const tag = normalizeTag(line.tag);
     const product = normalizeProduct(line.title);
 
@@ -346,7 +342,7 @@ export function computeStandardStatusDetail(
     const line = orderRepresentativeLine(lines);
     if (!line) continue;
     if (orderStatusFromLines(lines) !== statusName) continue;
-    const country = normalizeCountry(line.country);
+    const country = normalizeOrderCountry(line.country);
     if (!countryOrders.has(country)) countryOrders.set(country, new Set());
     countryOrders.get(country)!.add(orderKey);
   }

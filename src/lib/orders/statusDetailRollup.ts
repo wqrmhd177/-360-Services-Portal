@@ -1,4 +1,8 @@
 import type { OperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
+import type {
+  OperationsStatusDaysGroup,
+  OperationsStatusCountryGroup,
+} from "@/lib/analytics/operations-status-detail";
 import { normalizeOrderCountry } from "@/lib/country-normalization";
 import {
   getOperationsStatusGroup,
@@ -57,6 +61,53 @@ function mergeCountryTagGroups(
       }),
     }))
     .sort((a, b) => b.orders - a.orders || a.country.localeCompare(b.country));
+}
+
+function mergeDayBuckets(dayBuckets: OperationsStatusDaysGroup[]): OperationsStatusDaysGroup[] {
+  return dayBuckets.map((bucket) => {
+    const countryMap = new Map<
+      string,
+      { country: string; orders: number; subgroups: Map<string, { orders: number; orderIds: Set<number> }> }
+    >();
+
+    for (const countryGroup of bucket.countries) {
+      const country = normalizeOrderCountry(countryGroup.country);
+      const entry =
+        countryMap.get(country) ??
+        { country, orders: 0, subgroups: new Map() };
+      entry.orders += countryGroup.orders;
+
+      for (const subgroup of countryGroup.subgroups) {
+        const subgroupEntry =
+          entry.subgroups.get(subgroup.label) ??
+          { orders: 0, orderIds: new Set<number>() };
+        subgroupEntry.orders += subgroup.orders;
+        for (const id of subgroup.orderIds) subgroupEntry.orderIds.add(id);
+        entry.subgroups.set(subgroup.label, subgroupEntry);
+      }
+
+      countryMap.set(country, entry);
+    }
+
+    const countries: OperationsStatusCountryGroup[] = [...countryMap.values()]
+      .map(({ country, orders, subgroups }) => ({
+        country,
+        orders,
+        subgroups: [...subgroups.entries()]
+          .map(([label, { orders: subgroupOrders, orderIds }]) => ({
+            label,
+            orders: subgroupOrders,
+            orderIds: [...orderIds].sort((a, b) => a - b),
+          }))
+          .sort((a, b) => b.orders - a.orders || a.label.localeCompare(b.label)),
+      }))
+      .sort((a, b) => b.orders - a.orders || a.country.localeCompare(b.country));
+
+    return {
+      ...bucket,
+      countries,
+    };
+  });
 }
 
 export function mapStatusDetailFromRpc(
@@ -155,7 +206,7 @@ export function mapStatusDetailFromRpc(
   return {
     ...base,
     layout: "daysCountrySubgroup",
-    dayBuckets,
+    dayBuckets: mergeDayBuckets(dayBuckets),
   };
 }
 

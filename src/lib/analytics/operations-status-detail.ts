@@ -14,6 +14,7 @@ import {
   type OperationsStatusKpiGroup,
 } from "@/lib/operations/status-kpi-groups";
 import type { OrderLineItem } from "@/lib/types/order";
+import { normalizeOrderCountry } from "@/lib/country-normalization";
 
 export interface OperationsStatusSubgroup {
   label: string;
@@ -68,11 +69,6 @@ export type OperationsStatusOrderDetail =
       layout: "countryTag";
       countryGroups: OperationsStatusCountryTagGroup[];
     });
-
-function normalizeCountry(raw: string): string {
-  const trimmed = raw?.trim();
-  return trimmed || "Unknown";
-}
 
 function normalizeTag(raw: string): string {
   const trimmed = raw?.trim();
@@ -221,7 +217,7 @@ function computeCountryTagDetail(
     if (!statusSet.has(status)) continue;
 
     const tag = normalizeTag(line.tag);
-    const country = normalizeCountry(orderCountryFromLines(lines));
+    const country = normalizeOrderCountry(orderCountryFromLines(lines));
 
     if (!tree.has(country)) tree.set(country, new Map());
     const tagMap = tree.get(country)!;
@@ -288,7 +284,7 @@ function computeDaysCountrySubgroupDetail(
     const status = orderStatusFromLines(lines);
     if (!statusSet.has(status)) continue;
 
-    const country = normalizeCountry(orderCountryFromLines(lines));
+    const country = normalizeOrderCountry(orderCountryFromLines(lines));
     const label = subgroupLabel(line);
     const days = daysSinceReference(line, group.daysFrom, today);
     const daysKey = days === null ? "null" : String(days);

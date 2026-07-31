@@ -1,5 +1,6 @@
 -- KPI date fixes: correct aging date per status group + new drill-down date columns.
 -- Run AFTER patch_store_visibility_status_detail.sql (step 4).
+-- Requires patch_country_normalization.sql (normalize_ops_country / ops_country_matches).
 -- This is step 11 in PERFORMANCE_SETUP.md.
 
 -- ── 1. Add confirmation_pending_date column ──────────────────────────────────
@@ -19,7 +20,7 @@ CREATE MATERIALIZED VIEW ops_orders_order_detail AS
 SELECT
   order_id,
   MIN(order_date_day)           AS order_date_day,
-  COALESCE(NULLIF(TRIM((ARRAY_AGG(country      ORDER BY id))[1]), ''), 'Unknown') AS country,
+  normalize_ops_country((ARRAY_AGG(country ORDER BY id))[1]) AS country,
   COALESCE(NULLIF(TRIM((ARRAY_AGG(bifurcation  ORDER BY id))[1]), ''), '')        AS bifurcation,
   COALESCE((ARRAY_AGG(store_id ORDER BY id))[1], 0)                               AS store_id,
   COALESCE(NULLIF(TRIM((ARRAY_AGG(status       ORDER BY id))[1]), ''), 'Unknown') AS status,
@@ -134,7 +135,7 @@ BEGIN
     WHEN 'confirmationPending' THEN 'confirmationDate'
     WHEN 'approved'            THEN 'approvedDate'
     WHEN 'dispatching'         THEN 'approvedDate'
-    WHEN 'shipped'             THEN 'shipmentDate'
+    WHEN 'shipped'             THEN 'shipmentDateLog'
     WHEN 'undelivered'         THEN 'undeliveredDate'
     WHEN 'return'              THEN 'shipmentDateLog'
     ELSE 'orderDate'
@@ -165,7 +166,7 @@ BEGIN
     AND (p_to_date IS NULL OR d.order_date_day <= p_to_date)
     AND (p_store_id IS NULL OR d.store_id = p_store_id)
     AND (
-      (NULLIF(TRIM(p_country), '') IS NOT NULL AND d.country = NULLIF(TRIM(p_country), ''))
+      (NULLIF(TRIM(p_country), '') IS NOT NULL AND ops_country_matches(p_country, d.country))
       OR (
         NULLIF(TRIM(p_country), '') IS NULL
         AND d.country IS NOT NULL
@@ -184,7 +185,7 @@ BEGIN
 
   IF v_layout = 'countryTag' THEN
     WITH filtered AS (
-      SELECT d.order_id, d.country, d.tag
+      SELECT d.order_id, normalize_ops_country(d.country) AS country, d.tag
       FROM ops_orders_order_detail d
       WHERE
         d.status = ANY(v_statuses)
@@ -192,7 +193,7 @@ BEGIN
         AND (p_to_date IS NULL OR d.order_date_day <= p_to_date)
         AND (p_store_id IS NULL OR d.store_id = p_store_id)
         AND (
-          (NULLIF(TRIM(p_country), '') IS NOT NULL AND d.country = NULLIF(TRIM(p_country), ''))
+          (NULLIF(TRIM(p_country), '') IS NOT NULL AND ops_country_matches(p_country, d.country))
           OR (
             NULLIF(TRIM(p_country), '') IS NULL
             AND d.country IS NOT NULL AND TRIM(d.country) <> '' AND d.country <> 'Unknown'
@@ -267,7 +268,7 @@ BEGIN
   WITH source AS (
     SELECT
       p.order_id,
-      p.country,
+      normalize_ops_country(p.country) AS country,
       p.tag,
       p.title,
       CASE
@@ -322,7 +323,7 @@ BEGIN
       AND (p_to_date IS NULL OR p.order_date_day <= p_to_date)
       AND (p_store_id IS NULL OR p.store_id = p_store_id)
       AND (
-        (NULLIF(TRIM(p_country), '') IS NOT NULL AND p.country = NULLIF(TRIM(p_country), ''))
+        (NULLIF(TRIM(p_country), '') IS NOT NULL AND ops_country_matches(p_country, p.country))
         OR (
           NULLIF(TRIM(p_country), '') IS NULL
           AND p.country IS NOT NULL AND TRIM(p.country) <> '' AND p.country <> 'Unknown'
