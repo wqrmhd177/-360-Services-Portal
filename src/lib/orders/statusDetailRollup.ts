@@ -73,7 +73,7 @@ export function mapStatusDetailFromRpc(
     title: String(payload?.title ?? group.title),
     groupBy: (payload?.groupBy === "title" ? "title" : "tag") as "tag" | "title",
     daysFrom: (
-      ["confirmationDate", "approvedDate", "shipmentDate", "undeliveredDate", "shipmentDateLog"].includes(
+      ["confirmationDate", "approvedDate", "shipmentDateLog", "undeliveredDate"].includes(
         String(payload?.daysFrom ?? ""),
       )
         ? payload!.daysFrom

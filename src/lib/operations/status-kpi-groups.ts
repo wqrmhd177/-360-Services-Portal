@@ -12,10 +12,9 @@ export type OperationsStatusGroupBy = "tag" | "title";
 export type OperationsDaysFrom =
   | "confirmationDate"  // MAX(order_date, confirmation_pending_date) — whichever exists/is later
   | "approvedDate"      // approved_date
-  | "shipmentDate"      // shipment_date (not shipment_date_log)
+  | "shipmentDateLog"   // shipment_date_log (shipped, return)
   | "undeliveredDate"   // undelivered_date
-  | "orderDate"         // order_date (pre-dispatch cancelled)
-  | "shipmentDateLog";  // shipment_date_log (return)
+  | "orderDate";        // order_date (pre-dispatch cancelled)
 
 export type OperationsStatusDetailLayout =
   | "daysCountrySubgroup"
@@ -60,7 +59,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Shipped",
     statuses: ["Shipped"],
     groupBy: "tag",
-    daysFrom: "shipmentDate",
+    daysFrom: "shipmentDateLog",
     detailLayout: "daysCountrySubgroup",
   },
   {

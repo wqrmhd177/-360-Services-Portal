@@ -276,7 +276,7 @@ WITH per_order AS (
     MIN(delivered_date) AS delivered_date,
     MIN(returned_date) AS returned_date,
     MIN(final_action_date_undelivered) AS final_action_date_undelivered,
-    MIN(shipment_date) AS shipment_date
+    MIN(shipment_date_log) AS shipment_date_log
   FROM ops_orders_items
   WHERE order_id IS NOT NULL AND order_date_day IS NOT NULL
   GROUP BY order_id, order_date_day, country, bifurcation, store_id
@@ -302,12 +302,12 @@ sla_days AS (
       THEN (returned_date::date - final_action_date_undelivered::date)
     END AS return_days,
     CASE
-      WHEN shipment_date IS NOT NULL AND order_date IS NOT NULL
-      THEN (shipment_date::date - order_date::date)
+      WHEN shipment_date_log IS NOT NULL AND order_date IS NOT NULL
+      THEN (shipment_date_log::date - order_date::date)
     END AS ship_days,
     CASE
-      WHEN shipment_date IS NOT NULL AND order_date IS NOT NULL
-        AND (shipment_date::date - order_date::date) <= 2
+      WHEN shipment_date_log IS NOT NULL AND order_date IS NOT NULL
+        AND (shipment_date_log::date - order_date::date) <= 2
       THEN 1
       ELSE 0
     END AS shipped_within_48h

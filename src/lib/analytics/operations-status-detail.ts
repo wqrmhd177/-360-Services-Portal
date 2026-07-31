@@ -103,8 +103,6 @@ function referenceDate(
     }
     case "approvedDate":
       return line.approvedDate;
-    case "shipmentDate":
-      return line.shipmentDate;
     case "undeliveredDate":
       return line.undeliveredDate;
     case "shipmentDateLog":

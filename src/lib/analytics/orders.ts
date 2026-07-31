@@ -1123,8 +1123,8 @@ export function computeFulfillmentSLA(items: OrderLineItem[]): FulfillmentSLA {
         bucket.returnDays.push(days);
       }
     }
-    if (o.shipmentDate) {
-      const d = differenceInDays(o.shipmentDate, o.orderDate);
+    if (o.shipmentDateLog) {
+      const d = differenceInDays(o.shipmentDateLog, o.orderDate);
       shipDays.push(d);
       shipCount++;
       bucket.shipDays.push(d);
