@@ -24,6 +24,7 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 8. **`patch_return_sla_final_action_date.sql`** — syncs return-request date; fixes Avg return request → returned KPI
 9. **`patch_country_normalization.sql`** — clubs UAE/United Arab Emirates and KSA/Saudi Arabia in filters and KPIs
 10. **`patch_delivery_partner_live_rpc.sql`** — delivery partner chart: Blank / Unknown / Unassigned labels using tracking id + courier name (re-run after deploy, then sync)
+11. **`patch_kpi_date_fixes.sql`** — corrects KPI aging dates (confirmation, approved, dispatching, shipped, undelivered) and adds the `confirmation_pending_date` column; also enables the new country/date split-panel drill-down
 
 Then refresh materialized views once:
 

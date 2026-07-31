@@ -9,7 +9,13 @@ export type OperationsStatusGroupId =
 
 export type OperationsStatusGroupBy = "tag" | "title";
 
-export type OperationsDaysFrom = "orderDate" | "shipmentDateLog";
+export type OperationsDaysFrom =
+  | "confirmationDate"  // MAX(order_date, confirmation_pending_date) — whichever exists/is later
+  | "approvedDate"      // approved_date
+  | "shipmentDate"      // shipment_date (not shipment_date_log)
+  | "undeliveredDate"   // undelivered_date
+  | "orderDate"         // order_date (pre-dispatch cancelled)
+  | "shipmentDateLog";  // shipment_date_log (return)
 
 export type OperationsStatusDetailLayout =
   | "daysCountrySubgroup"
@@ -30,7 +36,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Confirmation",
     statuses: ["Confirmation Pending"],
     groupBy: "tag",
-    daysFrom: "orderDate",
+    daysFrom: "confirmationDate",
     detailLayout: "daysCountrySubgroup",
   },
   {
@@ -38,7 +44,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Approved",
     statuses: ["Approved"],
     groupBy: "title",
-    daysFrom: "orderDate",
+    daysFrom: "approvedDate",
     detailLayout: "daysCountrySubgroup",
   },
   {
@@ -46,7 +52,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Dispatching in Process",
     statuses: ["Dispatching in Process"],
     groupBy: "title",
-    daysFrom: "orderDate",
+    daysFrom: "approvedDate",
     detailLayout: "daysCountrySubgroup",
   },
   {
@@ -54,7 +60,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Shipped",
     statuses: ["Shipped"],
     groupBy: "tag",
-    daysFrom: "shipmentDateLog",
+    daysFrom: "shipmentDate",
     detailLayout: "daysCountrySubgroup",
   },
   {
@@ -62,7 +68,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Undelivered",
     statuses: ["Undelivered"],
     groupBy: "tag",
-    daysFrom: "shipmentDateLog",
+    daysFrom: "undeliveredDate",
     detailLayout: "daysCountrySubgroup",
   },
   {

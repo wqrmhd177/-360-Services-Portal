@@ -65,6 +65,7 @@ type DbOrderRow = {
   bifurcation: string | null;
   delivery_partner: string | null;
   courier_tracking_id: string | null;
+  confirmation_pending_date: string | null;
   platform: string | null;
   order_date: string | null;
   approved_date: string | null;
@@ -131,6 +132,7 @@ export function mapEnrichedDbRowToOrderLineItem(row: DbOrderRow): OrderLineItem 
     rescheduleDate: null,
     returnedDate: parseDate(row.returned_date),
     finalActionDateUndelivered: parseDate(row.final_action_date_undelivered),
+    confirmationPendingDate: parseDate(row.confirmation_pending_date),
     updateUser: null,
     storeId: Number(row.store_id ?? 0),
     currencyCode: row.currency?.trim() || undefined,

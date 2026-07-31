@@ -72,9 +72,13 @@ export function mapStatusDetailFromRpc(
     groupId,
     title: String(payload?.title ?? group.title),
     groupBy: (payload?.groupBy === "title" ? "title" : "tag") as "tag" | "title",
-    daysFrom: (payload?.daysFrom === "shipmentDateLog"
-      ? "shipmentDateLog"
-      : "orderDate") as "orderDate" | "shipmentDateLog",
+    daysFrom: (
+      ["confirmationDate", "approvedDate", "shipmentDate", "undeliveredDate", "shipmentDateLog"].includes(
+        String(payload?.daysFrom ?? ""),
+      )
+        ? payload!.daysFrom
+        : "orderDate"
+    ) as import("@/lib/operations/status-kpi-groups").OperationsDaysFrom,
     totalOrders: Number(payload?.totalOrders ?? 0),
     filteredTotalOrders: Number(payload?.filteredTotalOrders ?? 0),
   };

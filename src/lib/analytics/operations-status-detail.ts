@@ -94,8 +94,25 @@ function referenceDate(
   line: OrderLineItem,
   daysFrom: OperationsDaysFrom,
 ): Date | null {
-  if (daysFrom === "orderDate") return line.orderDate;
-  return line.shipmentDateLog;
+  switch (daysFrom) {
+    case "confirmationDate": {
+      const od = line.orderDate ?? null;
+      const cpd = line.confirmationPendingDate ?? null;
+      if (od && cpd) return od > cpd ? od : cpd;
+      return od ?? cpd;
+    }
+    case "approvedDate":
+      return line.approvedDate;
+    case "shipmentDate":
+      return line.shipmentDate;
+    case "undeliveredDate":
+      return line.undeliveredDate;
+    case "shipmentDateLog":
+      return line.shipmentDateLog;
+    case "orderDate":
+    default:
+      return line.orderDate;
+  }
 }
 
 function daysSinceReference(

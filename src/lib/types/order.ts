@@ -77,6 +77,8 @@ export interface OrderLineItem {
   returnedDate: Date | null;
   /** When return was requested (Metabase Final_action_date_undelivered). */
   finalActionDateUndelivered: Date | null;
+  /** Metabase Confirmation_Pending_Date — used together with orderDate for confirmation aging. */
+  confirmationPendingDate: Date | null;
   updateUser: string | null;
   storeId: number;
   /** ISO currency code from Metabase when available */

@@ -48,6 +48,8 @@ function line(partial: Partial<OrderLineItem> & Pick<OrderLineItem, "metabaseId"
     undeliveredDate: null,
     rescheduleDate: null,
     returnedDate: null,
+    finalActionDateUndelivered: null,
+    confirmationPendingDate: null,
     updateUser: null,
     storeId: 1,
     ...partial,

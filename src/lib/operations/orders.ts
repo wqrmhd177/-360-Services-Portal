@@ -30,6 +30,7 @@ export interface OrderRow {
   returnedDate: Date | null;
   undeliveredDate: Date | null;
   finalActionDateUndelivered: Date | null;
+  confirmationPendingDate: Date | null;
 }
 
 function parseDate(raw: string | null | undefined): Date | null {
@@ -98,6 +99,7 @@ export function normalizeOrderRows(raw: unknown[]): OrderRow[] {
       finalActionDateUndelivered: parseDate(
         r.Final_action_date_undelivered as string | null,
       ),
+      confirmationPendingDate: parseDate(r.Confirmation_Pending_Date as string | null),
     };
   });
 }
@@ -136,6 +138,9 @@ export function normalizeDbOrderRows(rows: unknown[]): OrderRow[] {
       undeliveredDate: r.undelivered_date ? new Date(String(r.undelivered_date)) : null,
       finalActionDateUndelivered: r.final_action_date_undelivered
         ? new Date(String(r.final_action_date_undelivered))
+        : null,
+      confirmationPendingDate: r.confirmation_pending_date
+        ? new Date(String(r.confirmation_pending_date))
         : null,
     };
   });
