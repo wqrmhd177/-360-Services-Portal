@@ -10,7 +10,6 @@ import {
   createBulkDraftRequests,
   createProductAvailabilityRequest,
   deriveCountsFromRows,
-  fetchAllProductAvailabilityData,
   formatAvailabilityLabel,
   formatDerivedStatusLabel,
   formatStockStatusLabel,
@@ -116,7 +115,7 @@ export default function ProductAvailabilityPage() {
   const dataScope = getProductAvailabilityDataScope(effectivePaRole);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterTab>("normal_requests");
+  const [filter, setFilter] = useState<FilterTab>("all");
   const [newTabMode, setNewTabMode] = useState<NewTabMode>("single");
   const [allRawRequests, setAllRawRequests] = useState<ProductAvailabilityRequestWithDetails[]>([]);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -158,7 +157,7 @@ export default function ProductAvailabilityPage() {
   const isManager = dataScope === "market" || portalIsAdmin;
   const canCreate = isAgent || isAdmin;
   const isPurchaser = dataScope === "assigned" || portalIsAdmin;
-  const canAccess = portalIsAdmin || !!paRole;
+  const canAccess = isAuthenticated;
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
     if (filter === "new") return "all";
@@ -215,19 +214,26 @@ export default function ProductAvailabilityPage() {
   };
 
   const refreshData = useCallback(async () => {
-    if (!userFriendlyId || !effectivePaRole) return;
+    if (!userFriendlyId) return;
     setIsLoading(true);
     try {
       await maybeSyncDelayedRequests();
-      const allRows = await fetchAllProductAvailabilityData({ userRole: effectivePaRole, userFriendlyId });
-      setAllRawRequests(allRows);
+      const res = await fetch("/api/product-availability/requests");
+      const data = (await res.json().catch(() => ({}))) as {
+        requests?: ProductAvailabilityRequestWithDetails[];
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load product availability requests");
+      }
+      setAllRawRequests(Array.isArray(data.requests) ? data.requests : []);
     } catch (err) {
       console.error(err);
       setError("Failed to load product availability requests");
     } finally {
       setIsLoading(false);
     }
-  }, [userFriendlyId, effectivePaRole]);
+  }, [userFriendlyId]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {

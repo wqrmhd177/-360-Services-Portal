@@ -8,6 +8,7 @@ export interface InventoryRow {
   available_quantity: number;
   country: string;
   category: string;
+  fulfilment_route?: string | null;
 }
 
 export function normalizeSku(value: string): string {

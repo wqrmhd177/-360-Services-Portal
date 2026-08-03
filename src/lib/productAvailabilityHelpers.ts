@@ -1,7 +1,10 @@
 import { createSupabaseClient } from "./supabaseClient";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  buildRequestedByOwnerOrFilter,
   getProductAvailabilityDataScope,
   normalizeProductAvailabilityUserId,
+  resolveProductAvailabilityOwnerIds,
 } from "./permissions";
 
 const supabase = createSupabaseClient();
@@ -201,7 +204,8 @@ function countryMatchesMarket(market: string, country: string | null | undefined
 
 /** PostgREST rejects very large `.in()` filters — batch request IDs. */
 async function fetchResponsesForRequestIds(
-  requestIds: string[]
+  requestIds: string[],
+  db: SupabaseClient = supabase
 ): Promise<ProductAvailabilityResponse[]> {
   if (requestIds.length === 0) return [];
 
@@ -210,7 +214,7 @@ async function fetchResponsesForRequestIds(
 
   for (let i = 0; i < requestIds.length; i += CHUNK_SIZE) {
     const chunk = requestIds.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("product_availability_responses")
       .select("*")
       .in("request_id", chunk)
@@ -223,6 +227,62 @@ async function fetchResponsesForRequestIds(
   }
 
   return allRows;
+}
+
+async function fetchOwnProductAvailabilityRequests(
+  db: SupabaseClient,
+  userEmail: string
+): Promise<ProductAvailabilityRequest[]> {
+  const ownerIds = await resolveProductAvailabilityOwnerIds(userEmail, db);
+  const ownerFilter = buildRequestedByOwnerOrFilter(ownerIds);
+  if (!ownerFilter) return [];
+
+  const { data, error } = await db
+    .from("product_availability_requests")
+    .select("*")
+    .or(ownerFilter)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message || "Failed to fetch availability requests");
+  return (data || []) as ProductAvailabilityRequest[];
+}
+
+function mergeProductAvailabilityRequests(
+  ...lists: ProductAvailabilityRequest[][]
+): ProductAvailabilityRequest[] {
+  const byId = new Map<string, ProductAvailabilityRequest>();
+  for (const list of lists) {
+    for (const row of list) byId.set(row.id, row);
+  }
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
+function attachProductAvailabilityDetails(
+  requestRows: ProductAvailabilityRequest[],
+  allResponseRows: ProductAvailabilityResponse[]
+): ProductAvailabilityRequestWithDetails[] {
+  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {};
+  allResponseRows.forEach((r) => {
+    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = [];
+    historyByRequestId[r.request_id].push(r);
+  });
+
+  return requestRows.map((request) => {
+    const derived = deriveStatus(
+      request.status,
+      request.assignment_status ?? "pending",
+      request.created_at
+    );
+    const history = historyByRequestId[request.id] || [];
+    return {
+      ...request,
+      derived_status: derived,
+      response: history[0] ?? null,
+      responseHistory: history,
+    } as ProductAvailabilityRequestWithDetails;
+  });
 }
 
 export async function cancelProductAvailabilityRequest(requestId: string): Promise<void> {
@@ -311,66 +371,71 @@ export async function createProductAvailabilityRequest(
 export async function fetchAllProductAvailabilityData(params: {
   userRole: string;
   userFriendlyId: string;
+  supabaseClient?: SupabaseClient;
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
+  const db = params.supabaseClient ?? supabase;
   const role = (params.userRole || "").toLowerCase();
   const scope = getProductAvailabilityDataScope(role);
   const userId = normalizeProductAvailabilityUserId(params.userFriendlyId);
 
-  let requestQuery = supabase
-    .from("product_availability_requests")
-    .select("*")
-    .order("created_at", { ascending: true });
+  let requestRows: ProductAvailabilityRequest[] = [];
 
   if (scope === "own_requests") {
-    requestQuery = requestQuery.ilike("requested_by_user_id", userId);
+    requestRows = await fetchOwnProductAvailabilityRequests(db, params.userFriendlyId);
   } else if (scope === "assigned") {
-    requestQuery = requestQuery
+    const { data, error } = await db
+      .from("product_availability_requests")
+      .select("*")
       .ilike("assigned_purchaser_user_id", userId)
-      .eq("is_draft", false);
+      .eq("is_draft", false)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message || "Failed to fetch availability requests");
+    const ownRows = await fetchOwnProductAvailabilityRequests(db, params.userFriendlyId);
+    requestRows = mergeProductAvailabilityRequests(
+      (data || []) as ProductAvailabilityRequest[],
+      ownRows
+    );
   } else if (scope === "market") {
-    // Managers see only requests for their country's market
-    const { data: mgrProfile } = await supabase
+    const { data: mgrProfile } = await db
       .from("profiles")
       .select("country")
-      .eq("email", params.userFriendlyId)
-      .single();
-    const mgrCountry = String((mgrProfile as { country?: string } | null)?.country || "").trim().toUpperCase();
+      .ilike("email", userId)
+      .maybeSingle();
+    const mgrCountry = String((mgrProfile as { country?: string } | null)?.country || "")
+      .trim()
+      .toUpperCase();
     const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
       keywords.some((k) => mgrCountry.includes(k))
     )?.[0];
-    requestQuery = requestQuery.eq("is_draft", false);
-    if (mgrMarket) requestQuery = requestQuery.eq("market", mgrMarket);
-  }
-  // admin and other roles: no is_draft filter — returns everything including drafts
 
-  const { data: requestRows, error: requestError } = await requestQuery;
-  if (requestError) throw new Error(requestError.message || "Failed to fetch availability requests");
+    let marketQuery = db
+      .from("product_availability_requests")
+      .select("*")
+      .eq("is_draft", false)
+      .order("created_at", { ascending: true });
+    if (mgrMarket) marketQuery = marketQuery.eq("market", mgrMarket);
 
-  const requestIds = (requestRows || []).map((row: { id: string }) => row.id);
-  if (requestIds.length === 0) return [];
-
-  const allResponseRows = await fetchResponsesForRequestIds(requestIds);
-
-  const historyByRequestId: Record<string, ProductAvailabilityResponse[]> = {};
-  (allResponseRows || []).forEach((r: ProductAvailabilityResponse) => {
-    if (!historyByRequestId[r.request_id]) historyByRequestId[r.request_id] = [];
-    historyByRequestId[r.request_id].push(r);
-  });
-
-  return (requestRows || []).map((request: ProductAvailabilityRequest) => {
-    const derived = deriveStatus(
-      request.status,
-      request.assignment_status ?? "pending",
-      request.created_at
+    const { data, error } = await marketQuery;
+    if (error) throw new Error(error.message || "Failed to fetch availability requests");
+    const ownRows = await fetchOwnProductAvailabilityRequests(db, params.userFriendlyId);
+    requestRows = mergeProductAvailabilityRequests(
+      (data || []) as ProductAvailabilityRequest[],
+      ownRows
     );
-    const history = historyByRequestId[request.id] || [];
-    return {
-      ...request,
-      derived_status: derived,
-      response: history[0] ?? null,
-      responseHistory: history,
-    } as ProductAvailabilityRequestWithDetails;
-  });
+  } else {
+    const { data, error } = await db
+      .from("product_availability_requests")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message || "Failed to fetch availability requests");
+    requestRows = (data || []) as ProductAvailabilityRequest[];
+  }
+
+  if (requestRows.length === 0) return [];
+
+  const requestIds = requestRows.map((row) => row.id);
+  const allResponseRows = await fetchResponsesForRequestIds(requestIds, db);
+  return attachProductAvailabilityDetails(requestRows, allResponseRows);
 }
 
 export function deriveCountsFromRows(allRows: ProductAvailabilityRequestWithDetails[]): {

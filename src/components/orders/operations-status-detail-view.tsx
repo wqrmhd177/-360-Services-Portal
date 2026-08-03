@@ -5,8 +5,9 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import type { OperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
 import type {
   OperationsStatusDaysGroup,
-  OperationsStatusSubgroup,
+  OperationsStatusCountrySummary,
   OperationsStatusCountryTagSubgroup,
+  OperationsStatusOrderUserGroup,
 } from "@/lib/analytics/operations-status-detail";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
 
@@ -16,44 +17,107 @@ function pctOfTotal(count: number, total: number) {
   return total > 0 ? count / total : 0;
 }
 
-// ── order ID chip list ────────────────────────────────────────────────────────
+export type CountryBifurcationSelection = {
+  country: string;
+  bifurcation: string | null;
+};
 
-function OrderIdList({ orderIds }: { orderIds: number[] }) {
-  if (orderIds.length === 0) {
+function filterOrderGroups(
+  groups: OperationsStatusOrderUserGroup[] | undefined,
+  bifurcation: string | null,
+): OperationsStatusOrderUserGroup[] {
+  if (!groups?.length) return [];
+  if (!bifurcation) return groups;
+
+  return groups
+    .map((user) => ({
+      ...user,
+      skus: user.skus.filter((s) => (s.bifurcation ?? "Unknown") === bifurcation),
+    }))
+    .filter((user) => user.skus.length > 0);
+}
+
+function countOrdersInGroups(groups: OperationsStatusOrderUserGroup[]): number {
+  const ids = new Set<number>();
+  for (const user of groups) {
+    for (const sku of user.skus) {
+      for (const id of sku.orderIds) ids.add(id);
+    }
+  }
+  return ids.size;
+}
+
+// ── grouped order list ────────────────────────────────────────────────────────
+
+function OrderGroupList({ orderGroups }: { orderGroups: OperationsStatusOrderUserGroup[] }) {
+  if (orderGroups.length === 0) {
     return (
       <p className="py-2 text-center text-xs text-[var(--muted)]">No orders.</p>
     );
   }
+
   return (
-    <ul className="flex flex-wrap gap-1.5 py-2">
-      {orderIds.map((id) => (
-        <li
-          key={id}
-          className="rounded-md border border-[var(--card-border)] bg-[var(--card)] px-2 py-0.5 font-mono text-xs tabular-nums text-[var(--foreground)]"
-        >
-          {id}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-2 py-2">
+      {orderGroups.map((user) => {
+        const userKey = user.userId ?? "unknown";
+        const totalOrders = user.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
+        return (
+          <div
+            key={userKey}
+            className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2"
+          >
+            <p className="text-xs font-semibold text-[var(--foreground)]">
+              User ID{" "}
+              <span className="font-mono tabular-nums">
+                {user.userId ?? "—"}
+              </span>
+              <span className="ml-2 font-normal text-[var(--muted)]">
+                ({formatNumber(totalOrders)} order{totalOrders === 1 ? "" : "s"})
+              </span>
+            </p>
+            <div className="mt-2 space-y-2">
+              {user.skus.map((skuGroup) => (
+                <div key={`${userKey}-${skuGroup.sku}-${skuGroup.bifurcation ?? ""}`}>
+                  <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                    {skuGroup.sku}
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1.5">
+                    {skuGroup.orderIds.map((id) => (
+                      <li
+                        key={id}
+                        className="rounded-md border border-[var(--card-border)] bg-[var(--table-header)]/50 px-2 py-0.5 font-mono text-xs tabular-nums text-[var(--foreground)]"
+                      >
+                        {id}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-// ── expandable reason row (right panel) ──────────────────────────────────────
+// ── expandable reason row ─────────────────────────────────────────────────────
 
 function ReasonRow({
   label,
   orders,
   dateLabel,
   showDate,
-  orderIds,
+  orderGroups,
 }: {
   label: string;
   orders: number;
   dateLabel?: string;
   showDate: boolean;
-  orderIds: number[];
+  orderGroups: OperationsStatusOrderUserGroup[];
 }) {
   const [open, setOpen] = useState(false);
+  const displayCount = orderGroups.length > 0 ? countOrdersInGroups(orderGroups) : orders;
 
   return (
     <div className="border-b border-[var(--card-border)] last:border-0">
@@ -67,11 +131,11 @@ function ReasonRow({
             {dateLabel ?? "—"}
           </span>
         )}
-        <span className="min-w-0 flex-1 text-sm text-[var(--foreground)] truncate">
+        <span className="min-w-0 flex-1 break-words text-sm text-[var(--foreground)]">
           {label}
         </span>
         <span className="ml-2 shrink-0 text-sm font-semibold tabular-nums text-[var(--foreground)]">
-          {formatNumber(orders)}
+          {formatNumber(displayCount)}
         </span>
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" />
@@ -81,50 +145,83 @@ function ReasonRow({
       </button>
       {open && (
         <div className="bg-[var(--table-header)]/40 px-4 pb-2">
-          <OrderIdList orderIds={orderIds} />
+          <OrderGroupList orderGroups={orderGroups} />
         </div>
       )}
     </div>
   );
 }
 
-// ── country sidebar ───────────────────────────────────────────────────────────
+// ── country + bifurcation sidebar ─────────────────────────────────────────────
 
-function CountrySidebar({
+function CountryBifurcationSidebar({
   countries,
+  countrySummaries,
   selected,
   onSelect,
 }: {
   countries: Array<{ country: string; orders: number }>;
-  selected: string;
-  onSelect: (c: string) => void;
+  countrySummaries: OperationsStatusCountrySummary[];
+  selected: CountryBifurcationSelection;
+  onSelect: (next: CountryBifurcationSelection) => void;
 }) {
+  const summaryByCountry = new Map(countrySummaries.map((s) => [s.country, s]));
+
   return (
-    <div className="flex w-52 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto">
+    <div className="flex w-64 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto sm:w-72">
       {countries.map(({ country, orders }) => {
-        const active = selected === country;
+        const isCountryActive =
+          selected.country === country && selected.bifurcation === null;
+        const isAll = country === "All";
+        const summary = summaryByCountry.get(country);
+        const bifurcations = isAll ? [] : (summary?.bifurcations ?? []);
+
         return (
-          <button
-            key={country}
-            type="button"
-            onClick={() => onSelect(country)}
-            className={cn(
-              "flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left text-xs transition-colors border-b border-[var(--card-border)] last:border-0",
-              active
-                ? "bg-teal-600 text-white font-semibold"
-                : "text-[var(--foreground)] hover:bg-[var(--table-header)]",
-            )}
-          >
-            <span className="min-w-0 flex-1 break-words leading-snug">{country}</span>
-            <span
+          <div key={country} className="border-b border-[var(--card-border)] last:border-0">
+            <button
+              type="button"
+              onClick={() => onSelect({ country, bifurcation: null })}
               className={cn(
-                "shrink-0 tabular-nums font-medium",
-                active ? "text-white/90" : "text-[var(--muted)]",
+                "flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left text-xs transition-colors",
+                isCountryActive
+                  ? "bg-teal-600 text-white font-semibold"
+                  : "text-[var(--foreground)] hover:bg-[var(--table-header)]",
               )}
             >
-              {formatNumber(orders)}
-            </span>
-          </button>
+              <span className="min-w-0 flex-1 break-words leading-snug">{country}</span>
+              <span
+                className={cn(
+                  "shrink-0 tabular-nums font-medium",
+                  isCountryActive ? "text-white/90" : "text-[var(--muted)]",
+                )}
+              >
+                {formatNumber(orders)}
+              </span>
+            </button>
+
+            {bifurcations.map(({ bifurcation, orders: bifOrders }) => {
+              const isBifActive =
+                selected.country === country && selected.bifurcation === bifurcation;
+              return (
+                <button
+                  key={`${country}-${bifurcation}`}
+                  type="button"
+                  onClick={() => onSelect({ country, bifurcation })}
+                  className={cn(
+                    "flex w-full items-start justify-between gap-2 py-2 pl-5 pr-3 text-left text-[11px] transition-colors",
+                    isBifActive
+                      ? "bg-teal-600/90 text-white font-medium"
+                      : "text-[var(--muted)] hover:bg-[var(--table-header)] hover:text-[var(--foreground)]",
+                  )}
+                >
+                  <span className="min-w-0 flex-1 break-words leading-snug before:mr-1 before:content-['–']">
+                    {bifurcation}
+                  </span>
+                  <span className="shrink-0 tabular-nums">{formatNumber(bifOrders)}</span>
+                </button>
+              );
+            })}
+          </div>
         );
       })}
     </div>
@@ -146,14 +243,73 @@ function RightPanelHeader({ showDate, subgroupLabel }: { showDate: boolean; subg
 
 // ── data inversion: dayBuckets → countryFirst ────────────────────────────────
 
-type ReasonEntry = { label: string; orders: number; orderIds: number[] };
+type ReasonEntry = {
+  label: string;
+  orders: number;
+  orderGroups: OperationsStatusOrderUserGroup[];
+};
 type DateEntry = { days: number | null; label: string; orders: number; reasons: ReasonEntry[] };
 type CountryEntry = { country: string; orders: number; dates: DateEntry[] };
+
+function mergeUserGroups(
+  a: OperationsStatusOrderUserGroup[],
+  b: OperationsStatusOrderUserGroup[],
+): OperationsStatusOrderUserGroup[] {
+  const userMap = new Map<
+    string,
+    Map<string, { sku: string; bifurcation?: string; orderIds: Set<number> }>
+  >();
+
+  for (const groups of [a, b]) {
+    for (const group of groups) {
+      const userKey = group.userId == null ? "null" : String(group.userId);
+      if (!userMap.has(userKey)) userMap.set(userKey, new Map());
+      const skuMap = userMap.get(userKey)!;
+      for (const skuGroup of group.skus) {
+        const skuKey = `${skuGroup.sku}\0${skuGroup.bifurcation ?? ""}`;
+        const entry =
+          skuMap.get(skuKey) ??
+          { sku: skuGroup.sku, bifurcation: skuGroup.bifurcation, orderIds: new Set<number>() };
+        for (const id of skuGroup.orderIds) entry.orderIds.add(id);
+        skuMap.set(skuKey, entry);
+      }
+    }
+  }
+
+  return [...userMap.entries()]
+    .map(([userKey, skuMap]) => ({
+      userId: userKey === "null" ? null : Number(userKey),
+      skus: [...skuMap.values()].map(({ sku, bifurcation, orderIds }) => ({
+        sku,
+        bifurcation,
+        orderIds: [...orderIds].sort((x, y) => x - y),
+      })),
+    }))
+    .sort((x, y) => {
+      const xCount = x.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
+      const yCount = y.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
+      return yCount - xCount;
+    });
+}
 
 function invertToCountryFirst(
   dayBuckets: OperationsStatusDaysGroup[],
 ): CountryEntry[] {
-  const map = new Map<string, { orders: number; dateMap: Map<string, { days: number | null; label: string; orders: number; reasonMap: Map<string, { orders: number; orderIds: Set<number> }> }> }>();
+  const map = new Map<
+    string,
+    {
+      orders: number;
+      dateMap: Map<
+        string,
+        {
+          days: number | null;
+          label: string;
+          orders: number;
+          reasonMap: Map<string, { orders: number; orderGroups: OperationsStatusOrderUserGroup[] }>;
+        }
+      >;
+    }
+  >();
 
   for (const bucket of dayBuckets) {
     for (const cg of bucket.countries) {
@@ -164,18 +320,23 @@ function invertToCountryFirst(
 
       const dateKey = bucket.days === null ? "null" : String(bucket.days);
       if (!entry.dateMap.has(dateKey)) {
-        entry.dateMap.set(dateKey, { days: bucket.days, label: bucket.label, orders: 0, reasonMap: new Map() });
+        entry.dateMap.set(dateKey, {
+          days: bucket.days,
+          label: bucket.label,
+          orders: 0,
+          reasonMap: new Map(),
+        });
       }
       const dateEntry = entry.dateMap.get(dateKey)!;
       dateEntry.orders += cg.orders;
 
       for (const sg of cg.subgroups) {
         if (!dateEntry.reasonMap.has(sg.label)) {
-          dateEntry.reasonMap.set(sg.label, { orders: 0, orderIds: new Set() });
+          dateEntry.reasonMap.set(sg.label, { orders: 0, orderGroups: [] });
         }
         const re = dateEntry.reasonMap.get(sg.label)!;
         re.orders += sg.orders;
-        for (const id of sg.orderIds) re.orderIds.add(id);
+        re.orderGroups = mergeUserGroups(re.orderGroups, sg.orderGroups ?? []);
       }
     }
   }
@@ -190,10 +351,10 @@ function invertToCountryFirst(
           label: de.label,
           orders: de.orders,
           reasons: [...de.reasonMap.entries()]
-            .map(([label, { orders: ro, orderIds }]) => ({
+            .map(([label, { orders: ro, orderGroups }]) => ({
               label,
               orders: ro,
-              orderIds: [...orderIds].sort((a, b) => a - b),
+              orderGroups,
             }))
             .sort((a, b) => b.orders - a.orders),
         }))
@@ -222,46 +383,61 @@ function DaysCountrySubgroupSplitPanel({
         b.countries.reduce(
           (acc, cg) => {
             for (const sg of cg.subgroups) {
-              if (!acc[sg.label]) acc[sg.label] = { label: sg.label, orders: 0, orderIds: new Set<number>() };
+              if (!acc[sg.label]) {
+                acc[sg.label] = { label: sg.label, orders: 0, orderGroups: [] as OperationsStatusOrderUserGroup[] };
+              }
               acc[sg.label].orders += sg.orders;
-              for (const id of sg.orderIds) acc[sg.label].orderIds.add(id);
+              acc[sg.label].orderGroups = mergeUserGroups(
+                acc[sg.label].orderGroups,
+                sg.orderGroups ?? [],
+              );
             }
             return acc;
           },
-          {} as Record<string, { label: string; orders: number; orderIds: Set<number> }>,
+          {} as Record<string, ReasonEntry>,
         ),
-      )
-        .map(({ label, orders, orderIds }) => ({
-          label,
-          orders,
-          orderIds: [...orderIds].sort((a, b) => a - b),
-        }))
-        .sort((a, b) => b.orders - a.orders),
+      ).sort((a, b) => b.orders - a.orders),
     })),
   };
 
-  const sidebarCountries = [allCountries, ...countryFirst];
-  const [selectedCountry, setSelectedCountry] = useState("All");
+  const sidebarCountries = [{ country: "All", orders: data.totalOrders }, ...countryFirst];
+  const [selected, setSelected] = useState<CountryBifurcationSelection>({
+    country: "All",
+    bifurcation: null,
+  });
 
   const activeEntry =
-    selectedCountry === "All"
+    selected.country === "All"
       ? allCountries
-      : countryFirst.find((c) => c.country === selectedCountry) ?? allCountries;
+      : countryFirst.find((c) => c.country === selected.country) ?? allCountries;
 
-  // Flatten date × reason into a single list of rows
-  const rows: Array<{ dateLabel: string; label: string; orders: number; orderIds: number[] }> = [];
+  const rows: Array<{
+    dateLabel: string;
+    label: string;
+    orders: number;
+    orderGroups: OperationsStatusOrderUserGroup[];
+  }> = [];
+
   for (const de of activeEntry.dates) {
     for (const r of de.reasons) {
-      rows.push({ dateLabel: de.label, label: r.label, orders: r.orders, orderIds: r.orderIds });
+      const filteredGroups = filterOrderGroups(r.orderGroups, selected.bifurcation);
+      if (filteredGroups.length === 0 && selected.bifurcation) continue;
+      rows.push({
+        dateLabel: de.label,
+        label: r.label,
+        orders: r.orders,
+        orderGroups: filteredGroups,
+      });
     }
   }
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <CountrySidebar
-        countries={sidebarCountries.map(({ country, orders }) => ({ country, orders }))}
-        selected={selectedCountry}
-        onSelect={setSelectedCountry}
+      <CountryBifurcationSidebar
+        countries={sidebarCountries}
+        countrySummaries={data.countrySummaries}
+        selected={selected}
+        onSelect={setSelected}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <RightPanelHeader showDate subgroupLabel={subgroupLabel} />
@@ -278,7 +454,7 @@ function DaysCountrySubgroupSplitPanel({
                 orders={row.orders}
                 dateLabel={row.dateLabel}
                 showDate
-                orderIds={row.orderIds}
+                orderGroups={row.orderGroups}
               />
             ))
           )}
@@ -299,47 +475,70 @@ function CountryTagSplitPanel({
     { country: "All", orders: data.totalOrders },
     ...data.countryGroups.map((cg) => ({ country: cg.country, orders: cg.orders })),
   ];
-  const [selectedCountry, setSelectedCountry] = useState("All");
+  const [selected, setSelected] = useState<CountryBifurcationSelection>({
+    country: "All",
+    bifurcation: null,
+  });
 
   const tags: OperationsStatusCountryTagSubgroup[] =
-    selectedCountry === "All"
+    selected.country === "All"
       ? Object.values(
           data.countryGroups.reduce(
             (acc, cg) => {
               for (const t of cg.tags) {
-                if (!acc[t.tag]) acc[t.tag] = { tag: t.tag, orders: 0, pct: 0, orderIds: [] };
+                if (!acc[t.tag]) {
+                  acc[t.tag] = {
+                    tag: t.tag,
+                    orders: 0,
+                    pct: 0,
+                    orderIds: [],
+                    orderGroups: [],
+                  };
+                }
                 acc[t.tag].orders += t.orders;
                 acc[t.tag].orderIds = [...acc[t.tag].orderIds, ...t.orderIds].sort((a, b) => a - b);
+                acc[t.tag].orderGroups = mergeUserGroups(
+                  acc[t.tag].orderGroups ?? [],
+                  t.orderGroups ?? [],
+                );
               }
               return acc;
             },
             {} as Record<string, OperationsStatusCountryTagSubgroup>,
           ),
         ).sort((a, b) => b.orders - a.orders)
-      : (data.countryGroups.find((cg) => cg.country === selectedCountry)?.tags ?? []);
+      : (data.countryGroups.find((cg) => cg.country === selected.country)?.tags ?? []);
+
+  const filteredTags = tags
+    .map((t) => ({
+      ...t,
+      orderGroups: filterOrderGroups(t.orderGroups, selected.bifurcation),
+    }))
+    .filter((t) => !selected.bifurcation || t.orderGroups.length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <CountrySidebar
+      <CountryBifurcationSidebar
         countries={sidebarCountries}
-        selected={selectedCountry}
-        onSelect={setSelectedCountry}
+        countrySummaries={data.countrySummaries}
+        selected={selected}
+        onSelect={setSelected}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <RightPanelHeader showDate={false} subgroupLabel="Reason / Tag" />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {tags.length === 0 ? (
+          {filteredTags.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-[var(--muted)]">
               No orders for this selection.
             </p>
           ) : (
-            tags.map((t) => (
+            filteredTags.map((t) => (
               <ReasonRow
                 key={t.tag}
                 label={t.tag}
                 orders={t.orders}
                 showDate={false}
-                orderIds={t.orderIds}
+                orderGroups={t.orderGroups ?? []}
               />
             ))
           )}
@@ -418,8 +617,8 @@ export function operationsStatusDetailBreadcrumb(
   detail: OperationsStatusOrderDetail,
 ): string {
   if (detail.layout === "countryTag") {
-    return "Select country → reason → order IDs";
+    return "Select country → bifurcation → reason → order details";
   }
   const subgroup = detail.groupBy === "title" ? "product title" : "reason";
-  return `Select country → date × ${subgroup} → order IDs`;
+  return `Select country → bifurcation → date × ${subgroup} → order details`;
 }

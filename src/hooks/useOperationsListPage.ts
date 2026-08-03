@@ -152,5 +152,6 @@ export function useOperationsListPage<T>({
     total,
     lastSyncedAt,
     runSync,
+    load,
   };
 }

@@ -1,4 +1,8 @@
-import type { OperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
+import type {
+  OperationsStatusCountrySummary,
+  OperationsStatusOrderDetail,
+  OperationsStatusOrderUserGroup,
+} from "@/lib/analytics/operations-status-detail";
 import type {
   OperationsStatusDaysGroup,
   OperationsStatusCountryGroup,
@@ -19,16 +23,150 @@ function asNumberArray(value: unknown): number[] {
   return value.map((v) => Number(v)).filter((n) => Number.isFinite(n));
 }
 
+function mapOrderGroups(value: unknown): OperationsStatusOrderUserGroup[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((row) => {
+    const user = row as Record<string, unknown>;
+    const skus = Array.isArray(user.skus)
+      ? user.skus.map((skuRow) => {
+          const sku = skuRow as Record<string, unknown>;
+          return {
+            sku: String(sku.sku ?? "No SKU"),
+            bifurcation: sku.bifurcation == null ? undefined : String(sku.bifurcation),
+            orderIds: asNumberArray(sku.orderIds),
+          };
+        })
+      : [];
+    const userIdRaw = user.userId;
+    return {
+      userId:
+        userIdRaw == null || userIdRaw === ""
+          ? null
+          : Number.isFinite(Number(userIdRaw))
+            ? Number(userIdRaw)
+            : null,
+      skus,
+    };
+  });
+}
+
+function mergeOrderGroups(
+  groups: OperationsStatusOrderUserGroup[],
+): OperationsStatusOrderUserGroup[] {
+  const userMap = new Map<
+    string,
+    Map<string, { sku: string; bifurcation?: string; orderIds: Set<number> }>
+  >();
+
+  for (const group of groups) {
+    const userKey = group.userId == null ? "null" : String(group.userId);
+    if (!userMap.has(userKey)) userMap.set(userKey, new Map());
+    const skuMap = userMap.get(userKey)!;
+
+    for (const skuGroup of group.skus) {
+      const skuKey = `${skuGroup.sku}\0${skuGroup.bifurcation ?? ""}`;
+      const entry =
+        skuMap.get(skuKey) ??
+        { sku: skuGroup.sku, bifurcation: skuGroup.bifurcation, orderIds: new Set<number>() };
+      for (const id of skuGroup.orderIds) entry.orderIds.add(id);
+      skuMap.set(skuKey, entry);
+    }
+  }
+
+  return [...userMap.entries()]
+    .map(([userKey, skuMap]) => ({
+      userId: userKey === "null" ? null : Number(userKey),
+      skus: [...skuMap.values()]
+        .map(({ sku, bifurcation, orderIds }) => ({
+          sku,
+          bifurcation,
+          orderIds: [...orderIds].sort((a, b) => a - b),
+        }))
+        .sort(
+          (a, b) =>
+            b.orderIds.length - a.orderIds.length || a.sku.localeCompare(b.sku),
+        ),
+    }))
+    .sort((a, b) => {
+      const aCount = a.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
+      const bCount = b.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
+      return bCount - aCount || (a.userId ?? 0) - (b.userId ?? 0);
+    });
+}
+
+function mergeCountrySummaries(
+  summaries: OperationsStatusCountrySummary[],
+): OperationsStatusCountrySummary[] {
+  const merged = new Map<
+    string,
+    { orders: number; bifurcations: Map<string, number> }
+  >();
+
+  for (const row of summaries) {
+    const country = normalizeOrderCountry(row.country);
+    const bucket = merged.get(country) ?? { orders: 0, bifurcations: new Map() };
+    bucket.orders += row.orders;
+    for (const b of row.bifurcations) {
+      const key = b.bifurcation || "Unknown";
+      bucket.bifurcations.set(key, (bucket.bifurcations.get(key) ?? 0) + b.orders);
+    }
+    merged.set(country, bucket);
+  }
+
+  return [...merged.entries()]
+    .map(([country, bucket]) => ({
+      country,
+      orders: bucket.orders,
+      bifurcations: [...bucket.bifurcations.entries()]
+        .map(([bifurcation, orders]) => ({ bifurcation, orders }))
+        .sort((a, b) => b.orders - a.orders || a.bifurcation.localeCompare(b.bifurcation)),
+    }))
+    .sort((a, b) => b.orders - a.orders || a.country.localeCompare(b.country));
+}
+
+function mapCountrySummaries(payload: unknown): OperationsStatusCountrySummary[] {
+  if (!Array.isArray(payload)) return [];
+  return payload.map((row) => {
+    const countryRow = row as Record<string, unknown>;
+    const bifurcations = Array.isArray(countryRow.bifurcations)
+      ? countryRow.bifurcations.map((bRow) => {
+          const b = bRow as Record<string, unknown>;
+          return {
+            bifurcation: String(b.bifurcation ?? "Unknown"),
+            orders: Number(b.orders ?? 0),
+          };
+        })
+      : [];
+    return {
+      country: String(countryRow.country ?? "Unknown"),
+      orders: Number(countryRow.orders ?? 0),
+      bifurcations,
+    };
+  });
+}
+
 function mergeCountryTagGroups(
   groups: Array<{
     country: string;
     orders: number;
-    tags: Array<{ tag: string; orders: number; pct: number; orderIds: number[] }>;
+    tags: Array<{
+      tag: string;
+      orders: number;
+      pct: number;
+      orderIds: number[];
+      orderGroups?: OperationsStatusOrderUserGroup[];
+    }>;
   }>,
 ) {
   const merged = new Map<
     string,
-    { orders: number; tags: Map<string, { orders: number; orderIds: Set<number> }> }
+    {
+      orders: number;
+      tags: Map<
+        string,
+        { orders: number; orderIds: Set<number>; orderGroups: OperationsStatusOrderUserGroup[] }
+      >;
+    }
   >();
 
   for (const group of groups) {
@@ -37,9 +175,16 @@ function mergeCountryTagGroups(
     bucket.orders += group.orders;
 
     for (const tagRow of group.tags) {
-      const tagBucket = bucket.tags.get(tagRow.tag) ?? { orders: 0, orderIds: new Set<number>() };
+      const tagBucket = bucket.tags.get(tagRow.tag) ?? {
+        orders: 0,
+        orderIds: new Set<number>(),
+        orderGroups: [] as OperationsStatusOrderUserGroup[],
+      };
       tagBucket.orders += tagRow.orders;
       for (const id of tagRow.orderIds) tagBucket.orderIds.add(id);
+      if (tagRow.orderGroups?.length) {
+        tagBucket.orderGroups.push(...tagRow.orderGroups);
+      }
       bucket.tags.set(tagRow.tag, tagBucket);
     }
 
@@ -57,6 +202,7 @@ function mergeCountryTagGroups(
           orders: orderIds.length,
           pct: bucket.orders > 0 ? orderIds.length / bucket.orders : 0,
           orderIds,
+          orderGroups: mergeOrderGroups(tagBucket.orderGroups),
         };
       }),
     }))
@@ -67,7 +213,18 @@ function mergeDayBuckets(dayBuckets: OperationsStatusDaysGroup[]): OperationsSta
   return dayBuckets.map((bucket) => {
     const countryMap = new Map<
       string,
-      { country: string; orders: number; subgroups: Map<string, { orders: number; orderIds: Set<number> }> }
+      {
+        country: string;
+        orders: number;
+        subgroups: Map<
+          string,
+          {
+            orders: number;
+            orderIds: Set<number>;
+            orderGroups: OperationsStatusOrderUserGroup[];
+          }
+        >;
+      }
     >();
 
     for (const countryGroup of bucket.countries) {
@@ -80,9 +237,12 @@ function mergeDayBuckets(dayBuckets: OperationsStatusDaysGroup[]): OperationsSta
       for (const subgroup of countryGroup.subgroups) {
         const subgroupEntry =
           entry.subgroups.get(subgroup.label) ??
-          { orders: 0, orderIds: new Set<number>() };
+          { orders: 0, orderIds: new Set<number>(), orderGroups: [] };
         subgroupEntry.orders += subgroup.orders;
         for (const id of subgroup.orderIds) subgroupEntry.orderIds.add(id);
+        if (subgroup.orderGroups?.length) {
+          subgroupEntry.orderGroups.push(...subgroup.orderGroups);
+        }
         entry.subgroups.set(subgroup.label, subgroupEntry);
       }
 
@@ -94,10 +254,11 @@ function mergeDayBuckets(dayBuckets: OperationsStatusDaysGroup[]): OperationsSta
         country,
         orders,
         subgroups: [...subgroups.entries()]
-          .map(([label, { orders: subgroupOrders, orderIds }]) => ({
+          .map(([label, { orders: subgroupOrders, orderIds, orderGroups }]) => ({
             label,
             orders: subgroupOrders,
             orderIds: [...orderIds].sort((a, b) => a - b),
+            orderGroups: mergeOrderGroups(orderGroups),
           }))
           .sort((a, b) => b.orders - a.orders || a.label.localeCompare(b.label)),
       }))
@@ -119,6 +280,8 @@ export function mapStatusDetailFromRpc(
     throw new Error(`Unknown group: ${groupId}`);
   }
 
+  const countrySummaries = mergeCountrySummaries(mapCountrySummaries(payload?.countrySummaries));
+
   const base = {
     groupId,
     title: String(payload?.title ?? group.title),
@@ -132,6 +295,7 @@ export function mapStatusDetailFromRpc(
     ) as import("@/lib/operations/status-kpi-groups").OperationsDaysFrom,
     totalOrders: Number(payload?.totalOrders ?? 0),
     filteredTotalOrders: Number(payload?.filteredTotalOrders ?? 0),
+    countrySummaries,
   };
 
   if (payload?.layout === "countryTag") {
@@ -146,6 +310,7 @@ export function mapStatusDetailFromRpc(
                   orders: Number(tag.orders ?? 0),
                   pct: Number(tag.pct ?? 0),
                   orderIds: asNumberArray(tag.orderIds),
+                  orderGroups: mapOrderGroups(tag.orderGroups),
                 };
               })
             : [];
@@ -184,6 +349,7 @@ export function mapStatusDetailFromRpc(
                       label: String(sg.label ?? ""),
                       orders: Number(sg.orders ?? 0),
                       orderIds: asNumberArray(sg.orderIds),
+                      orderGroups: mapOrderGroups(sg.orderGroups),
                     };
                   })
                 : [];

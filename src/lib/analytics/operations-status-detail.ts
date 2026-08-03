@@ -20,6 +20,29 @@ export interface OperationsStatusSubgroup {
   label: string;
   orders: number;
   orderIds: number[];
+  orderGroups?: OperationsStatusOrderUserGroup[];
+}
+
+export interface OperationsStatusOrderSkuGroup {
+  sku: string;
+  bifurcation?: string;
+  orderIds: number[];
+}
+
+export interface OperationsStatusOrderUserGroup {
+  userId: number | null;
+  skus: OperationsStatusOrderSkuGroup[];
+}
+
+export interface OperationsStatusBifurcationSummary {
+  bifurcation: string;
+  orders: number;
+}
+
+export interface OperationsStatusCountrySummary {
+  country: string;
+  orders: number;
+  bifurcations: OperationsStatusBifurcationSummary[];
 }
 
 export interface OperationsStatusCountryGroup {
@@ -41,6 +64,7 @@ export interface OperationsStatusCountryTagSubgroup {
   /** Share of this country's return orders (not date-range total). */
   pct: number;
   orderIds: number[];
+  orderGroups?: OperationsStatusOrderUserGroup[];
 }
 
 export interface OperationsStatusCountryTagGroup {
@@ -58,6 +82,7 @@ type OperationsStatusOrderDetailBase = {
   totalOrders: number;
   /** All orders in the date/filter selection (denominator for %). */
   filteredTotalOrders: number;
+  countrySummaries: OperationsStatusCountrySummary[];
 };
 
 export type OperationsStatusOrderDetail =
@@ -258,6 +283,7 @@ function computeCountryTagDetail(
     daysFrom: group.daysFrom,
     totalOrders,
     filteredTotalOrders,
+    countrySummaries: [],
     layout: "countryTag",
     countryGroups: sortCountryTagGroups(countryGroups),
   };
@@ -341,6 +367,7 @@ function computeDaysCountrySubgroupDetail(
     daysFrom: group.daysFrom,
     totalOrders,
     filteredTotalOrders,
+    countrySummaries: [],
     layout: "daysCountrySubgroup",
     dayBuckets: sortDaysGroups(dayBuckets),
   };

@@ -31,7 +31,13 @@ BEGIN
   END;
 
   BEGIN
-    REFRESH MATERIALIZED VIEW ops_sku_daily_performance;
+    REFRESH MATERIALIZED VIEW ops_nd_allocations;
+  EXCEPTION
+    WHEN undefined_table THEN NULL;
+  END;
+
+  BEGIN
+    REFRESH MATERIALIZED VIEW ops_nd_sku_summary;
   EXCEPTION
     WHEN undefined_table THEN NULL;
   END;

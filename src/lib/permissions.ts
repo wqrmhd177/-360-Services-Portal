@@ -1,4 +1,5 @@
 import type { UserRole } from "./simpleAuth";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface UserPermissions {
   zambeel360?: ZambeelDepartment[];
@@ -75,9 +76,10 @@ export function deriveEffectivePermissions(input: {
     permissions?.zambeel360 ??
     (role && isZambeelDepartment(role) ? [role] : []);
 
+  const explicitPa = permissions?.product_availability;
   const paRole: ProductAvailabilityRole | null =
-    permissions?.product_availability !== undefined
-      ? permissions.product_availability
+    typeof explicitPa === "string" && isProductAvailabilityRole(explicitPa)
+      ? explicitPa
       : role && isProductAvailabilityRole(role)
         ? role
         : "agent";
@@ -119,6 +121,45 @@ export function getProductAvailabilityDataScope(
 
 export function normalizeProductAvailabilityUserId(userId: string): string {
   return userId.trim().toLowerCase();
+}
+
+/** Resolve every value that may appear in requested_by_user_id for this portal user. */
+export async function resolveProductAvailabilityOwnerIds(
+  userEmail: string,
+  db: SupabaseClient
+): Promise<string[]> {
+  const normalized = normalizeProductAvailabilityUserId(userEmail);
+  const ids = new Set<string>([normalized, userEmail.trim()]);
+
+  const { data: profile } = await db
+    .from("profiles")
+    .select("id, email")
+    .ilike("email", normalized)
+    .maybeSingle();
+
+  if (profile?.id) ids.add(String(profile.id));
+  if (profile?.email) {
+    ids.add(profile.email.trim());
+    ids.add(normalizeProductAvailabilityUserId(profile.email));
+  }
+
+  return Array.from(ids).filter(Boolean);
+}
+
+export function buildRequestedByOwnerOrFilter(ownerIds: string[]): string | null {
+  const unique = Array.from(new Set(ownerIds.map((id) => id.trim()).filter(Boolean)));
+  if (unique.length === 0) return null;
+  return unique.map((id) => `requested_by_user_id.ilike.${id}`).join(",");
+}
+
+export function getEffectiveProductAvailabilityRole(input: {
+  role?: UserRole | string | null;
+  isAdmin?: boolean;
+  permissions?: UserPermissions;
+}): string {
+  if (input.isAdmin) return "admin";
+  const { paRole } = deriveEffectivePermissions(input);
+  return paRole ?? "agent";
 }
 
 export const ZAMBEEL_DEPARTMENT_OPTIONS: { value: ZambeelDepartment; label: string }[] = [

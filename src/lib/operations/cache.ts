@@ -9,6 +9,8 @@ import {
 } from "@/lib/orders/dbAnalytics";
 import { getSkuPerformanceSummary } from "@/lib/operations/skuPerformance";
 import type { SkuPerformanceFilters } from "@/lib/operations/skuPerformance";
+import { getNdReportSummary } from "@/lib/operations/ndReport";
+import type { NdReportFilters } from "@/lib/operations/ndReport";
 import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
 import { searchParamsToFilterParams } from "@/lib/orders/filteredItems";
 import { parseDateRange } from "@/lib/orders/params";
@@ -121,6 +123,34 @@ export async function getSkuPerformanceSummaryCached(params: {
   const cached = unstable_cache(
     () => getSkuPerformanceSummary(params),
     ["sku-performance", key],
+    { revalidate: 3600, tags: [OPS_DATA_TAG] },
+  );
+  return cached();
+}
+
+export async function getNdReportSummaryCached(params: {
+  filters: NdReportFilters;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}) {
+  const f = params.filters;
+  const key = [
+    f.country ?? "",
+    f.bifurcation ?? "",
+    f.fromDate ?? "",
+    f.toDate ?? "",
+    f.search ?? "",
+    String(params.page ?? 1),
+    String(params.pageSize ?? 20),
+    params.sortBy ?? "nd_quantity",
+    params.sortDir ?? "desc",
+  ].join("|");
+
+  const cached = unstable_cache(
+    () => getNdReportSummary(params),
+    ["nd-report", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
   return cached();

@@ -1,6 +1,9 @@
 "use client";
 
-import { Loader2, RefreshCw, Warehouse } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, RefreshCw, Upload, Warehouse } from "lucide-react";
+import { InventoryBulkUploadDialog } from "@/components/operations/InventoryBulkUploadDialog";
+import { InventoryFulfilmentRouteCell } from "@/components/operations/InventoryFulfilmentRouteCell";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
@@ -22,11 +25,49 @@ export default function OperationsInventoryPage() {
     total,
     lastSyncedAt,
     runSync,
+    load,
   } = useOperationsListPage<InventoryRow>({
     apiPath: "/api/operations/inventory",
     syncPath: "/api/operations/inventory/sync",
     itemsKey: "items",
   });
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [routeOptions, setRouteOptions] = useState<string[]>([]);
+  const [routeMap, setRouteMap] = useState<Record<string, string>>({});
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setIsAdmin(!!json?.session?.isAdmin))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  const loadRoutes = useCallback(async (skus: string[]) => {
+    if (skus.length === 0) return;
+    try {
+      const params = new URLSearchParams({ skus: skus.join(",") });
+      const res = await fetch(`/api/operations/inventory/fulfilment-routes?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (!res.ok) return;
+      setRouteOptions(json.options ?? []);
+      const nextMap: Record<string, string> = {};
+      for (const row of json.routes ?? []) {
+        if (row.sku) nextMap[row.sku] = row.fulfilment_route;
+      }
+      setRouteMap((prev) => ({ ...prev, ...nextMap }));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const skus = items.map((row) => row.sku).filter(Boolean);
+    if (skus.length > 0) void loadRoutes(skus);
+  }, [items, loadRoutes]);
 
   const busy = loading || syncing || bootstrapping;
 
@@ -44,6 +85,16 @@ export default function OperationsInventoryPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="input w-full sm:w-72"
             />
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                className="btn-secondary inline-flex shrink-0 items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                Bulk Routes
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={runSync}
@@ -104,6 +155,7 @@ export default function OperationsInventoryPage() {
                     <th className="px-4 py-3 text-center">Available Quantity</th>
                     <th className="px-4 py-3 text-center">Country</th>
                     <th className="px-4 py-3 text-center">Category</th>
+                    <th className="px-4 py-3 text-left">Fulfilment Route</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -116,6 +168,20 @@ export default function OperationsInventoryPage() {
                       <td className="px-4 py-3 text-center text-gray-700">{row.available_quantity}</td>
                       <td className="px-4 py-3 text-center text-gray-600">{row.country || "—"}</td>
                       <td className="px-4 py-3 text-center text-gray-600">{row.category || "—"}</td>
+                      <td className="px-4 py-3">
+                        <InventoryFulfilmentRouteCell
+                          sku={row.sku}
+                          route={routeMap[row.sku] ?? row.fulfilment_route ?? null}
+                          routeOptions={routeOptions}
+                          isAdmin={isAdmin}
+                          onSaved={(nextRoute) => {
+                            setRouteMap((prev) => ({ ...prev, [row.sku]: nextRoute }));
+                            if (!routeOptions.includes(nextRoute)) {
+                              setRouteOptions((prev) => [...prev, nextRoute].sort());
+                            }
+                          }}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -132,6 +198,16 @@ export default function OperationsInventoryPage() {
           />
         </>
       )}
+
+      <InventoryBulkUploadDialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onComplete={() => {
+          void load(currentPage, search);
+          const skus = items.map((row) => row.sku).filter(Boolean);
+          void loadRoutes(skus);
+        }}
+      />
     </div>
   );
 }

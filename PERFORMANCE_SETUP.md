@@ -25,6 +25,9 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 9. **`patch_country_normalization.sql`** — clubs UAE/United Arab Emirates and KSA/Saudi Arabia in filters and KPIs
 10. **`patch_delivery_partner_live_rpc.sql`** — delivery partner chart: Blank / Unknown / Unassigned labels using tracking id + courier name (re-run after deploy, then sync)
 11. **`patch_kpi_date_fixes.sql`** — corrects KPI aging dates (confirmation, approved, dispatching, shipped, undelivered) and adds the `confirmation_pending_date` column; also enables the new country/date split-panel drill-down
+12. **`setup_nd_report.sql`** — ND Report FIFO allocation MVs, remarks table, and RPCs (requires step 9 for country normalization)
+13. **`patch_nd_report_enhancements.sql`** — store-level ND remarks (Ops/Growth/Status), remark logs, fulfilment routes, bulk route upload, and updated ND summary MV
+14. **`patch_kpi_drilldown_enhancements.sql`** — KPI drill-down bifurcation sidebar counts and User ID / SKU order grouping
 
 Then refresh materialized views once:
 

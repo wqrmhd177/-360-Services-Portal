@@ -123,7 +123,7 @@ function OperationsStatusDialog({
         "backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm",
       )}
     >
-      <div className="relative flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl">
+      <div className="relative flex max-h-[min(90vh,56rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl">
         <div
           className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-violet-500/15 blur-2xl"
           aria-hidden
