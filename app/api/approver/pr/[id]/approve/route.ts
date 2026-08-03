@@ -14,8 +14,8 @@ export async function POST(
     const session = getPortalSession();
     const denied = requireWriteAccess(
       session,
-      ["approver", "finance"],
-      "Forbidden - Approver or Finance role required"
+      ["approver"],
+      "Forbidden - Approver role required"
     );
     if (denied) return denied;
     const authSession = session!;

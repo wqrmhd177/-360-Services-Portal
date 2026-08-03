@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Pr } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
-import ApproverPRActions from "../../approver/pr/[id]/ApproverPRActions";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 interface FinancePRTableProps {
   prs: Pr[];
@@ -324,11 +324,13 @@ export default function FinancePRTable({ prs }: FinancePRTableProps) {
             </div>
             <PRDetailCard pr={selectedPr} showFullDetails />
             {selectedPr.approval_status === "pending" && (
-              <div className="mt-6">
-                <ApproverPRActions prId={selectedPr.id} redirectPath="/dashboard/finance/purchase-requests" onSuccess={() => setSelectedPr(null)} />
+              <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                This PR is awaiting Approver approval before Finance can act on it.
               </div>
             )}
-            {selectedPr.approval_status === "approved" && selectedPr.finance_verification_status === "pending" && (
+            {selectedPr.approval_status === "approved" &&
+              selectedPr.finance_verification_status === "pending" &&
+              !isFinanceSkipService(selectedPr.seller_service_type) && (
               <div className="mt-4">
                 <a
                   href={`/dashboard/finance/pr/${selectedPr.id}`}
@@ -336,6 +338,12 @@ export default function FinancePRTable({ prs }: FinancePRTableProps) {
                 >
                   Verify payment →
                 </a>
+              </div>
+            )}
+            {selectedPr.approval_status === "approved" &&
+              isFinanceSkipService(selectedPr.seller_service_type) && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                Finance verification is not required for {selectedPr.seller_service_type}. Procurement can create a PO after Approver approval.
               </div>
             )}
           </div>

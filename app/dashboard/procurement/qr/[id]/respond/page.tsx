@@ -9,6 +9,7 @@ import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import SkuSearchInput from "@/components/SkuSearchInput";
 import type { InventorySku } from "@/lib/metabaseInventory";
+import { PURCHASE_FROM_OPTIONS, normalizePurchaseFrom, type PurchaseFromOption } from "@/lib/purchaseFrom";
 
 // Get Supabase URL from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://uengcejyjagdcqecnlkr.supabase.co";
@@ -37,7 +38,7 @@ interface PurchaseDetail {
   productName?: string;
   destinationCountry?: string;
   destinationCountries?: string[];
-  countryOfPurchase?: "China" | "Local Market";
+  countryOfPurchase?: PurchaseFromOption | string;
   shippingType?: string;
   movementType?: string;
   quantity: number;
@@ -56,7 +57,7 @@ type CurrencyCode = "AED" | "SAR" | "PKR";
 
 interface CombinationRow {
   destinationCountry: string;
-  countryOfPurchase: "China" | "Local Market";
+  countryOfPurchase: PurchaseFromOption;
   shippingType: string;
   movementType: string;
   currency?: CurrencyCode;
@@ -185,7 +186,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
             if (saved && Array.isArray(saved.combinations) && saved.combinations.length > 0) {
               combos[index] = saved.combinations.map((c: any) => ({
                 destinationCountry: c.destinationCountry ?? "",
-                countryOfPurchase: c.countryOfPurchase ?? "China",
+                countryOfPurchase: normalizePurchaseFrom(c.countryOfPurchase),
                 shippingType: c.shippingType ?? "sea",
                 movementType: c.movementType ?? "normal",
                 currency: (c.currency === "AED" || c.currency === "SAR" || c.currency === "PKR" ? c.currency : undefined) ?? (getCurrencyForCountry(c.destinationCountry ?? "") as CurrencyCode),
@@ -199,7 +200,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
             } else if (saved && saved.costPerUnit !== undefined) {
               combos[index] = [{
                 destinationCountry: detail.destinationCountry || countries[0] || "",
-                countryOfPurchase: detail.countryOfPurchase ?? "China",
+                countryOfPurchase: normalizePurchaseFrom(detail.countryOfPurchase),
                 shippingType: detail.shippingType ?? "sea",
                 movementType: detail.movementType ?? "normal",
                 currency: (saved.currency === "AED" || saved.currency === "SAR" || saved.currency === "PKR" ? saved.currency : undefined) ?? (getCurrencyForCountry(detail.destinationCountry || countries[0] || "") as CurrencyCode),
@@ -218,7 +219,7 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
               const firstCountry = detail.destinationCountry || countries[0] || "";
               const defaultRow: CombinationRow = {
                 destinationCountry: firstCountry,
-                countryOfPurchase: (detail.countryOfPurchase as "China" | "Local Market") ?? "China",
+                countryOfPurchase: normalizePurchaseFrom(detail.countryOfPurchase),
                 shippingType: detail.shippingType ?? "sea",
                 movementType: detail.movementType ?? "normal",
                 currency: getCurrencyForCountry(firstCountry) as CurrencyCode,
@@ -1012,11 +1013,12 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
                             <label className="block text-[10px] font-medium text-gray-600">Purchase From</label>
                             <select
                               value={row.countryOfPurchase}
-                              onChange={(e) => updateCombination(index, rowIndex, "countryOfPurchase", e.target.value as "China" | "Local Market")}
+                              onChange={(e) => updateCombination(index, rowIndex, "countryOfPurchase", e.target.value as PurchaseFromOption)}
                               className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs"
                             >
-                              <option value="China">China</option>
-                              <option value="Local Market">Local Market</option>
+                              {PURCHASE_FROM_OPTIONS.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
                             </select>
                           </div>
                           <div className="space-y-1">

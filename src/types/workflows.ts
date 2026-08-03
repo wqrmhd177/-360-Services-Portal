@@ -1,3 +1,5 @@
+import type { PurchaseFromOption } from "@/lib/purchaseFrom";
+
 export type ShippingType = "sea" | "air" | "road";
 export type MovementType = "normal" | "express";
 export type PaymentMethod = "advance" | "partial" | "invoice";
@@ -67,7 +69,7 @@ export interface Qr {
       remarks?: string;
       currency?: "SAR" | "PKR" | "AED";
     }[];
-    countryOfPurchase?: "China" | "Local Market";
+    countryOfPurchase?: PurchaseFromOption | string;
     shippingType?: ShippingType;
     movementType?: MovementType;
     quantity: number;

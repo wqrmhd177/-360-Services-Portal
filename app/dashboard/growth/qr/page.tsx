@@ -10,6 +10,7 @@ import { countryDetailTotal, enrichPurchaseDetailForStorage } from "@/lib/qrPurc
 import SuccessModal from "@/components/SuccessModal";
 import CountrySelectInput from "@/components/CountrySelectInput";
 import ServiceTypeSelect from "@/components/ServiceTypeSelect";
+import type { PurchaseFromOption } from "@/lib/purchaseFrom";
 
 /** Per-country row; Movements uses unitPrice/totalPrice, other services use targetPrice. */
 export type CountryDetail = {
@@ -32,7 +33,7 @@ interface PurchaseDetail {
   destinationCountries?: string[];
   /** Per-country quantity and price; one entry per destination country. */
   countryDetails?: CountryDetail[];
-  countryOfPurchase: "China" | "Local Market";
+  countryOfPurchase: PurchaseFromOption;
   shippingType: ShippingType;
   movementType: MovementType;
   quantity: number;

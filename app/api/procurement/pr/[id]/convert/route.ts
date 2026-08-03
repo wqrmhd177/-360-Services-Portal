@@ -7,6 +7,7 @@ import { insertPurchaseOrder } from "@/lib/poCreate";
 import { buildPoProductsFromPr } from "@/lib/poProductCosts";
 import type { ProcurementResponseMap } from "@/lib/procurementImages";
 import { requireWriteAccess } from "@/lib/accessControl";
+import { isPrReadyForPo } from "@/lib/prWorkflow";
 
 function getInvoiceFile(formData: FormData, field: string): File | null {
   const entry = formData.get(field);
@@ -72,7 +73,7 @@ export async function POST(
     const { data: prDetails, error: prFetchError } = await supabase
       .from("pr")
       .select(
-        "created_by_email, from_qr_id, products, product_name, sku_code, quantity, rate, approval_status, finance_verification_status, po_created"
+        "created_by_email, from_qr_id, products, product_name, sku_code, quantity, rate, approval_status, finance_verification_status, seller_service_type, po_created"
       )
       .eq("id", prId)
       .single();
@@ -88,16 +89,9 @@ export async function POST(
       );
     }
 
-    if (prDetails.approval_status !== "approved") {
+    if (!isPrReadyForPo(prDetails)) {
       return NextResponse.json(
-        { error: "PR must be approved before creating a PO." },
-        { status: 400 }
-      );
-    }
-
-    if (prDetails.finance_verification_status !== "verified") {
-      return NextResponse.json(
-        { error: "PR must be finance-verified before creating a PO." },
+        { error: "PR must be approved (and finance-verified when required) before creating a PO." },
         { status: 400 }
       );
     }

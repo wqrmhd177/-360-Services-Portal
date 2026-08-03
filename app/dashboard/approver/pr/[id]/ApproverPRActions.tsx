@@ -4,15 +4,18 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReadOnlyAdmin } from "@/hooks/useReadOnlyAdmin";
 import ActionConfirmModal from "@/components/ActionConfirmModal";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 interface ApproverPRActionsProps {
   prId: string;
+  sellerServiceType?: string | null;
   redirectPath?: string;
   onSuccess?: () => void;
 }
 
 export default function ApproverPRActions({
   prId,
+  sellerServiceType,
   redirectPath = "/dashboard/approver/pr",
   onSuccess,
 }: ApproverPRActionsProps) {
@@ -79,6 +82,8 @@ export default function ApproverPRActions({
     setLoading(false);
   };
 
+  const skipFinance = isFinanceSkipService(sellerServiceType);
+
   if (readOnly) return null;
 
   return (
@@ -115,7 +120,11 @@ export default function ApproverPRActions({
       <ActionConfirmModal
         open={showApproveModal}
         title="Approve Purchase Request"
-        description="This will notify the Finance team. Please review the details before confirming."
+        description={
+          skipFinance
+            ? "Finance verification is not required for this service type. After approval, Procurement can create a PO."
+            : "This will notify the Finance team. Please review the details before confirming."
+        }
         variant="approve"
         remarks={approveRemarks}
         onRemarksChange={setApproveRemarks}

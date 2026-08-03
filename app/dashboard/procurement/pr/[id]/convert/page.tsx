@@ -6,6 +6,7 @@ import type { Pr } from "@/types/workflows";
 import Link from "next/link";
 import PurchaseRequestSummary from "./PurchaseRequestSummary";
 import ConvertPrToPoForm from "./ConvertPrToPoForm";
+import { isPrFinanceVerificationRequired, isPrReadyForPo } from "@/lib/prWorkflow";
 
 async function getPrDetails(prId: string) {
   const supabase = createSupabaseClient();
@@ -52,12 +53,15 @@ export default async function ProcurementPrConvertPage({ params }: { params: { i
 
   const { pr, userNames } = result;
 
-  // Check both Approver approval AND Finance verification
-  if (pr.approval_status !== "approved" || pr.finance_verification_status !== "verified") {
+  // Check approver approval and finance verification (when required)
+  if (!isPrReadyForPo(pr)) {
+    const financeRequired = isPrFinanceVerificationRequired(pr);
     return (
       <div className="card">
         <p className="text-sm text-gray-500">
-          This PR requires both Approver approval AND Finance verification before conversion to PO.
+          {financeRequired
+            ? "This PR requires both Approver approval and Finance verification before conversion to PO."
+            : "This PR requires Approver approval before conversion to PO."}
         </p>
         <div className="mt-3 space-y-1 text-xs text-gray-600">
           <p>
@@ -66,12 +70,14 @@ export default async function ProcurementPrConvertPage({ params }: { params: { i
               {pr.approval_status}
             </span>
           </p>
-          <p>
-            <span className="font-medium">Finance Status:</span>{" "}
-            <span className={`capitalize ${pr.finance_verification_status === "verified" ? "text-green-600" : "text-yellow-600"}`}>
-              {pr.finance_verification_status}
-            </span>
-          </p>
+          {isPrFinanceVerificationRequired(pr) && (
+            <p>
+              <span className="font-medium">Finance Status:</span>{" "}
+              <span className={`capitalize ${pr.finance_verification_status === "verified" ? "text-green-600" : "text-yellow-600"}`}>
+                {pr.finance_verification_status}
+              </span>
+            </p>
+          )}
         </div>
         <Link
           href="/dashboard/procurement"

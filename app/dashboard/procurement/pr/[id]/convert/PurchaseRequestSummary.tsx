@@ -1,6 +1,7 @@
 "use client";
 
 import type { Pr } from "@/types/workflows";
+import { isPrFinanceVerificationRequired } from "@/lib/prWorkflow";
 
 interface PurchaseRequestSummaryProps {
   pr: Pr;
@@ -79,15 +80,21 @@ export default function PurchaseRequestSummary({ pr, userNames }: PurchaseReques
             >
               {pr.approval_status === "approved" ? "Approved" : pr.approval_status}
             </span>
-            <span
-              className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                pr.finance_verification_status === "verified"
-                  ? "bg-green-500 text-white"
-                  : "bg-yellow-500 text-white"
-              }`}
-            >
-              {pr.finance_verification_status === "verified" ? "Payment Verified" : "Payment Pending"}
-            </span>
+            {isPrFinanceVerificationRequired(pr) ? (
+              <span
+                className={`px-3 py-1 rounded-lg text-xs font-semibold ${
+                  pr.finance_verification_status === "verified"
+                    ? "bg-green-500 text-white"
+                    : "bg-yellow-500 text-white"
+                }`}
+              >
+                {pr.finance_verification_status === "verified" ? "Payment Verified" : "Payment Pending"}
+              </span>
+            ) : (
+              <span className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                Finance Not Required
+              </span>
+            )}
           </div>
         </div>
       </div>

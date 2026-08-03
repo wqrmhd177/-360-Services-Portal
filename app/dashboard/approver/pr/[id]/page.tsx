@@ -5,6 +5,7 @@ import type { Pr } from "@/types/workflows";
 import ApproverPRActions from "./ApproverPRActions";
 import PRDetailCard from "@/components/PRDetailCard";
 import Link from "next/link";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 interface PageProps {
   params: {
@@ -78,7 +79,7 @@ export default async function ApproverPRDetailPage({ params }: PageProps) {
         {/* Approval Actions */}
         {pr.approval_status === "pending" && (
           <div className="mt-6">
-            <ApproverPRActions prId={pr.id} />
+            <ApproverPRActions prId={pr.id} sellerServiceType={pr.seller_service_type} />
           </div>
         )}
 
@@ -103,8 +104,9 @@ export default async function ApproverPRDetailPage({ params }: PageProps) {
                   PR Approved
                 </h3>
                 <p className="mt-1 text-sm text-green-700">
-                  This PR has been approved and is awaiting Finance
-                  verification.
+                  {isFinanceSkipService(pr.seller_service_type)
+                    ? "This PR is ready for Procurement to create a PO. Finance verification is not required for this service type."
+                    : "This PR has been approved and is awaiting Finance verification."}
                 </p>
               </div>
             </div>

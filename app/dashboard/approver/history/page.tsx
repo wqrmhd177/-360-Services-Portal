@@ -348,7 +348,11 @@ export default function ApproverPurchaseRequestPage() {
             <PRDetailCard pr={selectedPr} showFullDetails />
             {selectedPr.approval_status === "pending" && (
               <div className="mt-6">
-                <ApproverPRActions prId={selectedPr.id} onSuccess={() => setSelectedPr(null)} />
+                <ApproverPRActions
+                  prId={selectedPr.id}
+                  sellerServiceType={selectedPr.seller_service_type}
+                  onSuccess={() => setSelectedPr(null)}
+                />
               </div>
             )}
           </div>

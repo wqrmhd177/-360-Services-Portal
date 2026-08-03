@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { Pr } from "@/types/workflows";
 import { Eye, X, FileText, ImageOff, CheckCircle, XCircle, BadgeCheck, Pencil, Check } from "lucide-react";
 import PRDetailCard from "@/components/PRDetailCard";
-import ApproverPRActions from "../../../approver/pr/[id]/ApproverPRActions";
 import ActionConfirmModal from "@/components/ActionConfirmModal";
 import { isFinanceSkipService } from "@/lib/serviceTypes";
 
@@ -101,14 +100,13 @@ export default function SellerPaymentsTable({
   }
 
   // Selectable PR groups
-  const pendingPrs = prs.filter((pr) => pr.approval_status === "pending");
   const verifiablePrs = prs.filter(
     (pr) =>
       pr.approval_status === "approved" &&
       pr.finance_verification_status === "pending" &&
       !isFinanceSkipService(pr.seller_service_type)
   );
-  const actionablePrs = [...pendingPrs, ...verifiablePrs];
+  const actionablePrs = verifiablePrs;
 
   // Checkbox selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -120,10 +118,6 @@ export default function SellerPaymentsTable({
     selectedIds.has(pr.id)
   );
 
-  // Which selected PRs are pending-approval vs finance-pending
-  const selectedPendingIds = Array.from(selectedIds).filter((id) =>
-    pendingPrs.some((pr) => pr.id === id)
-  );
   const selectedVerifiableIds = Array.from(selectedIds).filter((id) =>
     verifiablePrs.some((pr) => pr.id === id)
   );
@@ -243,37 +237,6 @@ export default function SellerPaymentsTable({
     }
   };
 
-  // ── Single-PR approve modal ──────────────────────────────────────────────
-  const [approvePr, setApprovePr] = useState<Pr | null>(null);
-  const [approveRemarks, setApproveRemarks] = useState("");
-  const [approveLoading, setApproveLoading] = useState(false);
-  const [approveError, setApproveError] = useState<string | null>(null);
-
-  // ── Single-PR reject modal ───────────────────────────────────────────────
-  const [rejectPr, setRejectPr] = useState<Pr | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectLoading, setRejectLoading] = useState(false);
-  const [rejectError, setRejectError] = useState<string | null>(null);
-
-  // ── Bulk approve modal ───────────────────────────────────────────────────
-  const [bulkApproveOpen, setBulkApproveOpen] = useState(false);
-  const [bulkApproveRemarks, setBulkApproveRemarks] = useState("");
-  const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
-  const [bulkApproveResult, setBulkApproveResult] = useState<{
-    done: number;
-    failed: number;
-  } | null>(null);
-
-  // ── Bulk reject modal ────────────────────────────────────────────────────
-  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
-  const [bulkRejectReason, setBulkRejectReason] = useState("");
-  const [bulkRejectLoading, setBulkRejectLoading] = useState(false);
-  const [bulkRejectError, setBulkRejectError] = useState<string | null>(null);
-  const [bulkRejectResult, setBulkRejectResult] = useState<{
-    done: number;
-    failed: number;
-  } | null>(null);
-
   // ── Bulk verify modal ────────────────────────────────────────────────────
   const [bulkVerifyOpen, setBulkVerifyOpen] = useState(false);
   const [bulkVerifyLoading, setBulkVerifyLoading] = useState(false);
@@ -285,119 +248,6 @@ export default function SellerPaymentsTable({
     done: number;
     failed: number;
   } | null>(null);
-
-  const openApproveModal = (pr: Pr) => {
-    setApprovePr(pr);
-    setApproveRemarks("");
-    setApproveError(null);
-  };
-
-  const openRejectModal = (pr: Pr) => {
-    setRejectPr(pr);
-    setRejectReason("");
-    setRejectError(null);
-  };
-
-  const handleApprove = async () => {
-    if (!approvePr) return;
-    setApproveLoading(true);
-    setApproveError(null);
-    try {
-      const res = await fetch(`/api/approver/pr/${approvePr.id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remarks: approveRemarks }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setApprovePr(null);
-        router.refresh();
-      } else {
-        setApproveError(data.error || "Failed to approve PR");
-        setApproveLoading(false);
-      }
-    } catch {
-      setApproveError("An unexpected error occurred");
-      setApproveLoading(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectPr) return;
-    setRejectLoading(true);
-    setRejectError(null);
-    try {
-      const res = await fetch(`/api/approver/pr/${rejectPr.id}/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: rejectReason }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setRejectPr(null);
-        router.refresh();
-      } else {
-        setRejectError(data.error || "Failed to reject PR");
-        setRejectLoading(false);
-      }
-    } catch {
-      setRejectError("An unexpected error occurred");
-      setRejectLoading(false);
-    }
-  };
-
-  const handleBulkApprove = async () => {
-    setBulkApproveLoading(true);
-    setBulkApproveResult(null);
-    let done = 0;
-    let failed = 0;
-    for (const id of selectedPendingIds) {
-      try {
-        const res = await fetch(`/api/approver/pr/${id}/approve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ remarks: bulkApproveRemarks }),
-        });
-        if (res.ok) done++;
-        else failed++;
-      } catch {
-        failed++;
-      }
-    }
-    setBulkApproveLoading(false);
-    setBulkApproveResult({ done, failed });
-    setSelectedIds(new Set());
-    router.refresh();
-  };
-
-  const handleBulkReject = async () => {
-    if (!bulkRejectReason.trim()) {
-      setBulkRejectError("Rejection reason is required");
-      return;
-    }
-    setBulkRejectLoading(true);
-    setBulkRejectError(null);
-    setBulkRejectResult(null);
-    let done = 0;
-    let failed = 0;
-    for (const id of selectedPendingIds) {
-      try {
-        const res = await fetch(`/api/approver/pr/${id}/reject`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: bulkRejectReason }),
-        });
-        if (res.ok) done++;
-        else failed++;
-      } catch {
-        failed++;
-      }
-    }
-    setBulkRejectLoading(false);
-    setBulkRejectResult({ done, failed });
-    setSelectedIds(new Set());
-    router.refresh();
-  };
 
   const handleBulkVerify = async (action: "approve" | "reject") => {
     if (action === "reject" && !bulkVerifyReason.trim()) {
@@ -525,14 +375,8 @@ export default function SellerPaymentsTable({
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
             <span className="text-sm font-medium text-blue-800">
               {selectedIds.size} PR{selectedIds.size > 1 ? "s" : ""} selected
-              {selectedPendingIds.length > 0 && selectedVerifiableIds.length > 0 && (
-                <span className="ml-1 text-blue-600 font-normal text-xs">
-                  ({selectedPendingIds.length} pending · {selectedVerifiableIds.length} for verification)
-                </span>
-              )}
             </span>
             <div className="flex flex-wrap gap-2">
-              {/* Verify — only when finance-pending PRs are selected */}
               {selectedVerifiableIds.length > 0 && (
                 <button
                   type="button"
@@ -545,36 +389,6 @@ export default function SellerPaymentsTable({
                   <BadgeCheck className="h-3.5 w-3.5" />
                   Verify Selected ({selectedVerifiableIds.length})
                 </button>
-              )}
-              {/* Approve / Reject — only when approval-pending PRs are selected */}
-              {selectedPendingIds.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBulkApproveRemarks("");
-                      setBulkApproveResult(null);
-                      setBulkApproveOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700"
-                  >
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    Approve Selected ({selectedPendingIds.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBulkRejectReason("");
-                      setBulkRejectResult(null);
-                      setBulkRejectError(null);
-                      setBulkRejectOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    Reject Selected ({selectedPendingIds.length})
-                  </button>
-                </>
               )}
               <button
                 type="button"
@@ -652,11 +466,11 @@ export default function SellerPaymentsTable({
                   const creatorName =
                     nameMap[pr.created_by_email] ??
                     pr.created_by_email.split("@")[0];
-                  const isPending = pr.approval_status === "pending";
                   const isVerifiable =
                     pr.approval_status === "approved" &&
-                    pr.finance_verification_status === "pending";
-                  const isSelectable = isPending || isVerifiable;
+                    pr.finance_verification_status === "pending" &&
+                    !isFinanceSkipService(pr.seller_service_type);
+                  const isSelectable = isVerifiable;
 
                   return (
                     <tr
@@ -866,16 +680,13 @@ export default function SellerPaymentsTable({
             </div>
             <PRDetailCard pr={detailPr} showFullDetails />
             {detailPr.approval_status === "pending" && (
-              <div className="mt-6">
-                <ApproverPRActions
-                  prId={detailPr.id}
-                  redirectPath={`/dashboard/finance/seller-payments/${encodeURIComponent(serviceType)}`}
-                  onSuccess={() => setDetailPr(null)}
-                />
+              <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                This PR is awaiting Approver approval. Finance cannot approve purchase requests.
               </div>
             )}
             {detailPr.approval_status === "approved" &&
-              detailPr.finance_verification_status === "pending" && (
+              detailPr.finance_verification_status === "pending" &&
+              !isFinanceSkipService(detailPr.seller_service_type) && (
                 <div className="mt-4 flex gap-3">
                   <button
                     type="button"
@@ -936,152 +747,6 @@ export default function SellerPaymentsTable({
                   </div>
                 </div>
               )}
-          </div>
-        </div>
-      )}
-
-      {/* Approve Modal */}
-      {approvePr && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !approveLoading && setApprovePr(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Approve Purchase Request
-                </h3>
-                {approvePr.pr_number && (
-                  <p className="mt-0.5 font-mono text-xs text-gray-500">
-                    {approvePr.pr_number}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => !approveLoading && setApprovePr(null)}
-                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-5">
-              {approveError && (
-                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {approveError}
-                </p>
-              )}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">
-                  Remarks{" "}
-                  <span className="text-gray-400">(optional)</span>
-                </label>
-                <textarea
-                  value={approveRemarks}
-                  onChange={(e) => setApproveRemarks(e.target.value)}
-                  disabled={approveLoading}
-                  rows={3}
-                  placeholder="Add any comments about this approval..."
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-400 disabled:opacity-50"
-                />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => !approveLoading && setApprovePr(null)}
-                  disabled={approveLoading}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApprove}
-                  disabled={approveLoading}
-                  className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                >
-                  {approveLoading ? "Approving…" : "Confirm Approval"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Modal */}
-      {rejectPr && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !rejectLoading && setRejectPr(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Reject Purchase Request
-                </h3>
-                {rejectPr.pr_number && (
-                  <p className="mt-0.5 font-mono text-xs text-gray-500">
-                    {rejectPr.pr_number}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => !rejectLoading && setRejectPr(null)}
-                className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-5">
-              {rejectError && (
-                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {rejectError}
-                </p>
-              )}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">
-                  Rejection Reason <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={rejectReason}
-                  onChange={(e) => {
-                    setRejectReason(e.target.value);
-                    setRejectError(null);
-                  }}
-                  disabled={rejectLoading}
-                  rows={3}
-                  placeholder="Please provide a reason for rejection..."
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400 disabled:opacity-50"
-                />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => !rejectLoading && setRejectPr(null)}
-                  disabled={rejectLoading}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReject}
-                  disabled={rejectLoading || !rejectReason.trim()}
-                  className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                >
-                  {rejectLoading ? "Rejecting…" : "Confirm Rejection"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1192,202 +857,6 @@ export default function SellerPaymentsTable({
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Approve Modal */}
-      {bulkApproveOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() =>
-            !bulkApproveLoading && !bulkApproveResult && setBulkApproveOpen(false)
-          }
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Bulk Approve PRs
-                </h3>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  {selectedPendingIds.length} PR
-                  {selectedPendingIds.length > 1 ? "s" : ""} will be approved
-                </p>
-              </div>
-              {!bulkApproveLoading && !bulkApproveResult && (
-                <button
-                  type="button"
-                  onClick={() => setBulkApproveOpen(false)}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-            <div className="space-y-4 p-5">
-              {bulkApproveResult ? (
-                <div className="space-y-3 text-center">
-                  <div className="text-2xl">
-                    {bulkApproveResult.failed === 0 ? "✅" : "⚠️"}
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {bulkApproveResult.done} approved
-                    {bulkApproveResult.failed > 0 &&
-                      `, ${bulkApproveResult.failed} failed`}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setBulkApproveOpen(false)}
-                    className="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
-                  >
-                    Close
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-gray-600">
-                      Remarks{" "}
-                      <span className="text-gray-400">(optional — applied to all)</span>
-                    </label>
-                    <textarea
-                      value={bulkApproveRemarks}
-                      onChange={(e) => setBulkApproveRemarks(e.target.value)}
-                      disabled={bulkApproveLoading}
-                      rows={3}
-                      placeholder="Add any comments about these approvals..."
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-400 disabled:opacity-50"
-                    />
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setBulkApproveOpen(false)}
-                      disabled={bulkApproveLoading}
-                      className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBulkApprove}
-                      disabled={bulkApproveLoading}
-                      className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {bulkApproveLoading
-                        ? "Approving…"
-                        : `Approve ${selectedPendingIds.length} PR${selectedPendingIds.length > 1 ? "s" : ""}`}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Reject Modal */}
-      {bulkRejectOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() =>
-            !bulkRejectLoading && !bulkRejectResult && setBulkRejectOpen(false)
-          }
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Bulk Reject PRs
-                </h3>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  {selectedPendingIds.length} PR
-                  {selectedPendingIds.length > 1 ? "s" : ""} will be rejected
-                </p>
-              </div>
-              {!bulkRejectLoading && !bulkRejectResult && (
-                <button
-                  type="button"
-                  onClick={() => setBulkRejectOpen(false)}
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
-            </div>
-            <div className="space-y-4 p-5">
-              {bulkRejectResult ? (
-                <div className="space-y-3 text-center">
-                  <div className="text-2xl">
-                    {bulkRejectResult.failed === 0 ? "✅" : "⚠️"}
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {bulkRejectResult.done} rejected
-                    {bulkRejectResult.failed > 0 &&
-                      `, ${bulkRejectResult.failed} failed`}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setBulkRejectOpen(false)}
-                    className="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
-                  >
-                    Close
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {bulkRejectError && (
-                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                      {bulkRejectError}
-                    </p>
-                  )}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-gray-600">
-                      Rejection Reason <span className="text-red-500">*</span>{" "}
-                      <span className="text-gray-400">(applied to all)</span>
-                    </label>
-                    <textarea
-                      value={bulkRejectReason}
-                      onChange={(e) => {
-                        setBulkRejectReason(e.target.value);
-                        setBulkRejectError(null);
-                      }}
-                      disabled={bulkRejectLoading}
-                      rows={3}
-                      placeholder="Please provide a reason for rejection..."
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400 disabled:opacity-50"
-                    />
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setBulkRejectOpen(false)}
-                      disabled={bulkRejectLoading}
-                      className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBulkReject}
-                      disabled={bulkRejectLoading || !bulkRejectReason.trim()}
-                      className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                    >
-                      {bulkRejectLoading
-                        ? "Rejecting…"
-                        : `Reject ${selectedPendingIds.length} PR${selectedPendingIds.length > 1 ? "s" : ""}`}
-                    </button>
-                  </div>
-                </>
               )}
             </div>
           </div>

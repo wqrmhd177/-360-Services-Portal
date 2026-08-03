@@ -9,6 +9,7 @@ import { StatusFilterPills } from "@/components/lists/StatusFilterPills";
 import { ListTableShell, ListEmptyState, ListSkeleton } from "@/components/lists/ListTableShell";
 import PrListTable from "@/components/lists/PrListTable";
 import { formatPrAmount, getPrSeller, summarizePrProduct } from "@/lib/format";
+import { isPrReadyForPo } from "@/lib/prWorkflow";
 
 export default function ProcurementPurchaseRequestsPage() {
   const [prs, setPrs] = useState<Pr[]>([]);
@@ -46,12 +47,7 @@ export default function ProcurementPurchaseRequestsPage() {
       : statusFilter === "pending"
       ? prs.filter((pr) => pr.finance_verification_status === "pending")
       : statusFilter === "verified"
-      ? prs.filter(
-          (pr) =>
-            pr.approval_status === "approved" &&
-            pr.finance_verification_status === "verified" &&
-            !pr.po_created
-        )
+      ? prs.filter((pr) => isPrReadyForPo(pr))
       : statusFilter === "po_created"
       ? prs.filter((pr) => !!pr.po_created)
       : prs;
@@ -105,9 +101,7 @@ export default function ProcurementPurchaseRequestsPage() {
   const statusCounts = {
     all: prs.length,
     pending: prs.filter((p) => p.finance_verification_status === "pending").length,
-    verified: prs.filter(
-      (p) => p.approval_status === "approved" && p.finance_verification_status === "verified" && !p.po_created
-    ).length,
+    verified: prs.filter((p) => isPrReadyForPo(p)).length,
     po_created: prs.filter((p) => !!p.po_created).length,
   };
 
@@ -118,10 +112,7 @@ export default function ProcurementPurchaseRequestsPage() {
     { key: "po_created", label: "PO Created", count: statusCounts.po_created },
   ];
 
-  const isReadyForPo = (pr: Pr) =>
-    pr.approval_status === "approved" &&
-    pr.finance_verification_status === "verified" &&
-    !pr.po_created;
+  const isReadyForPo = (pr: Pr) => isPrReadyForPo(pr);
 
   return (
     <div className="space-y-6">

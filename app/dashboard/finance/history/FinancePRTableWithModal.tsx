@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Pr, Po } from "@/types/workflows";
 import PRDetailCard from "@/components/PRDetailCard";
 import PODetailCard from "@/components/PODetailCard";
-import ApproverPRActions from "../../approver/pr/[id]/ApproverPRActions";
+import { isFinanceSkipService } from "@/lib/serviceTypes";
 
 interface FinancePRTableWithModalProps {
   prs: Pr[];
@@ -554,11 +554,13 @@ export default function FinancePRTableWithModal({ prs, pos }: FinancePRTableWith
             </div>
             <PRDetailCard pr={selectedPr} showFullDetails />
             {selectedPr.approval_status === "pending" && (
-              <div className="mt-6">
-                <ApproverPRActions prId={selectedPr.id} redirectPath="/dashboard/finance/history" onSuccess={() => setSelectedPr(null)} />
+              <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                This PR is awaiting Approver approval before Finance can act on it.
               </div>
             )}
-            {selectedPr.approval_status === "approved" && selectedPr.finance_verification_status === "pending" && (
+            {selectedPr.approval_status === "approved" &&
+              selectedPr.finance_verification_status === "pending" &&
+              !isFinanceSkipService(selectedPr.seller_service_type) && (
               <div className="mt-4">
                 <a
                   href={`/dashboard/finance/pr/${selectedPr.id}`}

@@ -4,6 +4,7 @@ import { getPortalSession } from "@/lib/session";
 import { notifyStandardUsers } from "@/lib/notifications";
 import { requireWriteAccess } from "@/lib/accessControl";
 import { isMovementsService } from "@/lib/serviceTypes";
+import { normalizePurchaseFrom } from "@/lib/purchaseFrom";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = getPortalSession();
@@ -140,7 +141,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         )
         .map((c: any) => ({
           destinationCountry: c.destinationCountry ?? "",
-          countryOfPurchase: c.countryOfPurchase ?? "China",
+          countryOfPurchase: normalizePurchaseFrom(c.countryOfPurchase),
           shippingType: c.shippingType ?? "sea",
           movementType: c.movementType ?? "normal",
           currency: typeof c.currency === "string" && VALID_CURRENCIES.has(c.currency) ? c.currency : undefined,

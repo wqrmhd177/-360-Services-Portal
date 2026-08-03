@@ -79,7 +79,8 @@ export default function ApproverDashboardPage() {
         <h2 className="text-2xl font-semibold tracking-tight text-gray-900">Approver Workspace</h2>
         <p className="text-sm text-gray-500">
           Review and approve Purchase Requests (PRs). You can view read-only QR details linked to
-          PRs, but cannot edit them. Approved PRs move forward to Finance and Procurement.
+          PRs, but cannot edit them. Approved PRs move forward to Finance or directly to Procurement
+          for services that skip finance verification (e.g. Partner Stores).
         </p>
       </div>
 
@@ -320,7 +321,11 @@ export default function ApproverDashboardPage() {
             <PRDetailCard pr={selectedPr} showFullDetails />
             {selectedPr.approval_status === "pending" && (
               <div className="mt-6">
-                <ApproverPRActions prId={selectedPr.id} onSuccess={() => setSelectedPr(null)} />
+                <ApproverPRActions
+                  prId={selectedPr.id}
+                  sellerServiceType={selectedPr.seller_service_type}
+                  onSuccess={() => setSelectedPr(null)}
+                />
               </div>
             )}
           </div>
