@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/session";
-import { searchSkus } from "@/lib/metabaseInventory";
+import { searchInventoryMatches } from "@/lib/inventoryLookup";
+import type { InventorySku } from "@/lib/metabaseInventory";
+
+function toInventorySku(match: {
+  sku: string;
+  quantity: number;
+  warehouse_name: string;
+  category?: string;
+}): InventorySku {
+  return {
+    sku: match.sku,
+    country: match.warehouse_name,
+    quantity: match.quantity,
+    sku_type: match.category ?? "",
+  };
+}
 
 export async function GET(request: Request) {
   const session = getPortalSession();
@@ -20,8 +35,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const results = await searchSkus(q);
-    return NextResponse.json(results);
+    const result = await searchInventoryMatches(q, { limit: 20 });
+    return NextResponse.json(result.matches.map(toInventorySku));
   } catch (error) {
     console.error("SKU search error:", error);
     return NextResponse.json({ error: "Failed to search inventory" }, { status: 500 });

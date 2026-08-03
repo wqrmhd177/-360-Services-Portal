@@ -29,6 +29,7 @@ import {
   lookupInventoryBySkuPrefix,
   InventoryLookupResult,
 } from "@/lib/productAvailabilityInventoryLookup";
+import { isProductAvailabilityAgentViewer } from "@/lib/permissions";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 
 const supabase = createSupabaseClient();
@@ -107,10 +108,12 @@ async function uploadFilesToStorage(ownerId: string, files: File[]): Promise<str
 
 export default function ProductAvailabilityPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading, paRole, userFriendlyId, isAdmin: portalIsAdmin } =
+  const { isAuthenticated, isLoading: authLoading, paRole, userRole, userFriendlyId, isAdmin: portalIsAdmin } =
     useProductAvailabilityAuth();
 
-  const effectivePaRole = portalIsAdmin ? "admin" : paRole;
+  const effectivePaRole = portalIsAdmin
+    ? "admin"
+    : paRole ?? (userRole === "growth" ? "agent" : null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("normal_requests");
@@ -150,12 +153,12 @@ export default function ProductAvailabilityPage() {
   const [selectedFeedbackRequest, setSelectedFeedbackRequest] =
     useState<ProductAvailabilityRequestWithDetails | null>(null);
 
-  const isAgent = effectivePaRole === "agent" || portalIsAdmin;
+  const isAgent = isProductAvailabilityAgentViewer(effectivePaRole) || portalIsAdmin;
   const isAdmin = effectivePaRole === "admin" || portalIsAdmin;
   const isManager = effectivePaRole === "manager" || portalIsAdmin;
   const canCreate = isAgent || isAdmin;
   const isPurchaser = effectivePaRole === "purchaser" || portalIsAdmin;
-  const canAccess = portalIsAdmin || !!paRole;
+  const canAccess = portalIsAdmin || !!paRole || userRole === "growth";
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
     if (filter === "new") return "all";
@@ -1001,6 +1004,11 @@ export default function ProductAvailabilityPage() {
                     | Results:{" "}
                     <span className="font-semibold">{inventoryLookup.totalMatches}</span>
                   </p>
+                  {inventoryLookup.totalMatches === 0 && (
+                    <p className="text-sm text-amber-700 mb-2">
+                      No warehouse rows matched this SKU. Try the full SKU code or a shorter prefix.
+                    </p>
+                  )}
                   <div className="space-y-2 max-h-56 overflow-auto">
                     {inventoryLookup.warehouseGroups.map((group) => (
                       <div key={group.warehouseName} className="bg-white border rounded-md p-2">

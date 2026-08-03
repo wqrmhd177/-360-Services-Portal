@@ -4,6 +4,7 @@ import {
   type InventoryRow,
 } from "@/lib/operations/inventory";
 import { clearInventorySkuCache } from "@/lib/metabaseInventory";
+import { clearInventoryLookupCache } from "@/lib/inventoryLookup";
 import { getOpsDb, getOpsServiceDb, logSync, refreshInventorySummary } from "@/lib/operations/opsDb";
 
 const BATCH = 500;
@@ -61,6 +62,7 @@ export async function syncInventoryFromMetabase(): Promise<{
 
     await refreshInventorySummary();
     clearInventorySkuCache();
+    clearInventoryLookupCache();
     await logSync("inventory", rows.length, "success");
     return { ok: true, rowCount: rows.length };
   } catch (err) {

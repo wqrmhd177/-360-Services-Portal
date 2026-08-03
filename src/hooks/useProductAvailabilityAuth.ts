@@ -62,7 +62,7 @@ export function useProductAvailabilityAuth(): ProductAvailabilityAuthState {
     userRole,
     paRole,
     isAdmin,
-    userFriendlyId: email,
+    userFriendlyId: email?.toLowerCase() ?? null,
     email,
   };
 }

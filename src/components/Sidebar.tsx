@@ -384,7 +384,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const showApprover = isAdmin || zambeelPerms.includes("approver");
   const showProcurement = isAdmin || zambeelPerms.includes("procurement");
   const showFinance = isAdmin || zambeelPerms.includes("finance");
-  const showPa = isAdmin || !!paRole;
+  const showPa = isAdmin || !!paRole || (role === "growth" && session.permissions?.product_availability !== null);
   const showPl = isAdmin || productListing;
   const showOps = isAdmin || operations;
 

@@ -40,6 +40,10 @@ export default function SkuSearchInput({
           `/api/inventory/sku-search?q=${encodeURIComponent(search.trim())}`
         );
         const data = await res.json();
+        if (!res.ok) {
+          setResults([]);
+          return;
+        }
         setResults(Array.isArray(data) ? data : []);
         setOpen(true);
       } catch {

@@ -33,10 +33,15 @@ export async function lookupInventoryBySkuPrefix(rawSku: string): Promise<Invent
   }
 
   const response = await fetch(
-    `/api/product-availability-inventory?sku=${encodeURIComponent(normalizedSku)}`
+    `/api/product-availability-inventory?sku=${encodeURIComponent(normalizedSku)}&include_zero_qty=true`
   );
   if (!response.ok) {
-    throw new Error("Failed to fetch inventory from Metabase");
+    const body = await response.json().catch(() => ({}));
+    throw new Error(
+      typeof body?.error === "string"
+        ? body.error
+        : "Failed to fetch inventory from Metabase"
+    );
   }
 
   const json = (await response.json()) as {

@@ -78,9 +78,11 @@ export function deriveEffectivePermissions(input: {
   const paRole: ProductAvailabilityRole | null =
     permissions?.product_availability !== undefined
       ? permissions.product_availability
-      : role && isProductAvailabilityRole(role)
-        ? role
-        : null;
+      : role === "growth"
+        ? "agent"
+        : role && isProductAvailabilityRole(role)
+          ? role
+          : null;
 
   const productListing = permissions?.product_listing ?? false;
   const operations = permissions?.operations ?? false;
@@ -96,6 +98,16 @@ export function formatZambeelPerms(perms: string[] | undefined): string {
 export function formatPaRole(role: string | null | undefined): string {
   if (!role) return "None";
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+/** Roles that only see requests they submitted (Growth users act as agents). */
+export function isProductAvailabilityAgentViewer(role: string | null | undefined): boolean {
+  const r = (role ?? "").toLowerCase();
+  return r === "agent" || r === "growth";
+}
+
+export function normalizeProductAvailabilityUserId(userId: string): string {
+  return userId.trim().toLowerCase();
 }
 
 export const ZAMBEEL_DEPARTMENT_OPTIONS: { value: ZambeelDepartment; label: string }[] = [

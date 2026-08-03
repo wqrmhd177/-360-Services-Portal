@@ -1,4 +1,8 @@
 import { createSupabaseClient } from "./supabaseClient";
+import {
+  isProductAvailabilityAgentViewer,
+  normalizeProductAvailabilityUserId,
+} from "./permissions";
 
 const supabase = createSupabaseClient();
 
@@ -274,8 +278,9 @@ export async function createProductAvailabilityRequest(
     .from("product_availability_requests")
     .insert([
       {
-        requested_by_user_id: input.requestedByUserId,
-        requested_by_role: input.requestedByRole,
+        requested_by_user_id: normalizeProductAvailabilityUserId(input.requestedByUserId),
+        requested_by_role:
+          input.requestedByRole === "growth" ? "agent" : input.requestedByRole,
         product_status: input.productStatus,
         markets: [normalizedMarket],
         market: normalizedMarket,
@@ -314,11 +319,14 @@ export async function fetchAllProductAvailabilityData(params: {
     .select("*")
     .order("created_at", { ascending: true });
 
-  if (role === "agent") {
-    requestQuery = requestQuery.eq("requested_by_user_id", params.userFriendlyId);
+  if (isProductAvailabilityAgentViewer(role)) {
+    requestQuery = requestQuery.ilike(
+      "requested_by_user_id",
+      normalizeProductAvailabilityUserId(params.userFriendlyId)
+    );
   } else if (role === "purchaser") {
     requestQuery = requestQuery
-      .eq("assigned_purchaser_user_id", params.userFriendlyId)
+      .ilike("assigned_purchaser_user_id", normalizeProductAvailabilityUserId(params.userFriendlyId))
       .eq("is_draft", false);
   } else if (role === "manager") {
     // Managers see only requests for their country's market
@@ -640,10 +648,10 @@ export async function getPendingProductAvailabilityCount(
     .select("*", { count: "exact", head: true })
     .eq("is_draft", false);
 
-  if (role === "agent") {
-    q = q.eq("requested_by_user_id", userFriendlyId);
+  if (isProductAvailabilityAgentViewer(role)) {
+    q = q.ilike("requested_by_user_id", normalizeProductAvailabilityUserId(userFriendlyId));
   } else if (role === "purchaser") {
-    q = q.eq("assigned_purchaser_user_id", userFriendlyId);
+    q = q.ilike("assigned_purchaser_user_id", normalizeProductAvailabilityUserId(userFriendlyId));
   }
 
   const { count, error } = await q;
