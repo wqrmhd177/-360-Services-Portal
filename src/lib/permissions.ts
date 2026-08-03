@@ -78,11 +78,9 @@ export function deriveEffectivePermissions(input: {
   const paRole: ProductAvailabilityRole | null =
     permissions?.product_availability !== undefined
       ? permissions.product_availability
-      : role === "growth"
-        ? "agent"
-        : role && isProductAvailabilityRole(role)
-          ? role
-          : null;
+      : role && isProductAvailabilityRole(role)
+        ? role
+        : "agent";
 
   const productListing = permissions?.product_listing ?? false;
   const operations = permissions?.operations ?? false;
@@ -100,10 +98,23 @@ export function formatPaRole(role: string | null | undefined): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-/** Roles that only see requests they submitted (Growth users act as agents). */
-export function isProductAvailabilityAgentViewer(role: string | null | undefined): boolean {
+/** Roles that see all requests (admin oversight). */
+export function isProductAvailabilityAdminViewer(role: string | null | undefined): boolean {
+  return (role ?? "").toLowerCase() === "admin";
+}
+
+/** How Product Availability list queries are scoped for a viewer role. */
+export type ProductAvailabilityDataScope = "all" | "own_requests" | "assigned" | "market";
+
+export function getProductAvailabilityDataScope(
+  role: string | null | undefined
+): ProductAvailabilityDataScope {
   const r = (role ?? "").toLowerCase();
-  return r === "agent" || r === "growth";
+  if (r === "admin") return "all";
+  if (r === "purchaser") return "assigned";
+  if (r === "manager") return "market";
+  // agent, growth, and any other requester — only their own submissions
+  return "own_requests";
 }
 
 export function normalizeProductAvailabilityUserId(userId: string): string {

@@ -1,6 +1,6 @@
 import { createSupabaseClient } from "./supabaseClient";
 import {
-  isProductAvailabilityAgentViewer,
+  getProductAvailabilityDataScope,
   normalizeProductAvailabilityUserId,
 } from "./permissions";
 
@@ -313,22 +313,21 @@ export async function fetchAllProductAvailabilityData(params: {
   userFriendlyId: string;
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
   const role = (params.userRole || "").toLowerCase();
+  const scope = getProductAvailabilityDataScope(role);
+  const userId = normalizeProductAvailabilityUserId(params.userFriendlyId);
 
   let requestQuery = supabase
     .from("product_availability_requests")
     .select("*")
     .order("created_at", { ascending: true });
 
-  if (isProductAvailabilityAgentViewer(role)) {
-    requestQuery = requestQuery.ilike(
-      "requested_by_user_id",
-      normalizeProductAvailabilityUserId(params.userFriendlyId)
-    );
-  } else if (role === "purchaser") {
+  if (scope === "own_requests") {
+    requestQuery = requestQuery.ilike("requested_by_user_id", userId);
+  } else if (scope === "assigned") {
     requestQuery = requestQuery
-      .ilike("assigned_purchaser_user_id", normalizeProductAvailabilityUserId(params.userFriendlyId))
+      .ilike("assigned_purchaser_user_id", userId)
       .eq("is_draft", false);
-  } else if (role === "manager") {
+  } else if (scope === "market") {
     // Managers see only requests for their country's market
     const { data: mgrProfile } = await supabase
       .from("profiles")
@@ -622,9 +621,10 @@ export async function getPendingProductAvailabilityCount(
   userRole: string,
   userFriendlyId: string
 ): Promise<number> {
-  const role = userRole.toLowerCase();
+  const scope = getProductAvailabilityDataScope(userRole);
+  const userId = normalizeProductAvailabilityUserId(userFriendlyId);
 
-  if (role === "manager") {
+  if (scope === "market") {
     const { data: mgrProfile } = await supabase
       .from("profiles")
       .select("country")
@@ -645,13 +645,14 @@ export async function getPendingProductAvailabilityCount(
 
   let q = supabase
     .from("product_availability_requests")
-    .select("*", { count: "exact", head: true })
-    .eq("is_draft", false);
+    .select("*", { count: "exact", head: true });
 
-  if (isProductAvailabilityAgentViewer(role)) {
-    q = q.ilike("requested_by_user_id", normalizeProductAvailabilityUserId(userFriendlyId));
-  } else if (role === "purchaser") {
-    q = q.ilike("assigned_purchaser_user_id", normalizeProductAvailabilityUserId(userFriendlyId));
+  if (scope === "own_requests") {
+    q = q.ilike("requested_by_user_id", userId);
+  } else if (scope === "assigned") {
+    q = q.ilike("assigned_purchaser_user_id", userId).eq("is_draft", false);
+  } else {
+    q = q.eq("is_draft", false);
   }
 
   const { count, error } = await q;

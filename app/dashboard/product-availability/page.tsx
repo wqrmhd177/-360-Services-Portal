@@ -29,7 +29,7 @@ import {
   lookupInventoryBySkuPrefix,
   InventoryLookupResult,
 } from "@/lib/productAvailabilityInventoryLookup";
-import { isProductAvailabilityAgentViewer } from "@/lib/permissions";
+import { getProductAvailabilityDataScope } from "@/lib/permissions";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 
 const supabase = createSupabaseClient();
@@ -111,9 +111,9 @@ export default function ProductAvailabilityPage() {
   const { isAuthenticated, isLoading: authLoading, paRole, userRole, userFriendlyId, isAdmin: portalIsAdmin } =
     useProductAvailabilityAuth();
 
-  const effectivePaRole = portalIsAdmin
-    ? "admin"
-    : paRole ?? (userRole === "growth" ? "agent" : null);
+  const effectivePaRole = portalIsAdmin ? "admin" : (paRole ?? "agent");
+
+  const dataScope = getProductAvailabilityDataScope(effectivePaRole);
 
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("normal_requests");
@@ -153,12 +153,12 @@ export default function ProductAvailabilityPage() {
   const [selectedFeedbackRequest, setSelectedFeedbackRequest] =
     useState<ProductAvailabilityRequestWithDetails | null>(null);
 
-  const isAgent = isProductAvailabilityAgentViewer(effectivePaRole) || portalIsAdmin;
+  const isAgent = dataScope === "own_requests" || portalIsAdmin;
   const isAdmin = effectivePaRole === "admin" || portalIsAdmin;
-  const isManager = effectivePaRole === "manager" || portalIsAdmin;
+  const isManager = dataScope === "market" || portalIsAdmin;
   const canCreate = isAgent || isAdmin;
-  const isPurchaser = effectivePaRole === "purchaser" || portalIsAdmin;
-  const canAccess = portalIsAdmin || !!paRole || userRole === "growth";
+  const isPurchaser = dataScope === "assigned" || portalIsAdmin;
+  const canAccess = portalIsAdmin || !!paRole;
 
   const dataFilter: ProductAvailabilityListFilter = useMemo(() => {
     if (filter === "new") return "all";
