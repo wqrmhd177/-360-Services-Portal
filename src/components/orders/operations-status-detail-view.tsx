@@ -170,11 +170,11 @@ function CountryBifurcationSidebar({
   return (
     <div className="flex w-64 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto sm:w-72">
       {countries.map(({ country, orders }) => {
-        const isCountryActive =
-          selected.country === country && selected.bifurcation === null;
         const isAll = country === "All";
+        const isCountryExpanded = !isAll && selected.country === country;
+        const isCountryActive = isCountryExpanded && selected.bifurcation === null;
         const summary = summaryByCountry.get(country);
-        const bifurcations = isAll ? [] : (summary?.bifurcations ?? []);
+        const bifurcations = isCountryExpanded ? (summary?.bifurcations ?? []) : [];
 
         return (
           <div key={country} className="border-b border-[var(--card-border)] last:border-0">
