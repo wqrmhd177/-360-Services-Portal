@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { OperationsStatusOrderDetail } from "@/lib/analytics/operations-status-detail";
 import type {
@@ -8,6 +8,7 @@ import type {
   OperationsStatusCountrySummary,
   OperationsStatusCountryTagSubgroup,
   OperationsStatusOrderUserGroup,
+  OperationsStatusBifurcationSummary,
 } from "@/lib/analytics/operations-status-detail";
 import { cn, formatNumber, formatPercent } from "@/lib/utils";
 
@@ -154,6 +155,21 @@ function ReasonRow({
 
 // ── country + bifurcation sidebar ─────────────────────────────────────────────
 
+function aggregateAllBifurcations(
+  summaries: OperationsStatusCountrySummary[],
+): OperationsStatusBifurcationSummary[] {
+  const map = new Map<string, number>();
+  for (const summary of summaries) {
+    for (const row of summary.bifurcations) {
+      const key = row.bifurcation || "Unknown";
+      map.set(key, (map.get(key) ?? 0) + row.orders);
+    }
+  }
+  return [...map.entries()]
+    .map(([bifurcation, orders]) => ({ bifurcation, orders }))
+    .sort((a, b) => b.orders - a.orders || a.bifurcation.localeCompare(b.bifurcation));
+}
+
 function CountryBifurcationSidebar({
   countries,
   countrySummaries,
@@ -166,21 +182,40 @@ function CountryBifurcationSidebar({
   onSelect: (next: CountryBifurcationSelection) => void;
 }) {
   const summaryByCountry = new Map(countrySummaries.map((s) => [s.country, s]));
+  const allBifurcations = useMemo(
+    () => aggregateAllBifurcations(countrySummaries),
+    [countrySummaries],
+  );
+  const [expandedCountry, setExpandedCountry] = useState<string | null>("All");
+
+  const handleCountryClick = (country: string) => {
+    if (expandedCountry === country) {
+      setExpandedCountry(null);
+      onSelect({ country, bifurcation: null });
+      return;
+    }
+    setExpandedCountry(country);
+    onSelect({ country, bifurcation: null });
+  };
 
   return (
     <div className="flex w-64 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto sm:w-72">
       {countries.map(({ country, orders }) => {
         const isAll = country === "All";
-        const isCountryExpanded = !isAll && selected.country === country;
-        const isCountryActive = isCountryExpanded && selected.bifurcation === null;
+        const isExpanded = expandedCountry === country;
+        const isCountryActive = selected.country === country && selected.bifurcation === null;
         const summary = summaryByCountry.get(country);
-        const bifurcations = isCountryExpanded ? (summary?.bifurcations ?? []) : [];
+        const bifurcations = isExpanded
+          ? isAll
+            ? allBifurcations
+            : (summary?.bifurcations ?? [])
+          : [];
 
         return (
           <div key={country} className="border-b border-[var(--card-border)] last:border-0">
             <button
               type="button"
-              onClick={() => onSelect({ country, bifurcation: null })}
+              onClick={() => handleCountryClick(country)}
               className={cn(
                 "flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left text-xs transition-colors",
                 isCountryActive
@@ -206,7 +241,10 @@ function CountryBifurcationSidebar({
                 <button
                   key={`${country}-${bifurcation}`}
                   type="button"
-                  onClick={() => onSelect({ country, bifurcation })}
+                  onClick={() => {
+                    setExpandedCountry(country);
+                    onSelect({ country, bifurcation });
+                  }}
                   className={cn(
                     "flex w-full items-start justify-between gap-2 py-2 pl-5 pr-3 text-left text-[11px] transition-colors",
                     isBifActive
