@@ -126,6 +126,8 @@ function referenceDate(
       return line.approvedDate;
     case "undeliveredDate":
       return line.undeliveredDate;
+    case "finalActionDateUndelivered":
+      return line.finalActionDateUndelivered;
     case "shipmentDateLog":
       return line.shipmentDateLog;
     case "orderDate":

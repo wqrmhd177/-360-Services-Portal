@@ -1,6 +1,75 @@
--- KPI drill-down enhancements: bifurcation sidebar counts + User/SKU order grouping.
--- Run AFTER patch_kpi_date_fixes.sql (step 11).
--- Requires: patch_country_normalization.sql, setup_operations_cache.sql (channel list).
+﻿-- Orders in Returning KPI: Return in Transit only, aged from final_action_date_undelivered.
+-- Run AFTER patch_kpi_drilldown_enhancements.sql (step 14).
+-- Requires: patch_return_sla_final_action_date.sql (column on ops_orders_items).
+
+DROP MATERIALIZED VIEW IF EXISTS ops_orders_product_rollup CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS ops_orders_order_detail CASCADE;
+
+CREATE MATERIALIZED VIEW ops_orders_order_detail AS
+SELECT
+  order_id,
+  MIN(order_date_day)           AS order_date_day,
+  normalize_ops_country((ARRAY_AGG(country ORDER BY id))[1]) AS country,
+  COALESCE(NULLIF(TRIM((ARRAY_AGG(bifurcation  ORDER BY id))[1]), ''), '')        AS bifurcation,
+  COALESCE((ARRAY_AGG(store_id ORDER BY id))[1], 0)                               AS store_id,
+  COALESCE(NULLIF(TRIM((ARRAY_AGG(status       ORDER BY id))[1]), ''), 'Unknown') AS status,
+  COALESCE(NULLIF(TRIM((ARRAY_AGG(tag          ORDER BY id))[1]), ''), 'No tag')  AS tag,
+  COALESCE(NULLIF(TRIM((ARRAY_AGG(title        ORDER BY id))[1]), ''), 'No title') AS title,
+  MIN(order_date)                AS order_date,
+  MIN(shipment_date_log)         AS shipment_date_log,
+  MIN(approved_date)             AS approved_date,
+  MIN(shipment_date)             AS shipment_date,
+  MIN(undelivered_date)          AS undelivered_date,
+  MIN(final_action_date_undelivered) AS final_action_date_undelivered,
+  MIN(confirmation_pending_date) AS confirmation_pending_date,
+  CASE
+    WHEN MIN(order_date) IS NOT NULL AND MIN(confirmation_pending_date) IS NOT NULL
+      THEN GREATEST(MIN(order_date), MIN(confirmation_pending_date))
+    ELSE COALESCE(MIN(order_date), MIN(confirmation_pending_date))
+  END AS confirmation_date
+FROM ops_orders_items
+WHERE order_id IS NOT NULL AND order_date_day IS NOT NULL
+GROUP BY order_id;
+
+CREATE UNIQUE INDEX idx_ops_orders_order_detail_order_id
+  ON ops_orders_order_detail(order_id);
+
+CREATE INDEX idx_ops_orders_order_detail_filters
+  ON ops_orders_order_detail(order_date_day, country, bifurcation, store_id, status);
+
+CREATE MATERIALIZED VIEW ops_orders_product_rollup AS
+WITH distinct_titles AS (
+  SELECT DISTINCT
+    order_id,
+    COALESCE(NULLIF(TRIM(title), ''), 'Unknown') AS title
+  FROM ops_orders_items
+  WHERE order_id IS NOT NULL
+)
+SELECT
+  d.order_date_day,
+  d.country,
+  d.bifurcation,
+  d.store_id,
+  d.status,
+  d.tag,
+  d.order_date,
+  d.shipment_date_log,
+  d.approved_date,
+  d.shipment_date,
+  d.undelivered_date,
+  d.final_action_date_undelivered,
+  d.confirmation_date,
+  t.title,
+  d.order_id
+FROM ops_orders_order_detail d
+INNER JOIN distinct_titles t ON t.order_id = d.order_id;
+
+CREATE UNIQUE INDEX idx_ops_orders_product_rollup_unique
+  ON ops_orders_product_rollup(order_id, title);
+
+CREATE INDEX idx_ops_orders_product_rollup_filters
+  ON ops_orders_product_rollup(order_date_day, country, bifurcation, store_id);
+
 
 CREATE OR REPLACE FUNCTION get_ops_orders_status_detail(
   p_group_id    TEXT,

@@ -594,6 +594,7 @@ function SummaryStrip({ data }: { data: OperationsStatusOrderDetail }) {
     confirmationDate: "Days from confirmation (or order) date to today",
     approvedDate: "Days from approved date to today",
     undeliveredDate: "Days from undelivered date to today",
+    finalActionDateUndelivered: "Days from return request date to today",
     shipmentDateLog: "Days from shipment date log to today",
     orderDate: "Days from order date to today",
   };

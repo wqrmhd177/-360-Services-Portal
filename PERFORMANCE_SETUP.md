@@ -28,6 +28,7 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 12. **`setup_nd_report.sql`** — ND Report FIFO allocation MVs, remarks table, and RPCs (requires step 9 for country normalization)
 13. **`patch_nd_report_enhancements.sql`** — store-level ND remarks (Ops/Growth/Status), remark logs, fulfilment routes, bulk route upload, and updated ND summary MV
 14. **`patch_kpi_drilldown_enhancements.sql`** — KPI drill-down bifurcation sidebar counts and User ID / SKU order grouping
+15. **`patch_kpi_returning_status.sql`** — Orders in Returning card: `Return in Transit` only, aged from `final_action_date_undelivered` (rebuilds order-detail MVs + status drill-down RPC)
 
 Then refresh materialized views once:
 

@@ -12,8 +12,9 @@ export type OperationsStatusGroupBy = "tag" | "title";
 export type OperationsDaysFrom =
   | "confirmationDate"  // MAX(order_date, confirmation_pending_date) — whichever exists/is later
   | "approvedDate"      // approved_date
-  | "shipmentDateLog"   // shipment_date_log (shipped, return)
+  | "shipmentDateLog"   // shipment_date_log (shipped)
   | "undeliveredDate"   // undelivered_date
+  | "finalActionDateUndelivered" // final_action_date_undelivered (return in transit)
   | "orderDate";        // order_date (pre-dispatch cancelled)
 
 export type OperationsStatusDetailLayout =
@@ -80,11 +81,11 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
   },
   {
     id: "return",
-    title: "Orders in Return",
-    statuses: ["Return in Transit", "Return"],
+    title: "Orders in Returning",
+    statuses: ["Return in Transit"],
     groupBy: "tag",
-    daysFrom: "shipmentDateLog",
-    detailLayout: "countryTag",
+    daysFrom: "finalActionDateUndelivered",
+    detailLayout: "daysCountrySubgroup",
   },
 ] as const;
 
