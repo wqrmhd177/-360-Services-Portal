@@ -52,7 +52,7 @@ export const OPERATIONS_STATUS_KPI_GROUPS: readonly OperationsStatusKpiGroup[] =
     title: "Orders in Dispatching in Process",
     statuses: ["Dispatching in Process"],
     groupBy: "title",
-    daysFrom: "approvedDate",
+    daysFrom: "shipmentDateLog",
     detailLayout: "daysCountrySubgroup",
   },
   {

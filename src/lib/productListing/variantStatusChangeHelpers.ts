@@ -1,8 +1,9 @@
-import { createSupabaseClient } from '@/lib/supabaseClient'
+import { createSupabaseServiceClient } from '@/lib/supabaseClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlVariantStatusChangeRequest } from './types'
 
-function getClient() {
-  return createSupabaseClient()
+function getClient(db?: SupabaseClient) {
+  return db ?? createSupabaseServiceClient()
 }
 
 /** Create a pending status change request. Returns null if no change. */
@@ -126,8 +127,8 @@ export async function rejectStatusChangeRequest(
 }
 
 /** Count pending status change requests. */
-export async function getPendingStatusChangeCount(): Promise<number> {
-  const supabase = getClient()
+export async function getPendingStatusChangeCount(db?: SupabaseClient): Promise<number> {
+  const supabase = getClient(db)
   const { count, error } = await supabase
     .from('pl_variant_status_change_requests')
     .select('id', { count: 'exact', head: true })

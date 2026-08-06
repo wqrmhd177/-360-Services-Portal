@@ -246,12 +246,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     if (!isAdmin && !productListing) return;
     const load = async () => {
       try {
-        const supabase = (await import("@/lib/supabaseClient")).createSupabaseClient();
-        const [ph, vs] = await Promise.all([
-          supabase.from("pl_price_history").select("id", { count: "exact", head: true }).eq("status", "pending"),
-          supabase.from("pl_variant_status_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        ]);
-        setPlPendingCount((ph.count ?? 0) + (vs.count ?? 0));
+        const res = await fetch("/api/product-listing/pending-counts");
+        if (!res.ok) return;
+        const json = await res.json();
+        setPlPendingCount(Number(json.total) || 0);
       } catch {
         // silently ignore
       }

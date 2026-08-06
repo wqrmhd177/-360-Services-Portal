@@ -5,17 +5,13 @@ import { createPortal } from "react-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Calendar, ChevronDown, X } from "lucide-react";
 import {
-  QUICK_SELECT_PRESETS,
   defaultDateRange,
-  findMatchingPresetIdFromRange,
   formatCompactRangeLabelFromStrings,
   formatRangeLabelFromStrings,
   parseRangeFromSearchParams,
-  type DateRangeValue,
 } from "@/lib/date-range-presets";
 import {
   dateRangeFromParamStrings,
-  dateRangeFromPickerDates,
 } from "@/lib/calendar-range";
 import type { DateRange } from "@/lib/types/order";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
@@ -38,42 +34,20 @@ function useIsLgUp() {
 
 function DateRangePanel({
   draft,
-  activePreset,
-  selectPreset,
   updateDraftFromInput,
   handleCancel,
   handleApply,
 }: {
   draft: DateRange;
-  activePreset: string | null;
-  selectPreset: (presetId: string) => void;
   updateDraftFromInput: (field: "from" | "to", value: string) => void;
   handleCancel: () => void;
   handleApply: () => void;
 }) {
   return (
     <>
-      <p className="mb-3 text-sm font-medium text-[var(--foreground)]">Quick select</p>
       <p className="mb-3 text-xs text-[var(--muted)]">Dates use Pacific Time (PST/PDT).</p>
-      <div className="flex flex-wrap gap-2">
-        {QUICK_SELECT_PRESETS.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            onClick={() => selectPreset(preset.id)}
-            className={cn(
-              "min-h-9 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-              activePreset === preset.id
-                ? "border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]"
-                : "border-[var(--card-border)] bg-[var(--table-header)] text-[var(--foreground)] hover:border-[var(--muted)] hover:bg-[var(--table-row-hover)]",
-            )}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
 
-      <div className="mt-4 space-y-3 border-t border-[var(--card-border)] pt-4">
+      <div className="space-y-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
             Start date
@@ -152,16 +126,12 @@ export function DateRangePicker({
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange>(applied);
-  const [activePreset, setActivePreset] = useState<string | null>(
-    findMatchingPresetIdFromRange(applied),
-  );
 
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const next = parseRangeFromSearchParams(fromParam, toParam, defaultDateRange());
     setDraft(next);
-    setActivePreset(findMatchingPresetIdFromRange(next));
   }, [fromParam, toParam]);
 
   useEffect(() => {
@@ -179,20 +149,18 @@ export function DateRangePicker({
       if (containerRef.current?.contains(e.target as Node)) return;
       setOpen(false);
       setDraft(applied);
-      setActivePreset(findMatchingPresetIdFromRange(applied));
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open, useSheet, applied]);
 
-  function applyRange(range: DateRange, presetId: string | null) {
+  function applyRange(range: DateRange) {
     const params = isOrdersOverviewPath(pathname)
       ? toDateOnlySearchParams(searchParams)
       : new URLSearchParams(searchParams.toString());
     params.set("from", range.fromDate);
     params.set("to", range.toDate);
-    if (presetId) params.set("range", presetId);
-    else params.delete("range");
+    params.delete("range");
     const query = params.toString();
     navigate(query ? `${pathname}?${query}` : pathname);
     setOpen(false);
@@ -203,21 +171,12 @@ export function DateRangePicker({
     let toDate = draft.toDate;
     if (fromDate > toDate) [fromDate, toDate] = [toDate, fromDate];
     const range = dateRangeFromParamStrings(fromDate, toDate);
-    applyRange(range, findMatchingPresetIdFromRange(range));
+    applyRange(range);
   }
 
   function handleCancel() {
     setDraft(applied);
-    setActivePreset(findMatchingPresetIdFromRange(applied));
     setOpen(false);
-  }
-
-  function selectPreset(presetId: string) {
-    const preset = QUICK_SELECT_PRESETS.find((p) => p.id === presetId);
-    if (!preset) return;
-    const pickerRange: DateRangeValue = preset.getRange();
-    setDraft(dateRangeFromPickerDates(pickerRange.from, pickerRange.to));
-    setActivePreset(presetId);
   }
 
   function updateDraftFromInput(field: "from" | "to", value: string) {
@@ -226,7 +185,6 @@ export function DateRangePicker({
       const fromDate = field === "from" ? value : draft.fromDate;
       const toDate = field === "to" ? value : draft.toDate;
       setDraft(dateRangeFromParamStrings(fromDate, toDate));
-      setActivePreset(null);
     } catch {
       /* ignore invalid */
     }
@@ -237,8 +195,6 @@ export function DateRangePicker({
 
   const panelProps = {
     draft,
-    activePreset,
-    selectPreset,
     updateDraftFromInput,
     handleCancel,
     handleApply,

@@ -1,8 +1,9 @@
-import { createSupabaseClient } from '@/lib/supabaseClient'
+import { createSupabaseServiceClient } from '@/lib/supabaseClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlGroupedProduct, PlProductRow, PlProductVariantRow, PlVariantInfo } from './types'
 
-function getClient() {
-  return createSupabaseClient()
+function getClient(db?: SupabaseClient) {
+  return db ?? createSupabaseServiceClient()
 }
 
 /** Extract image URLs from a JSONB image field (string | string[] | null). */
@@ -61,11 +62,15 @@ export function groupProductRows(rows: PlProductRow[]): PlGroupedProduct[] {
  * Fetch all products with their variants.
  * Merges pl_products headers with pl_product_variants rows.
  */
-export async function fetchProductsWithVariants(filters?: {
-  ownerId?: string
-  status?: string
-}): Promise<PlGroupedProduct[]> {
-  const supabase = getClient()
+export async function fetchProductsWithVariants(
+  filters?: {
+    ownerId?: string
+    status?: string
+    search?: string
+  },
+  db?: SupabaseClient,
+): Promise<PlGroupedProduct[]> {
+  const supabase = getClient(db)
 
   let query = supabase
     .from('pl_products')
@@ -134,8 +139,8 @@ export async function generateProductId(): Promise<number> {
 }
 
 /** Delete a product and all its variants. Returns true on success. */
-export async function deleteProduct(productId: number): Promise<boolean> {
-  const supabase = getClient()
+export async function deleteProduct(productId: number, db?: SupabaseClient): Promise<boolean> {
+  const supabase = getClient(db)
   const { error: varErr } = await supabase
     .from('pl_product_variants')
     .delete()
@@ -158,9 +163,10 @@ export async function deleteProduct(productId: number): Promise<boolean> {
 /** Update product status directly. */
 export async function updateProductStatus(
   productId: number,
-  status: 'pending' | 'active' | 'inactive' | 'rejected'
+  status: 'pending' | 'active' | 'inactive' | 'rejected',
+  db?: SupabaseClient,
 ): Promise<boolean> {
-  const supabase = getClient()
+  const supabase = getClient(db)
   const { error } = await supabase
     .from('pl_products')
     .update({ status, updated_at: new Date().toISOString() })

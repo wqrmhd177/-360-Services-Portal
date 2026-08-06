@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { createSupabaseClient } from "@/lib/supabaseClient";
+import { createSupabaseServiceClient } from "@/lib/supabaseClient";
+import { getPortalSession } from "@/lib/session";
 
 export async function GET() {
-  const supabase = createSupabaseClient();
+  const session = getPortalSession();
+  if (!session?.isAdmin && session?.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = createSupabaseServiceClient();
   
   try {
     // Check profiles table

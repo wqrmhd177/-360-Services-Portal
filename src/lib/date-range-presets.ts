@@ -96,7 +96,9 @@ export const QUICK_SELECT_PRESETS: QuickSelectPreset[] = [
 ];
 
 export function defaultDateRange(): DateRangeValue {
-  return QUICK_SELECT_PRESETS.find((p) => p.id === "thisMonth")!.getRange();
+  const to = todayInPortalTz();
+  const from = addPortalCalendarDays(to, -29);
+  return portalPresetRange(from, to);
 }
 
 /** Stock Cover Days: 1 Jan (current PST year) through today. */

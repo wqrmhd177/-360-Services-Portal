@@ -1,8 +1,9 @@
-import { createSupabaseClient } from '@/lib/supabaseClient'
+import { createSupabaseServiceClient } from '@/lib/supabaseClient'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlPriceHistoryEntry } from './types'
 
-function getClient() {
-  return createSupabaseClient()
+function getClient(db?: SupabaseClient) {
+  return db ?? createSupabaseServiceClient()
 }
 
 /** Create a pending price change request. Returns null if prices are equal. */
@@ -113,8 +114,8 @@ export async function rejectPriceChange(
 }
 
 /** Count pending price change requests. */
-export async function getPendingPriceRequestCount(): Promise<number> {
-  const supabase = getClient()
+export async function getPendingPriceRequestCount(db?: SupabaseClient): Promise<number> {
+  const supabase = getClient(db)
   const { count, error } = await supabase
     .from('pl_price_history')
     .select('id', { count: 'exact', head: true })

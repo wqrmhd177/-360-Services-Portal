@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Loader2, Radio, RefreshCw } from "lucide-react";
+import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
@@ -115,7 +116,9 @@ export default function ChannelListPage() {
                     <tr key={`${row.store_id}-${row.user_id}`} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-center text-gray-700">{row.store_id}</td>
                       <td className="px-4 py-3 text-center text-gray-700">{row.user_id}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{row.store_name}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {formatStoreDisplayName(row.store_name)}
+                      </td>
                       <td className="max-w-xs px-4 py-3 text-gray-600">
                         {isHttpUrl(row.store_url) ? (
                           <a

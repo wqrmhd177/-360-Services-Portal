@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MovementType, ShippingType } from "@/types/workflows";
 import { TOP_COUNTRIES } from "@/lib/countries";
 import { isZambeelLikeService, isLogisticsService, isMovementsService, isSourcingService } from "@/lib/serviceTypes";
-import { createSupabaseClient } from "@/lib/supabaseClient";
+import { uploadFileToStorage } from "@/lib/uploadClient";
 import { countryDetailTotal, enrichPurchaseDetailForStorage } from "@/lib/qrPurchaseDetails";
 import SuccessModal from "@/components/SuccessModal";
 import CountrySelectInput from "@/components/CountrySelectInput";
@@ -365,8 +365,6 @@ export default function GrowthQrFormPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    
-    const supabase = createSupabaseClient();
 
     // Resolve reseller country from search if user typed but didn't click dropdown
     const resolvedResellerCountry =
@@ -473,19 +471,16 @@ export default function GrowthQrFormPage() {
             for (const image of imagesToUpload) {
               try {
                 const safeName = sanitizeFileName(image.name || "image.png");
-                const fileName = `qr-images/${Date.now()}-${Math.random()
+                const objectPath = `qr-images/${Date.now()}-${Math.random()
                   .toString(36)
                   .substring(7)}-${safeName}`;
-                const { data, error } = await supabase.storage
-                  .from("qr-attachments")
-                  .upload(fileName, image, {
-                    cacheControl: "3600",
-                    upsert: false,
-                  });
-
-                if (!error && data) {
-                  imagePaths.push(data.path);
-                }
+                const { path } = await uploadFileToStorage(
+                  image,
+                  "qr-attachments",
+                  undefined,
+                  objectPath,
+                );
+                if (path) imagePaths.push(path);
               } catch (uploadError) {
                 console.error("Failed to upload image:", uploadError);
               }

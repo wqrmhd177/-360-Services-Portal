@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { createSupabaseClient } from "@/lib/supabaseClient";
+import { uploadFilesToStorage } from "@/lib/uploadClient";
 import type { PoProduct } from "@/types/workflows";
 
 const inputClass =
@@ -86,20 +86,10 @@ export default function CreatePOForm({
   }
 
   async function uploadProductImages(): Promise<Record<number, string[]>> {
-    const supabase = createSupabaseClient();
     const result: Record<number, string[]> = {};
     for (const [lineIndex, files] of productImageFilesRef.current.entries()) {
       if (!files.length) continue;
-      const urls: string[] = [];
-      for (const file of files) {
-        const ext = file.name.split(".").pop() || "jpg";
-        const path = `po-products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from("product-listing-images").upload(path, file, { upsert: false });
-        if (!error) {
-          const { data: urlData } = supabase.storage.from("product-listing-images").getPublicUrl(path);
-          urls.push(urlData.publicUrl);
-        }
-      }
+      const urls = await uploadFilesToStorage(files, "product-listing-images", "po-products");
       if (urls.length) result[lineIndex] = urls;
     }
     return result;

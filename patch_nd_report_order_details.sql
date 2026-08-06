@@ -1,25 +1,6 @@
--- ND Report: FIFO allocation MVs, remarks table, and RPCs.
--- Requires: setup_orders_cache_v2.sql, setup_operations_cache.sql,
---           patch_country_normalization.sql (normalize_ops_country).
--- Run setup_nd_report.sql then: SELECT refresh_ops_orders_summaries_simple();
-
--- ── Remarks (persistent, not in MV) ─────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS ops_nd_remarks (
-  country      TEXT        NOT NULL,
-  bifurcation  TEXT        NOT NULL,
-  sku          TEXT        NOT NULL,
-  remarks_text TEXT,
-  updated_by   TEXT        NOT NULL,
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (country, bifurcation, sku)
-);
-
-COMMENT ON TABLE ops_nd_remarks IS
-  'Admin remarks for ND SKUs — keyed by country + bifurcation + sku; survives SKU leaving ND.';
-
--- ── MV 1: per order-line FIFO allocation ──────────────────────────────────────
+-- ND Report: inventory-aware allocation fix, stuck-order list with approved dates.
+-- Run AFTER patch_nd_report_enhancements.sql (step 13).
+-- Then: SELECT refresh_ops_orders_summaries_simple();
 
 DROP MATERIALIZED VIEW IF EXISTS ops_nd_sku_summary CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS ops_nd_allocations CASCADE;
@@ -46,7 +27,7 @@ WITH eligible AS (
     AND TRIM(o.sku) <> ''
     AND o.status = 'Approved'
 ),
-inventory_by_key AS (
+inventory_exact AS (
   SELECT
     normalize_ops_country(i.country) AS country,
     COALESCE(NULLIF(TRIM(i.category), ''), '') AS bifurcation,
@@ -80,7 +61,7 @@ ranked AS (
       0
     )::NUMERIC AS cumulative_before
   FROM eligible e
-  LEFT JOIN inventory_by_key exact
+  LEFT JOIN inventory_exact exact
     ON exact.country = e.country
     AND exact.bifurcation = e.bifurcation
     AND exact.sku = e.sku
@@ -127,24 +108,24 @@ CREATE INDEX idx_ops_nd_allocations_sku
   ON ops_nd_allocations (country, bifurcation, sku);
 
 COMMENT ON MATERIALIZED VIEW ops_nd_allocations IS
-  'ND FIFO per Approved order line — only excess qty after inventory allocation by country+bifurcation+sku.';
-
--- ── MV 2: SKU summary (only rows with ND quantity) ───────────────────────────
+  'ND FIFO per Approved order line — only excess qty (approved minus allocated) appears in report; inventory exact country+bifurcation+sku, else country+sku pool.';
 
 CREATE MATERIALIZED VIEW ops_nd_sku_summary AS
 SELECT
-  country,
-  bifurcation,
-  sku,
-  MAX(title) AS title,
-  COUNT(DISTINCT order_id) FILTER (WHERE nd_qty > 0)::INTEGER AS nd_orders,
-  COALESCE(SUM(nd_qty) FILTER (WHERE nd_qty > 0), 0)::INTEGER AS nd_quantity,
-  COUNT(DISTINCT store_id) FILTER (WHERE nd_qty > 0 AND store_id > 0)::INTEGER AS store_count,
-  NULL::TEXT AS fulfilment_route,
+  a.country,
+  a.bifurcation,
+  a.sku,
+  MAX(a.title) AS title,
+  COUNT(DISTINCT a.order_id) FILTER (WHERE a.nd_qty > 0)::INTEGER AS nd_orders,
+  COALESCE(SUM(a.nd_qty) FILTER (WHERE a.nd_qty > 0), 0)::INTEGER AS nd_quantity,
+  COUNT(DISTINCT a.store_id) FILTER (WHERE a.nd_qty > 0 AND a.store_id > 0)::INTEGER AS store_count,
+  MAX(fr.fulfilment_route) AS fulfilment_route,
   NOW() AS mv_refreshed_at
-FROM ops_nd_allocations
-GROUP BY country, bifurcation, sku
-HAVING COALESCE(SUM(nd_qty), 0) > 0;
+FROM ops_nd_allocations a
+LEFT JOIN ops_inventory_fulfilment_routes fr
+  ON fr.sku = a.sku
+GROUP BY a.country, a.bifurcation, a.sku
+HAVING COALESCE(SUM(a.nd_qty), 0) > 0;
 
 CREATE UNIQUE INDEX idx_ops_nd_sku_summary_unique
   ON ops_nd_sku_summary (country, bifurcation, sku);
@@ -152,15 +133,13 @@ CREATE UNIQUE INDEX idx_ops_nd_sku_summary_unique
 CREATE INDEX idx_ops_nd_sku_summary_sort
   ON ops_nd_sku_summary (country, bifurcation, nd_quantity DESC);
 
-COMMENT ON MATERIALIZED VIEW ops_nd_sku_summary IS
-  'ND SKU rollup — one row per country+bifurcation+sku with nd_qty > 0.';
-
--- ── Helper: movement suggestions for one target SKU ───────────────────────────
-
-CREATE OR REPLACE FUNCTION get_ops_nd_movement_suggestions(
+-- Stuck orders for one SKU (nd_qty > 0 lines only), sorted by approved date ascending.
+CREATE OR REPLACE FUNCTION get_ops_nd_stuck_orders(
   p_country     TEXT,
   p_bifurcation TEXT,
-  p_sku         TEXT
+  p_sku         TEXT,
+  p_from_date   DATE DEFAULT NULL,
+  p_to_date     DATE DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE sql
@@ -172,87 +151,62 @@ AS $$
     SELECT
       normalize_ops_country(p_country) AS country,
       COALESCE(NULLIF(TRIM(p_bifurcation), ''), '') AS bifurcation,
-      UPPER(TRIM(p_sku)) AS target_sku,
-      split_part(UPPER(TRIM(p_sku)), '-', 1) AS sku_family
+      UPPER(TRIM(p_sku)) AS sku
   ),
-  target_nd AS (
-    SELECT COALESCE(SUM(a.nd_qty), 0)::INTEGER AS nd_qty
+  channel_by_store AS (
+    SELECT DISTINCT ON (store_id)
+      store_id,
+      store_name
+    FROM ops_channel_list_items
+    WHERE store_id IS NOT NULL
+    ORDER BY store_id, synced_at DESC NULLS LAST, id DESC
+  ),
+  filtered AS (
+    SELECT a.*
     FROM ops_nd_allocations a
     CROSS JOIN params p
     WHERE a.country = p.country
       AND a.bifurcation = p.bifurcation
-      AND a.sku = p.target_sku
+      AND a.sku = p.sku
       AND a.nd_qty > 0
+      AND (p_from_date IS NULL OR a.order_date_day >= p_from_date)
+      AND (p_to_date IS NULL OR a.order_date_day <= p_to_date)
   ),
-  inventory_by_key AS (
+  order_rows AS (
     SELECT
-      normalize_ops_country(i.country) AS country,
-      COALESCE(NULLIF(TRIM(i.category), ''), '') AS bifurcation,
-      UPPER(TRIM(i.sku)) AS sku,
-      COALESCE(SUM(i.available_quantity), 0)::NUMERIC AS available_qty
-    FROM ops_inventory_items i
-    WHERE i.sku IS NOT NULL AND TRIM(i.sku) <> ''
-    GROUP BY 1, 2, 3
-  ),
-  demand_by_sku AS (
-    SELECT
-      a.country,
-      a.bifurcation,
-      a.sku,
-      SUM(a.approved_qty)::NUMERIC AS total_demand
-    FROM ops_nd_allocations a
-    CROSS JOIN params p
-    WHERE a.country = p.country
-      AND a.bifurcation = p.bifurcation
-    GROUP BY a.country, a.bifurcation, a.sku
-  ),
-  related_sources AS (
-    SELECT DISTINCT a.sku AS source_sku
-    FROM ops_nd_allocations a
-    CROSS JOIN params p
-    WHERE a.country = p.country
-      AND a.bifurcation = p.bifurcation
-      AND split_part(a.sku, '-', 1) = p.sku_family
-      AND a.sku <> p.target_sku
-  ),
-  surplus AS (
-    SELECT
-      rs.source_sku,
-      GREATEST(
-        0,
-        COALESCE(inv.available_qty, 0) - COALESCE(d.total_demand, 0)
-      )::INTEGER AS surplus_qty
-    FROM related_sources rs
-    CROSS JOIN params p
-    LEFT JOIN inventory_by_key inv
-      ON inv.country = p.country
-      AND inv.bifurcation = p.bifurcation
-      AND inv.sku = rs.source_sku
-    LEFT JOIN demand_by_sku d
-      ON d.country = p.country
-      AND d.bifurcation = p.bifurcation
-      AND d.sku = rs.source_sku
+      f.order_id,
+      MAX(f.order_number) AS order_number,
+      MIN(f.approved_date) AS approved_date,
+      MAX(f.sku) AS sku,
+      COALESCE(SUM(f.nd_qty), 0)::INTEGER AS nd_quantity,
+      f.store_id,
+      MAX(cl.store_name) AS store_name
+    FROM filtered f
+    LEFT JOIN channel_by_store cl ON cl.store_id = f.store_id
+    GROUP BY f.order_id, f.store_id
   )
   SELECT COALESCE(
     jsonb_agg(
       jsonb_build_object(
-        'source_sku', s.source_sku,
-        'surplus_qty', s.surplus_qty,
-        'suggested_qty', LEAST(t.nd_qty, s.surplus_qty)
+        'order_id', order_id,
+        'order_number', order_number,
+        'approved_date', approved_date,
+        'sku', sku,
+        'nd_quantity', nd_quantity,
+        'store_id', store_id,
+        'store_name', store_name
       )
-      ORDER BY LEAST(t.nd_qty, s.surplus_qty) DESC, s.source_sku
+      ORDER BY approved_date ASC NULLS LAST, order_id ASC
     ),
     '[]'::JSONB
   )
-  FROM surplus s
-  CROSS JOIN target_nd t
-  WHERE s.surplus_qty > 0
-    AND t.nd_qty > 0
-    AND LEAST(t.nd_qty, s.surplus_qty) > 0;
+  FROM order_rows;
 $$;
 
--- ── ND summary (paginated list + totals) ────────────────────────────────────
+COMMENT ON FUNCTION get_ops_nd_stuck_orders IS
+  'ND SKU drill-down: order IDs with ND quantity and approved date (ascending), nd_qty > 0 lines only.';
 
+-- Fix summary RPC if setup_nd_report.sql was re-run after patch_nd_report_enhancements (remarks_text mismatch).
 CREATE OR REPLACE FUNCTION get_ops_nd_summary(
   p_country       TEXT DEFAULT NULL,
   p_bifurcation   TEXT DEFAULT NULL,
@@ -443,141 +397,3 @@ BEGIN
   );
 END;
 $$;
-
--- ── Store-level details for one SKU ─────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION get_ops_nd_sku_details(
-  p_country     TEXT,
-  p_bifurcation TEXT,
-  p_sku         TEXT,
-  p_from_date   DATE DEFAULT NULL,
-  p_to_date     DATE DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  WITH params AS (
-    SELECT
-      normalize_ops_country(p_country) AS country,
-      COALESCE(NULLIF(TRIM(p_bifurcation), ''), '') AS bifurcation,
-      UPPER(TRIM(p_sku)) AS sku
-  ),
-  channel_by_store AS (
-    SELECT DISTINCT ON (store_id)
-      store_id,
-      user_id,
-      store_name
-    FROM ops_channel_list_items
-    WHERE store_id IS NOT NULL
-    ORDER BY store_id, synced_at DESC NULLS LAST, id DESC
-  ),
-  filtered AS (
-    SELECT a.*
-    FROM ops_nd_allocations a
-    CROSS JOIN params p
-    WHERE a.country = p.country
-      AND a.bifurcation = p.bifurcation
-      AND a.sku = p.sku
-      AND a.nd_qty > 0
-      AND (p_from_date IS NULL OR a.order_date_day >= p_from_date)
-      AND (p_to_date IS NULL OR a.order_date_day <= p_to_date)
-  ),
-  store_rows AS (
-    SELECT
-      f.store_id,
-      cl.user_id,
-      cl.store_name,
-      COUNT(DISTINCT f.order_id)::INTEGER AS nd_orders,
-      COALESCE(SUM(f.nd_qty), 0)::INTEGER AS nd_quantity
-    FROM filtered f
-    LEFT JOIN channel_by_store cl ON cl.store_id = f.store_id
-    GROUP BY f.store_id, cl.user_id, cl.store_name
-    ORDER BY nd_quantity DESC, f.store_id
-  )
-  SELECT COALESCE(
-    jsonb_agg(
-      jsonb_build_object(
-        'store_id', store_id,
-        'user_id', user_id,
-        'store_name', store_name,
-        'nd_orders', nd_orders,
-        'nd_quantity', nd_quantity,
-        'in_transit_inventory', NULL
-      )
-    ),
-    '[]'::JSONB
-  )
-  FROM store_rows;
-$$;
-
--- ── Remark upsert ─────────────────────────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION upsert_ops_nd_remark(
-  p_country      TEXT,
-  p_bifurcation    TEXT,
-  p_sku            TEXT,
-  p_remarks_text   TEXT,
-  p_updated_by     TEXT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_country TEXT := normalize_ops_country(p_country);
-  v_bifurcation TEXT := COALESCE(NULLIF(TRIM(p_bifurcation), ''), '');
-  v_sku TEXT := UPPER(TRIM(p_sku));
-  v_row ops_nd_remarks%ROWTYPE;
-BEGIN
-  INSERT INTO ops_nd_remarks (country, bifurcation, sku, remarks_text, updated_by, updated_at)
-  VALUES (v_country, v_bifurcation, v_sku, NULLIF(TRIM(p_remarks_text), ''), p_updated_by, NOW())
-  ON CONFLICT (country, bifurcation, sku) DO UPDATE SET
-    remarks_text = EXCLUDED.remarks_text,
-    updated_by = EXCLUDED.updated_by,
-    updated_at = NOW()
-  RETURNING * INTO v_row;
-
-  RETURN jsonb_build_object(
-    'country', v_row.country,
-    'bifurcation', v_row.bifurcation,
-    'sku', v_row.sku,
-    'remarks_text', v_row.remarks_text,
-    'updated_by', v_row.updated_by,
-    'updated_at', v_row.updated_at
-  );
-END;
-$$;
-
--- ── Filter options from ND summary ────────────────────────────────────────────
-
-CREATE OR REPLACE FUNCTION get_ops_nd_filter_options()
-RETURNS JSONB
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT jsonb_build_object(
-    'countries', COALESCE((
-      SELECT jsonb_agg(c.country ORDER BY c.country)
-      FROM (SELECT DISTINCT country FROM ops_nd_sku_summary WHERE country <> 'Unknown') c
-    ), '[]'::JSONB),
-    'bifurcations', COALESCE((
-      SELECT jsonb_agg(b.bifurcation ORDER BY b.bifurcation)
-      FROM (SELECT DISTINCT bifurcation FROM ops_nd_sku_summary WHERE bifurcation <> '') b
-    ), '[]'::JSONB)
-  );
-$$;
-
-COMMENT ON FUNCTION get_ops_nd_summary IS
-  'ND Report main table — filtered totals, pagination, remarks, suggestion counts.';
-COMMENT ON FUNCTION get_ops_nd_sku_details IS
-  'ND store breakdown for one SKU with channel list store_name.';
-COMMENT ON FUNCTION get_ops_nd_movement_suggestions IS
-  'Related SKU movement suggestions with source demand protection.';
-COMMENT ON FUNCTION upsert_ops_nd_remark IS
-  'Admin remark upsert keyed by country+bifurcation+sku.';

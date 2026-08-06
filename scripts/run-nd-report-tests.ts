@@ -10,12 +10,8 @@ type OrderLine = {
   approvedDate: number;
 };
 
-function isNdEligible(status: string, trackingId: string | null): boolean {
-  if (status === "Approved") return true;
-  if (status === "Dispatching in Process") {
-    return !trackingId || trackingId.trim() === "";
-  }
-  return false;
+function isNdEligible(status: string): boolean {
+  return status === "Approved";
 }
 
 function allocateFifo(
@@ -41,16 +37,9 @@ function assert(condition: boolean, message: string) {
 }
 
 function testEligibility() {
-  assert(isNdEligible("Approved", null), "Approved is eligible");
-  assert(
-    isNdEligible("Dispatching in Process", ""),
-    "Dispatching without tracking is eligible",
-  );
-  assert(
-    !isNdEligible("Dispatching in Process", "TRK123"),
-    "Dispatching with tracking is not eligible",
-  );
-  assert(!isNdEligible("Shipped", null), "Shipped is not eligible");
+  assert(isNdEligible("Approved"), "Approved is eligible");
+  assert(!isNdEligible("Dispatching in Process"), "Dispatching is not eligible");
+  assert(!isNdEligible("Shipped"), "Shipped is not eligible");
 }
 
 function testFifoFullFirstOrder() {

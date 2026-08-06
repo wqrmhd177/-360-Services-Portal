@@ -11,6 +11,18 @@ const FIELD_LABELS: Record<NdRemarkLog["field_name"], string> = {
   status: "Status",
 };
 
+function formatLogLine(log: NdRemarkLog): string {
+  const parts: string[] = [];
+  if (log.old_value) {
+    parts.push(`${log.old_value} → ${log.new_value ?? "—"}`);
+  } else if (log.new_value) {
+    parts.push(log.new_value);
+  } else {
+    parts.push("—");
+  }
+  return parts.join("");
+}
+
 export function NdRemarkHistoryModal({
   country,
   bifurcation,
@@ -130,7 +142,7 @@ export function NdRemarkHistoryModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-3">
           {loading ? (
             <p className="py-8 text-center text-sm text-[var(--muted)]">Loading history…</p>
           ) : null}
@@ -141,34 +153,22 @@ export function NdRemarkHistoryModal({
             <p className="py-8 text-center text-sm text-[var(--muted)]">No changes recorded yet.</p>
           ) : null}
           {!loading && !error && logs.length > 0 ? (
-            <ul className="space-y-3">
+            <ul className="divide-y divide-[var(--card-border)]">
               {logs.map((log) => (
                 <li
                   key={log.id}
-                  className="rounded-lg border border-[var(--card-border)] bg-[var(--table-header)]/40 px-3 py-2.5 text-xs"
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-2 text-xs leading-snug"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-[var(--foreground)]">
-                      {FIELD_LABELS[log.field_name]}
-                    </span>
-                    <span className="shrink-0 text-[var(--muted)]">
-                      {new Date(log.changed_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[var(--muted)]">By {log.changed_by}</p>
-                  <div className="mt-2 space-y-1">
-                    {log.old_value ? (
-                      <p>
-                        <span className="text-[var(--muted)]">From:</span>{" "}
-                        <span className="line-through opacity-70">{log.old_value}</span>
-                      </p>
-                    ) : null}
-                    {log.new_value ? (
-                      <p>
-                        <span className="text-[var(--muted)]">To:</span> {log.new_value}
-                      </p>
-                    ) : null}
-                  </div>
+                  <span className="shrink-0 font-semibold text-[var(--foreground)]">
+                    {FIELD_LABELS[log.field_name]}
+                  </span>
+                  <span className="shrink-0 text-[var(--muted)]">
+                    {new Date(log.changed_at).toLocaleString()}
+                  </span>
+                  <span className="text-[var(--muted)]">· {log.changed_by}</span>
+                  <span className="min-w-0 flex-1 basis-full text-[var(--foreground)] sm:basis-auto">
+                    {formatLogLine(log)}
+                  </span>
                 </li>
               ))}
             </ul>

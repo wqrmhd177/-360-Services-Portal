@@ -1,8 +1,8 @@
-import { createSupabaseClient } from '@/lib/supabaseClient'
+import { createSupabaseServiceClient } from '@/lib/supabaseClient'
 import type { PlSupplier } from './types'
 
 function getClient() {
-  return createSupabaseClient()
+  return createSupabaseServiceClient()
 }
 
 /** Generate a new supplier code like SUP001, SUP002, … */

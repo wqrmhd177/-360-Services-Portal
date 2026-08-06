@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getUserNames } from "@/lib/getUserName";
+import { getPortalSession } from "@/lib/session";
 
 export async function POST(request: Request) {
+  const session = getPortalSession();
+  if (!session?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { emails } = await request.json();
 

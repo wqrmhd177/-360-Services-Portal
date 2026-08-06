@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { History, Package, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
+import { History, Package, X, ChevronDown, ChevronRight } from "lucide-react";
 import { PortalDialogLoading } from "@/components/layout/portal-loading";
 import { NdRemarkHistoryModal } from "@/components/operations/NdRemarkHistoryModal";
+import { NdStoreOrdersInline } from "@/components/operations/NdStoreOrdersInline";
 import {
   NdRemarkStatusCell,
   NdRemarkTextCell,
@@ -12,8 +13,10 @@ import type {
   NdMovementSuggestion,
   NdRemarkStatus,
   NdSkuSummaryRow,
+  NdStuckOrderRow,
   NdStoreDetailRow,
 } from "@/lib/operations/ndReport";
+import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { cn, formatNumber } from "@/lib/utils";
 
 export function NdSkuDetailsDialog({
@@ -31,8 +34,10 @@ export function NdSkuDetailsDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<NdStoreDetailRow[]>([]);
+  const [stuckOrders, setStuckOrders] = useState<NdStuckOrderRow[]>([]);
   const [suggestions, setSuggestions] = useState<NdMovementSuggestion[]>([]);
   const [historyStore, setHistoryStore] = useState<NdStoreDetailRow | null>(null);
+  const [expandedStoreId, setExpandedStoreId] = useState<number | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -63,11 +68,13 @@ export function NdSkuDetailsDialog({
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Failed to load details");
         setStores(json.rows ?? []);
+        setStuckOrders(json.stuck_orders ?? []);
         setSuggestions(json.movement_suggestions ?? []);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load details");
         setStores([]);
+        setStuckOrders([]);
         setSuggestions([]);
       } finally {
         setLoading(false);
@@ -79,9 +86,11 @@ export function NdSkuDetailsDialog({
   useEffect(() => {
     if (!open || !row) {
       setStores([]);
+      setStuckOrders([]);
       setSuggestions([]);
       setError(null);
       setHistoryStore(null);
+      setExpandedStoreId(null);
       return;
     }
 
@@ -148,6 +157,20 @@ export function NdSkuDetailsDialog({
     },
     [row],
   );
+
+  const toggleStoreOrders = useCallback((storeId: number) => {
+    setExpandedStoreId((prev) => (prev === storeId ? null : storeId));
+  }, []);
+
+  const ordersByStore = useMemo(() => {
+    const map = new Map<number, NdStuckOrderRow[]>();
+    for (const order of stuckOrders) {
+      const list = map.get(order.store_id) ?? [];
+      list.push(order);
+      map.set(order.store_id, list);
+    }
+    return map;
+  }, [stuckOrders]);
 
   const requestClose = () => {
     const dialog = dialogRef.current;
@@ -312,69 +335,99 @@ export function NdSkuDetailsDialog({
                     </tr>
                   </thead>
                   <tbody>
-                    {stores.map((store) => (
-                      <tr
-                        key={store.store_id}
-                        className="border-b border-[var(--card-border)] last:border-b-0 hover:bg-[var(--table-row-hover)]"
-                      >
-                        <td
-                          className="max-w-[160px] truncate px-4 py-3 font-medium"
-                          title={store.store_name ?? undefined}
-                        >
-                          {store.store_name ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 tabular-nums">{store.user_id ?? "—"}</td>
-                        <td className="px-3 py-3 tabular-nums">{store.store_id || "—"}</td>
-                        <td className="px-3 py-3 text-right tabular-nums">
-                          {formatNumber(store.nd_orders)}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums">
-                          {formatNumber(store.nd_quantity)}
-                        </td>
-                        <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
-                        <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
-                        <td className="px-3 py-3">
-                          <NdRemarkTextCell
-                            value={store.ops_remarks}
-                            placeholder="Ops remarks"
-                            onSave={async (next) => {
-                              await saveStoreRemark(store, {
-                                ops_remarks: next.trim() || null,
-                              });
-                            }}
-                          />
-                        </td>
-                        <td className="px-3 py-3">
-                          <NdRemarkTextCell
-                            value={store.growth_feedback}
-                            placeholder="Growth feedback"
-                            onSave={async (next) => {
-                              await saveStoreRemark(store, {
-                                growth_feedback: next.trim() || null,
-                              });
-                            }}
-                          />
-                        </td>
-                        <td className="px-3 py-3">
-                          <NdRemarkStatusCell
-                            value={store.status}
-                            onSave={async (next) => {
-                              await saveStoreRemark(store, { status: next });
-                            }}
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setHistoryStore(store)}
-                            className="inline-flex rounded p-1 text-[var(--muted)] hover:bg-[var(--table-header)] hover:text-[var(--foreground)]"
-                            aria-label="View change history"
+                    {stores.map((store) => {
+                      const storeOrders = ordersByStore.get(store.store_id) ?? [];
+                      const isExpanded = expandedStoreId === store.store_id;
+                      const displayName = formatStoreDisplayName(store.store_name);
+
+                      return (
+                        <Fragment key={store.store_id}>
+                          <tr
+                            className="border-b border-[var(--card-border)] last:border-b-0 hover:bg-[var(--table-row-hover)]"
                           >
-                            <History className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                            <td
+                              className="max-w-[160px] truncate px-4 py-3 font-medium"
+                              title={displayName !== "—" ? displayName : undefined}
+                            >
+                              {displayName}
+                            </td>
+                            <td className="px-3 py-3 tabular-nums">{store.user_id ?? "—"}</td>
+                            <td className="px-3 py-3 tabular-nums">{store.store_id || "—"}</td>
+                            <td className="px-3 py-3 text-right tabular-nums">
+                              {store.nd_orders > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStoreOrders(store.store_id)}
+                                  className="inline-flex items-center gap-1 font-semibold text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+                                  title="Show stuck orders for this store"
+                                >
+                                  {formatNumber(store.nd_orders)}
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              ) : (
+                                formatNumber(store.nd_orders)
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-right tabular-nums">
+                              {formatNumber(store.nd_quantity)}
+                            </td>
+                            <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
+                            <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
+                            <td className="px-3 py-3">
+                              <NdRemarkTextCell
+                                value={store.ops_remarks}
+                                placeholder="Ops remarks"
+                                onSave={async (next) => {
+                                  await saveStoreRemark(store, {
+                                    ops_remarks: next.trim() || null,
+                                  });
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              <NdRemarkTextCell
+                                value={store.growth_feedback}
+                                placeholder="Growth feedback"
+                                onSave={async (next) => {
+                                  await saveStoreRemark(store, {
+                                    growth_feedback: next.trim() || null,
+                                  });
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              <NdRemarkStatusCell
+                                value={store.status}
+                                onSave={async (next) => {
+                                  await saveStoreRemark(store, { status: next });
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setHistoryStore(store)}
+                                className="inline-flex rounded p-1 text-[var(--muted)] hover:bg-[var(--table-header)] hover:text-[var(--foreground)]"
+                                aria-label="View change history"
+                              >
+                                <History className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded ? (
+                            <tr key={`${store.store_id}-orders`} className="bg-[var(--table-header)]/30">
+                              <td colSpan={11} className="px-4 pb-3 pt-0">
+                                <NdStoreOrdersInline orders={storeOrders} />
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </>
@@ -389,7 +442,7 @@ export function NdSkuDetailsDialog({
           bifurcation={row.bifurcation}
           sku={row.sku}
           storeId={historyStore.store_id}
-          storeName={historyStore.store_name}
+          storeName={formatStoreDisplayName(historyStore.store_name)}
           open={!!historyStore}
           onClose={() => setHistoryStore(null)}
         />

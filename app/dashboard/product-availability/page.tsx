@@ -6,9 +6,6 @@ import { Loader2, Search, X } from "lucide-react";
 import { useProductAvailabilityAuth } from "@/hooks/useProductAvailabilityAuth";
 import {
   BulkUploadRowValidated,
-  cancelProductAvailabilityRequest,
-  createBulkDraftRequests,
-  createProductAvailabilityRequest,
   deriveCountsFromRows,
   formatAvailabilityLabel,
   formatDerivedStatusLabel,
@@ -19,19 +16,22 @@ import {
   parseBulkUploadFromRows,
   ProductAvailabilityListFilter,
   ProductAvailabilityRequestWithDetails,
-  requestAlternativeSearch,
-  submitDraftRequest,
-  submitProductAvailabilityResponse,
   titleCaseWords,
 } from "@/lib/productAvailabilityHelpers";
+import {
+  cancelProductAvailabilityRequestClient,
+  createBulkDraftRequestsClient,
+  createProductAvailabilityRequestClient,
+  requestAlternativeSearchClient,
+  submitDraftRequestClient,
+  submitProductAvailabilityResponseClient,
+} from "@/lib/productAvailabilityClient";
+import { uploadFilesToStorage } from "@/lib/uploadClient";
 import {
   lookupInventoryBySkuPrefix,
   InventoryLookupResult,
 } from "@/lib/productAvailabilityInventoryLookup";
 import { getProductAvailabilityDataScope } from "@/lib/permissions";
-import { createSupabaseClient } from "@/lib/supabaseClient";
-
-const supabase = createSupabaseClient();
 
 const MARKET_OPTIONS = ["UAE", "KSA", "PAK", "QTR", "KWT", "OMN", "BHR", "IRQ", "USA"];
 
@@ -89,20 +89,9 @@ const initialResponseForm: PurchaserResponseState = {
   images: [],
 };
 
-async function uploadFilesToStorage(ownerId: string, files: File[]): Promise<string[]> {
-  const urls: string[] = [];
-  for (const file of files) {
-    const ext = file.name.split(".").pop() || "jpg";
-    const safeOwner = ownerId.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${safeOwner}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { data, error } = await supabase.storage
-      .from("product_images")
-      .upload(path, file, { cacheControl: "3600", upsert: false });
-    if (error) throw new Error(error.message);
-    const { data: urlData } = supabase.storage.from("product_images").getPublicUrl(data.path);
-    if (urlData.publicUrl) urls.push(urlData.publicUrl);
-  }
-  return urls;
+async function uploadPaImages(ownerId: string, files: File[]): Promise<string[]> {
+  const safeOwner = ownerId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return uploadFilesToStorage(files, "product_images", safeOwner);
 }
 
 export default function ProductAvailabilityPage() {
@@ -305,8 +294,8 @@ export default function ProductAvailabilityPage() {
 
     setSavingRequest(true);
     try {
-      const imageUrls = await uploadFilesToStorage(userFriendlyId, createForm.images);
-      await createProductAvailabilityRequest({
+      const imageUrls = await uploadPaImages(userFriendlyId, createForm.images);
+      await createProductAvailabilityRequestClient({
         requestedByUserId: userFriendlyId,
         requestedByRole: effectivePaRole,
         productStatus: createForm.productStatus,
@@ -474,7 +463,7 @@ export default function ProductAvailabilityPage() {
     setBulkImporting(true);
     setError("");
     try {
-      const result = await createBulkDraftRequests(validRows, userFriendlyId, effectivePaRole);
+      const result = await createBulkDraftRequestsClient(validRows, userFriendlyId, effectivePaRole);
       setBulkImportResult(result);
       setBulkCsvRows([]);
       await refreshData();
@@ -501,8 +490,8 @@ export default function ProductAvailabilityPage() {
     setError("");
     setDraftSubmitting(requestId);
     try {
-      const imageUrls = await uploadFilesToStorage(userFriendlyId, files);
-      await submitDraftRequest(requestId, imageUrls);
+      const imageUrls = await uploadPaImages(userFriendlyId, files);
+      await submitDraftRequestClient(requestId, imageUrls);
       setDraftPhotoOpen(null);
       setDraftPhotoFiles((prev) => {
         const n = { ...prev };
@@ -534,7 +523,7 @@ export default function ProductAvailabilityPage() {
   const handleCancelRequest = async (requestId: string) => {
     setCancelling(true);
     try {
-      await cancelProductAvailabilityRequest(requestId);
+      await cancelProductAvailabilityRequestClient(requestId);
       setCancelConfirmId(null);
       await refreshData();
     } catch (err) {
@@ -565,9 +554,9 @@ export default function ProductAvailabilityPage() {
 
     setSavingResponse(true);
     try {
-      const imageUrls = await uploadFilesToStorage(userFriendlyId, responseForm.images);
+      const imageUrls = await uploadPaImages(userFriendlyId, responseForm.images);
       const isNotAvailable = responseForm.availability === "not_available";
-      await submitProductAvailabilityResponse({
+      await submitProductAvailabilityResponseClient({
         requestId: selectedAssignment.requestId,
         respondedByUserId: userFriendlyId,
         availability: responseForm.availability,
@@ -2026,7 +2015,7 @@ export default function ProductAvailabilityPage() {
                               setAltSearchSaving(true);
                               setAltSearchError("");
                               try {
-                                await requestAlternativeSearch(
+                                await requestAlternativeSearchClient(
                                   selectedFeedbackRequest.id,
                                   altSearchRemarks
                                 );

@@ -1,4 +1,4 @@
-import { createSupabaseClient, createSupabaseServiceClient } from "@/lib/supabaseClient";
+import { createSupabaseServiceClient } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type OpsSource = "inventory" | "channel_list" | "orders";
@@ -7,11 +7,7 @@ let _opsDb: SupabaseClient | null = null;
 
 export function getOpsDb() {
   if (!_opsDb) {
-    try {
-      _opsDb = createSupabaseServiceClient();
-    } catch {
-      _opsDb = createSupabaseClient();
-    }
+    _opsDb = createSupabaseServiceClient();
   }
   return _opsDb;
 }

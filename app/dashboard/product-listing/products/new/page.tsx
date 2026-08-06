@@ -13,9 +13,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { createSupabaseClient } from "@/lib/supabaseClient";
-import { fetchAllSuppliers } from "@/lib/productListing/supplierHelpers";
-import { generateProductId } from "@/lib/productListing/productHelpers";
+import { uploadFilesToStorage } from "@/lib/uploadClient";
 import type { PlSupplier } from "@/lib/productListing/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -94,7 +92,9 @@ export default function NewProductPage() {
   // Step 3: Review (no extra fields)
 
   useEffect(() => {
-    fetchAllSuppliers().then(setSuppliers);
+    fetch("/api/product-listing/action")
+      .then((r) => r.json())
+      .then((d) => setSuppliers(d.suppliers ?? []));
   }, []);
 
   // Auto-generate variant combinations when options change
@@ -114,30 +114,15 @@ export default function NewProductPage() {
   }, [options, hasVariants]);
 
   // ── Image upload helpers ──
-  async function uploadFilesToStorage(files: FileList | null): Promise<string[]> {
+  async function uploadFilesToStorageLocal(files: FileList | null): Promise<string[]> {
     if (!files || files.length === 0) return [];
-    const supabase = createSupabaseClient();
-    const urls: string[] = [];
-    for (const file of Array.from(files)) {
-      const ext = file.name.split(".").pop();
-      const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("product-listing-images")
-        .upload(path, file, { upsert: false });
-      if (!upErr) {
-        const { data } = supabase.storage
-          .from("product-listing-images")
-          .getPublicUrl(path);
-        if (data?.publicUrl) urls.push(data.publicUrl);
-      }
-    }
-    return urls;
+    return uploadFilesToStorage(Array.from(files), "product-listing-images");
   }
 
   async function handleImageUpload(files: FileList | null) {
     setUploading(true);
     try {
-      const urls = await uploadFilesToStorage(files);
+      const urls = await uploadFilesToStorageLocal(files);
       setImageUrls((prev) => [...prev, ...urls]);
     } finally {
       setUploading(false);
@@ -147,7 +132,7 @@ export default function NewProductPage() {
   async function handleVariantImageUpload(variantIndex: number, files: FileList | null) {
     setUploadingVariant((prev) => ({ ...prev, [variantIndex]: true }));
     try {
-      const urls = await uploadFilesToStorage(files);
+      const urls = await uploadFilesToStorageLocal(files);
       setVariantRows((prev) =>
         prev.map((r, i) =>
           i === variantIndex ? { ...r, images: [...r.images, ...urls] } : r
@@ -161,7 +146,7 @@ export default function NewProductPage() {
   async function handleSharedVariantImageUpload(files: FileList | null) {
     setUploadingShared(true);
     try {
-      const urls = await uploadFilesToStorage(files);
+      const urls = await uploadFilesToStorageLocal(files);
       setSharedVariantImages((prev) => [...prev, ...urls]);
     } finally {
       setUploadingShared(false);
@@ -192,67 +177,42 @@ export default function NewProductPage() {
     setSaving(true);
     setError("");
     try {
-      const supabase = createSupabaseClient();
-      const productId = await generateProductId();
+      const filledOptions = options
+        .filter((o) => o.name && o.values.length > 0)
+        .map((o) => ({ name: o.name, values: o.values }));
 
-      // Insert product header
-      const { error: prodErr } = await supabase.from("pl_products").insert([{
-        product_id: productId,
-        product_title: title,
-        fk_owned_by: supplierId,
-        image: imageUrls.length > 0 ? imageUrls : null,
-        brand_name: brand || null,
-        material: material || null,
-        description: description || null,
-        package_includes: packageIncludes.length > 0 ? packageIncludes : null,
-        has_variants: hasVariants,
-        options: hasVariants
-          ? options.filter((o) => o.name && o.values.length > 0).map((o) => ({ name: o.name, values: o.values }))
-          : null,
-        status: "pending",
-      }]);
-
-      if (prodErr) {
-        setError(prodErr.message || "Failed to create product");
+      const res = await fetch("/api/product-listing/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          supplierId,
+          imageUrls,
+          brand,
+          material,
+          description,
+          packageIncludes,
+          hasVariants,
+          options: filledOptions,
+          variantRows: hasVariants
+            ? variantRows.map((r) => ({
+                combination: r.combination,
+                price: r.price,
+                stock: r.stock,
+                sku: r.sku,
+                images: sameImageForAllVariants ? sharedVariantImages : r.images,
+              }))
+            : [],
+          singlePrice,
+          singleStock,
+          singleSku,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Failed to create product");
         return;
       }
-
-      // Insert variants
-      if (hasVariants && variantRows.length > 0) {
-        const variantInserts = variantRows.map((r) => {
-          const imgs = sameImageForAllVariants
-            ? sharedVariantImages
-            : r.images;
-          return {
-            product_id: productId,
-            option_values: r.combination,
-            price: parseFloat(r.price) || 0,
-            stock: parseInt(r.stock) || 0,
-            sku: r.sku || null,
-            image: imgs.length > 0 ? imgs : null,
-            active: true,
-          };
-        });
-        const { error: varErr } = await supabase
-          .from("pl_product_variants")
-          .insert(variantInserts);
-        if (varErr) {
-          await supabase.from("pl_products").delete().eq("product_id", productId);
-          setError(varErr.message || "Failed to create variants");
-          return;
-        }
-      } else {
-        // Single variant
-        await supabase.from("pl_product_variants").insert([{
-          product_id: productId,
-          option_values: null,
-          price: parseFloat(singlePrice) || 0,
-          stock: parseInt(singleStock) || 0,
-          sku: singleSku || null,
-          active: true,
-        }]);
-      }
-
       router.push("/dashboard/product-listing/products");
     } finally {
       setSaving(false);

@@ -9,18 +9,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { createSupabaseClient } from "@/lib/supabaseClient";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
-import {
-  fetchPriceRequestsByStatus,
-  approvePriceChange,
-  rejectPriceChange,
-} from "@/lib/productListing/priceHistoryHelpers";
-import {
-  fetchStatusRequestsByStatus,
-  approveStatusChangeRequest,
-  rejectStatusChangeRequest,
-} from "@/lib/productListing/variantStatusChangeHelpers";
 import {
   formatVariantLabel,
   sortVariantOptionNames,
@@ -155,121 +144,10 @@ export default function ProductUpdatesPage() {
     setLoading(true);
     setError("");
     try {
-      const [priceData, statusData] = await Promise.all([
-        fetchPriceRequestsByStatus(tab),
-        fetchStatusRequestsByStatus(tab),
-      ]);
-
-      // Enrich with variant meta
-      const allVariantIds = Array.from(
-        new Set([...priceData.map((r) => r.variant_id), ...statusData.map((r) => r.variant_id)])
-      );
-
-      const supabase = createSupabaseClient();
-      let variantMeta = new Map<number, { option_values?: Record<string, string>; image?: string[] | null }>();
-      if (allVariantIds.length > 0) {
-        const { data } = await supabase
-          .from("pl_product_variants")
-          .select("variant_id, option_values, image")
-          .in("variant_id", allVariantIds);
-        variantMeta = new Map(
-          (data || []).map((v: { variant_id: number; option_values?: Record<string, string>; image?: string[] | null }) => [v.variant_id, v])
-        );
-      }
-
-      const allProductIds = Array.from(
-        new Set([...priceData.map((r) => r.product_id), ...statusData.map((r) => r.product_id)])
-      );
-      let productMeta = new Map<number, { product_title: string; image?: string | string[] | null }>();
-      if (allProductIds.length > 0) {
-        const { data } = await supabase
-          .from("pl_products")
-          .select("product_id, product_title, image")
-          .in("product_id", allProductIds);
-        productMeta = new Map(
-          (data || []).map((p: { product_id: number; product_title: string; image?: string | string[] | null }) => [p.product_id, p])
-        );
-      }
-
-      // Merge price + status requests created in the same minute
-      const groups = new Map<string, { price?: PlPriceHistoryEntry; status?: PlVariantStatusChangeRequest }>();
-
-      priceData.forEach((r) => {
-        const key = `${r.status}|${r.product_id}|${r.variant_id}|${r.created_by ?? ""}|${toMinuteBucket(r.created_at)}`;
-        const ex = groups.get(key) ?? {};
-        groups.set(key, { ...ex, price: r });
-      });
-
-      statusData.forEach((r) => {
-        const scope = r.request_scope ?? "variant";
-        const key =
-          scope === "product"
-            ? `${r.status}|product|${r.product_id}|${r.created_by ?? ""}|${toMinuteBucket(r.created_at)}`
-            : `${r.status}|${r.product_id}|${r.variant_id}|${r.created_by ?? ""}|${toMinuteBucket(r.created_at)}`;
-        const ex = groups.get(key) ?? {};
-        groups.set(key, { ...ex, status: r });
-      });
-
-      const merged: MergedRequest[] = Array.from(groups.values())
-        .map((g): MergedRequest => {
-          const getVariantInfo = (vid: number) => variantMeta.get(vid);
-          const getProductInfo = (pid: number) => productMeta.get(pid);
-
-          if (g.price && g.status) {
-            const vm = getVariantInfo(g.price.variant_id);
-            const pm = getProductInfo(g.price.product_id);
-            return {
-              id: `${g.price.id}|${g.status.id}`,
-              request_type: "both",
-              product_id: g.price.product_id,
-              variant_id: g.price.variant_id,
-              created_at: g.price.created_at > g.status.created_at ? g.price.created_at : g.status.created_at,
-              created_by: g.price.created_by ?? g.status.created_by,
-              status: g.price.status,
-              reviewed_at: g.price.reviewed_at ?? g.status.reviewed_at,
-              reviewed_by: g.price.reviewed_by ?? g.status.reviewed_by,
-              product_title: pm?.product_title,
-              option_values: vm?.option_values ?? undefined,
-              variant_image: vm?.image,
-              product_image: pm?.image,
-              previous_price: g.price.previous_price,
-              updated_price: g.price.updated_price,
-              previous_active: g.status.previous_active,
-              updated_active: g.status.updated_active,
-              price_request_id: g.price.id,
-              status_request_id: g.status.id,
-              request_scope: g.status.request_scope,
-            };
-          }
-
-          if (g.price) {
-            const vm = getVariantInfo(g.price.variant_id);
-            const pm = getProductInfo(g.price.product_id);
-            return {
-              ...g.price,
-              request_type: "price",
-              product_title: pm?.product_title,
-              option_values: vm?.option_values ?? undefined,
-              variant_image: vm?.image,
-              product_image: pm?.image,
-            };
-          }
-
-          const s = g.status!;
-          const vm = getVariantInfo(s.variant_id);
-          const pm = getProductInfo(s.product_id);
-          return {
-            ...s,
-            request_type: "status",
-            product_title: pm?.product_title,
-            option_values: vm?.option_values ?? undefined,
-            variant_image: vm?.image,
-            product_image: pm?.image,
-          };
-        })
-        .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-
-      setRequests(merged);
+      const res = await fetch(`/api/product-listing/product-updates?tab=${tab}`);
+      if (!res.ok) throw new Error("Failed");
+      const json = await res.json();
+      setRequests(json.requests ?? []);
     } catch {
       setError("Failed to load approval requests");
     } finally {
@@ -283,18 +161,13 @@ export default function ProductUpdatesPage() {
     setError("");
     setSuccess("");
     try {
-      let ok = false;
-      if (req.request_type === "price") {
-        ok = await approvePriceChange(req.id, userEmail);
-      } else if (req.request_type === "status") {
-        ok = await approveStatusChangeRequest(req.id, userEmail);
-      } else {
-        const r = req as BothReq;
-        const a = await approvePriceChange(r.price_request_id, userEmail);
-        const b = await approveStatusChangeRequest(r.status_request_id, userEmail);
-        ok = a && b;
-      }
-      if (ok) {
+      const res = await fetch("/api/product-listing/product-updates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve", request: req }),
+      });
+      const json = res.ok ? await res.json() : { ok: false };
+      if (json.ok) {
         setSuccess(`Approved: ${req.product_title ?? `Product #${req.product_id}`}`);
         await load();
       } else {
@@ -311,18 +184,13 @@ export default function ProductUpdatesPage() {
     setError("");
     setSuccess("");
     try {
-      let ok = false;
-      if (req.request_type === "price") {
-        ok = await rejectPriceChange(req.id, userEmail);
-      } else if (req.request_type === "status") {
-        ok = await rejectStatusChangeRequest(req.id, userEmail);
-      } else {
-        const r = req as BothReq;
-        const a = await rejectPriceChange(r.price_request_id, userEmail);
-        const b = await rejectStatusChangeRequest(r.status_request_id, userEmail);
-        ok = a && b;
-      }
-      if (ok) {
+      const res = await fetch("/api/product-listing/product-updates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject", request: req }),
+      });
+      const json = res.ok ? await res.json() : { ok: false };
+      if (json.ok) {
         setSuccess(`Rejected: ${req.product_title ?? `Product #${req.product_id}`}`);
         await load();
       } else {

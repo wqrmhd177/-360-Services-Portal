@@ -1,8 +1,13 @@
-import { NextResponse } from "next/server";
-import { getProcurementPOs } from "@/lib/procurementPos";
+import { NextResponse } from "next/server";import { getProcurementPOs } from "@/lib/procurementPos";
+import { getPortalSession } from "@/lib/session";
 
 /** Single source of truth for procurement PO list (same as Purchase Orders page). */
 export async function GET(request: Request) {
+  const session = getPortalSession();
+  if (!session?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);

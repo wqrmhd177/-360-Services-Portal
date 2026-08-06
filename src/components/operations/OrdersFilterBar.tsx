@@ -203,7 +203,7 @@ export default function OrdersFilterBar(props: OrdersFilterBarProps) {
   );
 }
 
-/** Redirect to default "this month" range when no dates are in the URL. */
+/** Redirect to default last-30-days range when no dates are in the URL. */
 export function useDefaultOrdersDateRange() {
   const router = useRouter();
   const pathname = usePathname();
@@ -218,7 +218,7 @@ export function useDefaultOrdersDateRange() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("from", toInputValue(def.from));
     params.set("to", toInputValue(def.to));
-    params.set("range", "thisMonth");
+    params.delete("range");
     router.replace(`${pathname}?${params.toString()}`);
   }, [pathname, router, searchParams]);
 }

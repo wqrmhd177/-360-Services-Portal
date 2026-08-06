@@ -29,6 +29,8 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 13. **`patch_nd_report_enhancements.sql`** — store-level ND remarks (Ops/Growth/Status), remark logs, fulfilment routes, bulk route upload, and updated ND summary MV
 14. **`patch_kpi_drilldown_enhancements.sql`** — KPI drill-down bifurcation sidebar counts and User ID / SKU order grouping
 15. **`patch_kpi_returning_status.sql`** — Orders in Returning card: `Return in Transit` only, aged from `final_action_date_undelivered` (rebuilds order-detail MVs + status drill-down RPC)
+16. **`patch_nd_report_order_details.sql`** — ND stuck-order list with approved dates; inventory-aware FIFO allocation (country+SKU pool fallback). **Approved status only**; only excess quantity (above available stock) counts as ND.
+17. **`patch_kpi_dispatching_shipment_date.sql`** — Dispatching KPI ages from `shipment_date_log`; drill-down day/country/total counts use unique `order_id` (no double-count for multi-SKU orders).
 
 Then refresh materialized views once:
 
@@ -69,6 +71,15 @@ After patch 7, MV refresh runs inside Supabase even without `SUPABASE_DB_PASSWOR
 
 If Finance/Growth/Procurement KPIs error, patch 3 was not applied.  
 If Store Visibility or status drill-down error, patch 4 was not applied.
+
+## 18. Security lockdown (Supabase public access alerts)
+
+If Supabase emails report **publicly accessible tables** or **RLS disabled**, follow **[SECURITY_SETUP.md](./SECURITY_SETUP.md)**:
+
+1. Ensure `SUPABASE_SERVICE_ROLE_KEY` is set on Vercel (server only).
+2. Run **`patch_security_lockdown.sql`** in Supabase SQL Editor.
+3. Redeploy the app and verify login + a few dashboard pages.
+4. Confirm anon REST calls return no data (see SECURITY_SETUP.md).
 
 ## What changed in the app
 

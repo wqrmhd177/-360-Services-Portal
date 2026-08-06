@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { Qr } from "@/types/workflows";
 import { isZambeelLikeService, isMovementsService, isLogisticsService } from "@/lib/serviceTypes";
 import { getPurchaseDetailLabel } from "@/lib/qrPurchaseDetails";
-import { createSupabaseClient } from "@/lib/supabaseClient";
+import { uploadFileToStorage } from "@/lib/uploadClient";
 import SkuSearchInput from "@/components/SkuSearchInput";
 import type { InventorySku } from "@/lib/metabaseInventory";
 import { PURCHASE_FROM_OPTIONS, normalizePurchaseFrom, type PurchaseFromOption } from "@/lib/purchaseFrom";
@@ -582,23 +582,17 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
     setError(null);
 
     try {
-      const supabase = createSupabaseClient();
       const filesFromRef = procurementImageFilesRef.current.get(index) || [];
       const newImagePaths: string[] = [];
 
       if (filesFromRef.length > 0) {
         for (const image of filesFromRef) {
           const safeName = sanitizeFileName(image.name || "image.png");
-          const fileName = `procurement-images/${Date.now()}-${Math.random()
+          const objectPath = `procurement-images/${Date.now()}-${Math.random()
             .toString(36)
             .substring(7)}-${safeName}`;
-          const { data, error } = await supabase.storage
-            .from("qr-attachments")
-            .upload(fileName, image, {
-              cacheControl: "3600",
-              upsert: false
-            });
-          if (!error && data?.path) newImagePaths.push(data.path);
+          const { path } = await uploadFileToStorage(image, "qr-attachments", undefined, objectPath);
+          if (path) newImagePaths.push(path);
         }
       }
 
@@ -606,9 +600,9 @@ export default function ProcurementQrRespondPage({ params }: { params: { id: str
         const paths: string[] = [];
         for (const image of files) {
           const safeName = sanitizeFileName(image.name || "image.png");
-          const fileName = `procurement-images/${Date.now()}-${Math.random().toString(36).substring(7)}-${safeName}`;
-          const { data, error } = await supabase.storage.from("qr-attachments").upload(fileName, image, { cacheControl: "3600", upsert: false });
-          if (!error && data?.path) paths.push(data.path);
+          const objectPath = `procurement-images/${Date.now()}-${Math.random().toString(36).substring(7)}-${safeName}`;
+          const { path } = await uploadFileToStorage(image, "qr-attachments", undefined, objectPath);
+          if (path) paths.push(path);
         }
         return paths;
       }

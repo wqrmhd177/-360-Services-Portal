@@ -16,24 +16,13 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { createSupabaseClient } from "@/lib/supabaseClient";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import {
-  fetchProductsWithVariants,
-  deleteProduct,
-  updateProductStatus,
   extractImages,
   getProductThumbnail,
   formatVariantLabel,
   sortVariantOptionNames,
 } from "@/lib/productListing/productHelpers";
-import { fetchAllSuppliers } from "@/lib/productListing/supplierHelpers";
-import {
-  createPriceHistoryEntry,
-} from "@/lib/productListing/priceHistoryHelpers";
-import {
-  createVariantStatusChangeRequest,
-} from "@/lib/productListing/variantStatusChangeHelpers";
 import type { PlGroupedProduct, PlVariantInfo, PlSupplier } from "@/lib/productListing/types";
 
 const ITEMS_PER_PAGE = 25;
@@ -108,12 +97,15 @@ export default function ProductsPage() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [prods, sups] = await Promise.all([
-        fetchProductsWithVariants(),
-        fetchAllSuppliers(),
+      const [prodRes, supRes] = await Promise.all([
+        fetch("/api/product-listing/products"),
+        fetch("/api/product-listing/action"),
       ]);
+      const prodJson = prodRes.ok ? await prodRes.json() : { products: [] };
+      const supJson = supRes.ok ? await supRes.json() : { suppliers: [] };
+      const prods = prodJson.products ?? [];
       setProducts(prods);
-      setSuppliers(sups);
+      setSuppliers(supJson.suppliers ?? []);
       calcStats(prods);
     } finally {
       setLoading(false);
@@ -174,32 +166,24 @@ export default function ProductsPage() {
     setSavingEdit(true);
     setEditMsg("");
     try {
-      const supabase = createSupabaseClient();
-      for (const variant of viewProduct.variants) {
-        const newPrice = editPrices.get(variant.variant_id) ?? variant.price;
-        const newActive = editActive.get(variant.variant_id) ?? variant.active;
+      const variants = viewProduct.variants.map((variant) => ({
+        variant_id: variant.variant_id,
+        price: variant.price,
+        active: variant.active,
+        newPrice: editPrices.get(variant.variant_id) ?? variant.price,
+        newActive: editActive.get(variant.variant_id) ?? variant.active,
+      }));
 
-        if (newPrice !== variant.price) {
-          await createPriceHistoryEntry(
-            viewProduct.product_id,
-            variant.variant_id,
-            variant.price,
-            newPrice,
-            userEmail
-          );
-        }
-
-        if (newActive !== variant.active) {
-          await createVariantStatusChangeRequest(
-            viewProduct.product_id,
-            variant.variant_id,
-            variant.active,
-            newActive,
-            userEmail,
-            "variant"
-          );
-        }
-      }
+      const res = await fetch("/api/product-listing/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_variant_changes",
+          productId: viewProduct.product_id,
+          variants,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
       setEditMsg("Changes submitted for approval.");
       await loadAll();
     } catch {
@@ -213,10 +197,13 @@ export default function ProductsPage() {
   async function confirmDelete() {
     if (!deleteId) return;
     setDeleting(true);
-    const ok = await deleteProduct(deleteId);
+    const res = await fetch(`/api/product-listing/products?productId=${deleteId}`, {
+      method: "DELETE",
+    });
+    const json = res.ok ? await res.json() : { ok: false };
     setDeleting(false);
     setDeleteId(null);
-    if (ok) await loadAll();
+    if (json.ok) await loadAll();
   }
 
   const supplierName = useCallback(

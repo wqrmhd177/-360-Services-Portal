@@ -1,4 +1,5 @@
 import { normalizeCountryFilterParam } from "@/lib/country-normalization";
+import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { getLastSync, getOpsDb } from "@/lib/operations/opsDb";
 import { normalizeOptionalFilter } from "@/lib/orders/filteredItems";
 
@@ -44,6 +45,16 @@ export type NdStoreDetailRow = {
   status: NdRemarkStatus;
   remark_updated_by: string | null;
   remark_updated_at: string | null;
+};
+
+export type NdStuckOrderRow = {
+  order_id: number;
+  order_number: string | null;
+  approved_date: string | null;
+  sku: string;
+  nd_quantity: number;
+  store_id: number;
+  store_name: string | null;
 };
 
 export type NdMovementSuggestion = {
@@ -141,10 +152,13 @@ export async function getNdReportSummary(params: {
   });
 
   if (error) {
+    const msg = error.message;
     throw new Error(
-      error.message.includes("get_ops_nd_summary")
+      msg.includes("get_ops_nd_summary") || msg.includes("does not exist")
         ? "ND Report is not set up yet. Run setup_nd_report.sql on Supabase."
-        : error.message,
+        : msg.includes("remarks_text")
+          ? "ND Report RPC is out of date. Re-run patch_nd_report_enhancements.sql (step 13) or patch_nd_report_order_details.sql (step 16) on Supabase."
+          : msg,
     );
   }
 
@@ -183,6 +197,7 @@ export async function getNdSkuDetails(params: {
   toDate?: string | null;
 }): Promise<{
   rows: NdStoreDetailRow[];
+  stuckOrders: NdStuckOrderRow[];
   movementSuggestions: NdMovementSuggestion[];
 }> {
   const supabase = getOpsDb();
@@ -194,13 +209,14 @@ export async function getNdSkuDetails(params: {
     p_to_date: normalizeOptionalFilter(params.toDate),
   };
 
-  const [detailsRes, suggestionsRes] = await Promise.all([
+  const [detailsRes, suggestionsRes, stuckRes] = await Promise.all([
     supabase.rpc("get_ops_nd_sku_details", rpcFilters),
     supabase.rpc("get_ops_nd_movement_suggestions", {
       p_country: rpcFilters.p_country,
       p_bifurcation: rpcFilters.p_bifurcation,
       p_sku: rpcFilters.p_sku,
     }),
+    supabase.rpc("get_ops_nd_stuck_orders", rpcFilters),
   ]);
 
   if (detailsRes.error) {
@@ -209,12 +225,18 @@ export async function getNdSkuDetails(params: {
   if (suggestionsRes.error) {
     throw new Error(suggestionsRes.error.message);
   }
+  if (stuckRes.error) {
+    throw new Error(stuckRes.error.message);
+  }
 
   const rows = (Array.isArray(detailsRes.data) ? detailsRes.data : []).map(
     (row: Record<string, unknown>) => ({
       store_id: Number(row.store_id) || 0,
       user_id: row.user_id == null ? null : Number(row.user_id),
-      store_name: row.store_name == null ? null : String(row.store_name),
+      store_name:
+        row.store_name == null
+          ? null
+          : formatStoreDisplayName(String(row.store_name)),
       nd_orders: Number(row.nd_orders) || 0,
       nd_quantity: Number(row.nd_quantity) || 0,
       po_qty: row.po_qty == null ? null : Number(row.po_qty),
@@ -239,7 +261,22 @@ export async function getNdSkuDetails(params: {
     suggested_qty: Number(row.suggested_qty) || 0,
   }));
 
-  return { rows, movementSuggestions };
+  const stuckOrders = (Array.isArray(stuckRes.data) ? stuckRes.data : []).map(
+    (row: Record<string, unknown>) => ({
+      order_id: Number(row.order_id) || 0,
+      order_number: row.order_number == null ? null : String(row.order_number),
+      approved_date: row.approved_date == null ? null : String(row.approved_date),
+      sku: String(row.sku ?? params.sku),
+      nd_quantity: Number(row.nd_quantity) || 0,
+      store_id: Number(row.store_id) || 0,
+      store_name:
+        row.store_name == null
+          ? null
+          : formatStoreDisplayName(String(row.store_name)),
+    }),
+  );
+
+  return { rows, stuckOrders, movementSuggestions };
 }
 
 export async function upsertNdStoreRemark(params: {

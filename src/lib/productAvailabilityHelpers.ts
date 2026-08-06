@@ -1,4 +1,4 @@
-import { createSupabaseClient } from "./supabaseClient";
+import { createSupabaseServiceClient } from "./supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildRequestedByOwnerOrFilter,
@@ -7,7 +7,9 @@ import {
   resolveProductAvailabilityOwnerIds,
 } from "./permissions";
 
-const supabase = createSupabaseClient();
+function getDb(client?: SupabaseClient) {
+  return client ?? createSupabaseServiceClient();
+}
 
 export type ProductAvailabilityStatus = "pending" | "delayed" | "completed" | "cancelled";
 export type ProductStatusInput = "already_listed" | "not_listed" | "not_sure";
@@ -205,7 +207,7 @@ function countryMatchesMarket(market: string, country: string | null | undefined
 /** PostgREST rejects very large `.in()` filters — batch request IDs. */
 async function fetchResponsesForRequestIds(
   requestIds: string[],
-  db: SupabaseClient = supabase
+  db: SupabaseClient = getDb()
 ): Promise<ProductAvailabilityResponse[]> {
   if (requestIds.length === 0) return [];
 
@@ -286,7 +288,7 @@ function attachProductAvailabilityDetails(
 }
 
 export async function cancelProductAvailabilityRequest(requestId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getDb()
     .from("product_availability_requests")
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", requestId);
@@ -294,7 +296,7 @@ export async function cancelProductAvailabilityRequest(requestId: string): Promi
 }
 
 export async function requestAlternativeSearch(requestId: string, newRemarks: string): Promise<void> {
-  const { error } = await supabase.rpc("request_alternative_search", {
+  const { error } = await getDb().rpc("request_alternative_search", {
     p_request_id: requestId,
     p_new_remarks: newRemarks,
   });
@@ -303,7 +305,7 @@ export async function requestAlternativeSearch(requestId: string, newRemarks: st
 
 export async function maybeSyncDelayedRequests(): Promise<void> {
   const thresholdIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  await supabase
+  await getDb()
     .from("product_availability_requests")
     .update({ status: "delayed" })
     .eq("status", "pending")
@@ -325,7 +327,7 @@ export async function createProductAvailabilityRequest(
   }
 
   // Find the purchaser for this market using profiles table (email as identifier)
-  const { data: purchasers } = await supabase
+  const { data: purchasers } = await getDb()
     .from("profiles")
     .select("email, country")
     .eq("role", "purchaser");
@@ -334,7 +336,7 @@ export async function createProductAvailabilityRequest(
     countryMatchesMarket(normalizedMarket, p.country)
   );
 
-  const { data: createdRequest, error: requestError } = await supabase
+  const { data: createdRequest, error: requestError } = await getDb()
     .from("product_availability_requests")
     .insert([
       {
@@ -373,7 +375,7 @@ export async function fetchAllProductAvailabilityData(params: {
   userFriendlyId: string;
   supabaseClient?: SupabaseClient;
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
-  const db = params.supabaseClient ?? supabase;
+  const db = params.supabaseClient ?? getDb();
   const role = (params.userRole || "").toLowerCase();
   const scope = getProductAvailabilityDataScope(role);
   const userId = normalizeProductAvailabilityUserId(params.userFriendlyId);
@@ -497,7 +499,7 @@ export async function submitProductAvailabilityResponse(
     throw new Error("Single unit price is required for this stock status");
   }
 
-  const { error } = await supabase.rpc("submit_availability_response", {
+  const { error } = await getDb().rpc("submit_availability_response", {
     p_request_id: input.requestId,
     p_responded_by_user_id: input.respondedByUserId,
     p_availability: input.availability,
@@ -670,7 +672,7 @@ export async function submitDraftRequest(requestId: string, imageUrls: string[])
     throw new Error("Please attach between 1 and 5 photos before submitting");
   }
 
-  const { error } = await supabase
+  const { error } = await getDb()
     .from("product_availability_requests")
     .update({
       request_images: imageUrls,
@@ -690,7 +692,7 @@ export async function getPendingProductAvailabilityCount(
   const userId = normalizeProductAvailabilityUserId(userFriendlyId);
 
   if (scope === "market") {
-    const { data: mgrProfile } = await supabase
+    const { data: mgrProfile } = await getDb()
       .from("profiles")
       .select("country")
       .eq("email", userFriendlyId)
@@ -699,7 +701,7 @@ export async function getPendingProductAvailabilityCount(
     const mgrMarket = Object.entries(MARKET_TO_COUNTRY_KEYWORDS).find(([, keywords]) =>
       keywords.some((k) => mgrCountry.includes(k))
     )?.[0];
-    let q = supabase
+    let q = getDb()
       .from("product_availability_requests")
       .select("*", { count: "exact", head: true })
       .eq("is_draft", false);
@@ -708,7 +710,7 @@ export async function getPendingProductAvailabilityCount(
     return count ?? 0;
   }
 
-  let q = supabase
+  let q = getDb()
     .from("product_availability_requests")
     .select("*", { count: "exact", head: true });
 

@@ -50,6 +50,7 @@ function countOrdersInGroups(groups: OperationsStatusOrderUserGroup[]): number {
 
 // ── grouped order list ────────────────────────────────────────────────────────
 
+
 function OrderGroupList({ orderGroups }: { orderGroups: OperationsStatusOrderUserGroup[] }) {
   if (orderGroups.length === 0) {
     return (
@@ -58,47 +59,40 @@ function OrderGroupList({ orderGroups }: { orderGroups: OperationsStatusOrderUse
   }
 
   return (
-    <div className="space-y-2 py-2">
-      {orderGroups.map((user) => {
+    <ul className="space-y-1.5 py-2">
+      {orderGroups.flatMap((user) => {
         const userKey = user.userId ?? "unknown";
-        const totalOrders = user.skus.reduce((sum, s) => sum + s.orderIds.length, 0);
-        return (
-          <div
-            key={userKey}
-            className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-2"
+        return user.skus.map((skuGroup) => (
+          <li
+            key={`${userKey}-${skuGroup.sku}-${skuGroup.bifurcation ?? ""}`}
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-[var(--card-border)] bg-[var(--card)] px-2.5 py-1.5 text-xs"
           >
-            <p className="text-xs font-semibold text-[var(--foreground)]">
+            <span className="font-semibold text-[var(--foreground)]">
               User ID{" "}
-              <span className="font-mono tabular-nums">
-                {user.userId ?? "—"}
-              </span>
-              <span className="ml-2 font-normal text-[var(--muted)]">
-                ({formatNumber(totalOrders)} order{totalOrders === 1 ? "" : "s"})
-              </span>
-            </p>
-            <div className="mt-2 space-y-2">
-              {user.skus.map((skuGroup) => (
-                <div key={`${userKey}-${skuGroup.sku}-${skuGroup.bifurcation ?? ""}`}>
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                    {skuGroup.sku}
-                  </p>
-                  <ul className="mt-1 flex flex-wrap gap-1.5">
-                    {skuGroup.orderIds.map((id) => (
-                      <li
-                        key={id}
-                        className="rounded-md border border-[var(--card-border)] bg-[var(--table-header)]/50 px-2 py-0.5 font-mono text-xs tabular-nums text-[var(--foreground)]"
-                      >
-                        {id}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <span className="font-mono tabular-nums">{user.userId ?? "—"}</span>
+            </span>
+            <span className="text-[var(--muted)]">·</span>
+            <span
+              className="max-w-[200px] truncate font-mono text-[10px] uppercase tracking-wide text-[var(--muted)]"
+              title={skuGroup.sku}
+            >
+              {skuGroup.sku}
+            </span>
+            <span className="text-[var(--muted)]">·</span>
+            <span className="flex flex-wrap gap-1">
+              {skuGroup.orderIds.map((id) => (
+                <span
+                  key={id}
+                  className="rounded border border-[var(--card-border)] bg-[var(--table-header)]/50 px-1.5 py-0.5 font-mono tabular-nums text-[var(--foreground)]"
+                >
+                  {id}
+                </span>
               ))}
-            </div>
-          </div>
-        );
+            </span>
+          </li>
+        ));
       })}
-    </div>
+    </ul>
   );
 }
 
