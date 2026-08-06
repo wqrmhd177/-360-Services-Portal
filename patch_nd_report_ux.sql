@@ -349,8 +349,6 @@ AS $$
       AND COALESCE(NULLIF(TRIM(o.bifurcation), ''), '') = p.bifurcation
       AND UPPER(TRIM(o.sku)) = p.sku
       AND o.order_id IS NOT NULL
-      AND (p_from_date IS NULL OR o.order_date_day >= p_from_date)
-      AND (p_to_date IS NULL OR o.order_date_day <= p_to_date)
   ),
   store_status AS (
     SELECT

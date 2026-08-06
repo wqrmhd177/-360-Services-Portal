@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { Eye } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { NdSkuDetailsDialog } from "@/components/operations/NdSkuDetailsDialog";
 import type { NdSkuSummaryRow } from "@/lib/operations/ndReport";
@@ -65,7 +65,9 @@ export function NdReportTable({
                 <th className="px-2 py-2 text-right sm:px-3">ND Qty</th>
                 <th className="px-2 py-2 text-right sm:px-3">PO Qty</th>
                 <th className="px-2 py-2 text-right sm:px-3">Movement Qty</th>
-                <th className="w-20 px-2 py-2 text-center sm:px-3">Details</th>
+                <th className="w-12 px-2 py-2 text-center sm:px-3">
+                  <span className="sr-only">Details</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -102,10 +104,11 @@ export function NdReportTable({
                     <button
                       type="button"
                       onClick={() => openDetails(row)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--card-border)] px-2 py-0.5 text-[10px] font-medium hover:bg-[var(--table-header)] sm:px-2.5 sm:py-1 sm:text-xs"
+                      aria-label={`View details for ${row.sku}`}
+                      title="View details"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--card-border)] text-[var(--muted)] transition-colors hover:bg-[var(--table-header)] hover:text-[var(--foreground)]"
                     >
-                      View
-                      <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      <Eye className="h-4 w-4" strokeWidth={2} />
                     </button>
                   </td>
                 </tr>

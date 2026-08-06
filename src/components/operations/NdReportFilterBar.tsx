@@ -88,8 +88,7 @@ function NdReportFilterBarInner({ options }: { options: FilterOptions }) {
   }, [pathname, router]);
 
   return (
-    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm">
-      <div className="flex flex-wrap items-end gap-2 lg:flex-nowrap lg:gap-3">
+    <div className="flex flex-wrap items-end gap-2 lg:flex-nowrap lg:gap-3">
         <div className="min-w-[10rem] flex-1">
           <FilterMultiSelect
             label="Country"
@@ -156,7 +155,6 @@ function NdReportFilterBarInner({ options }: { options: FilterOptions }) {
           </button>
         </div>
       </div>
-    </div>
   );
 }
 

@@ -1,13 +1,17 @@
+import NdReportFilterBar from "@/components/operations/NdReportFilterBar";
 import { NdReportPaginationClient } from "@/components/operations/NdReportPaginationClient";
 import { NdReportTable } from "@/components/operations/NdReportTable";
 import { KpiCard, KPI_COMPACT_GRID_CLASS } from "@/components/orders/kpi-card";
 import { getNdReportSummaryCached } from "@/lib/operations/cache";
+import { formatPortalSyncLabel } from "@/lib/portalTimezone";
 import { formatNumber } from "@/lib/utils";
 
 export async function NdReportSection({
   searchParams,
+  filterOptions,
 }: {
   searchParams: Record<string, string | string[] | undefined>;
+  filterOptions: { countries: string[]; bifurcations: string[] };
 }) {
   const from = typeof searchParams.from === "string" ? searchParams.from : "";
   const to = typeof searchParams.to === "string" ? searchParams.to : "";
@@ -34,8 +38,18 @@ export async function NdReportSection({
     sortDir: "desc",
   });
 
+  const ndSyncLabel = formatPortalSyncLabel(
+    result.mvRefreshedAt,
+    "ND data last updated",
+  );
+  const inventorySyncLabel = formatPortalSyncLabel(
+    result.inventoryRefreshedAt,
+    "Inventory last synced",
+  );
+  const syncLine = [ndSyncLabel, inventorySyncLabel].filter(Boolean).join(" · ");
+
   return (
-    <>
+    <div className="space-y-2">
       <div className={KPI_COMPACT_GRID_CLASS}>
         <KpiCard compact title="ND SKUs" value={formatNumber(result.totals.nd_skus)} variant="items" />
         <KpiCard
@@ -58,6 +72,12 @@ export async function NdReportSection({
         />
       </div>
 
+      <NdReportFilterBar options={filterOptions} />
+
+      {syncLine ? (
+        <p className="text-[11px] text-[var(--muted)]">{syncLine}</p>
+      ) : null}
+
       <NdReportTable rows={result.data} filterQuery={filterQuery.toString()} />
 
       <NdReportPaginationClient
@@ -66,6 +86,6 @@ export async function NdReportSection({
         totalRecords={result.totalRecords}
         filterQuery={filterQuery.toString()}
       />
-    </>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { normalizeCountryFilterParam } from "@/lib/country-normalization";
+import { normalizeCountryFilterParam, countryFilterVariants } from "@/lib/country-normalization";
 import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { getLastSync, getOpsDb } from "@/lib/operations/opsDb";
 import { normalizeOptionalFilter } from "@/lib/orders/filteredItems";
@@ -160,6 +160,87 @@ function mapRemarkStatus(value: unknown): NdRemarkStatus {
   return "Open";
 }
 
+function isFaTag(tag: unknown): boolean {
+  const t = tag == null ? "" : String(tag).trim();
+  return t !== "" && t.toUpperCase().startsWith("FA");
+}
+
+/** Undelivered / Returning qty from live orders — status only, no date filter. */
+async function fetchSkuStatusQuantities(params: {
+  sku: string;
+  country: string;
+  bifurcation: string;
+}): Promise<{
+  skuTotals: NdSkuOrderTotals;
+  byStore: Map<number, { undelivered_qty: number; returning_qty: number }>;
+}> {
+  const supabase = getOpsDb();
+  const countryNorm = normalizeCountryFilterParam(params.country) ?? params.country;
+  const bifurcation = normalizeOptionalFilter(params.bifurcation) ?? "";
+  const skuUpper = params.sku.trim().toUpperCase();
+  const countryVariants = countryFilterVariants(countryNorm);
+
+  const byStore = new Map<number, { undelivered_qty: number; returning_qty: number }>();
+  let undeliveredTotal = 0;
+  let returningTotal = 0;
+
+  const pageSize = 1000;
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase
+      .from("ops_orders_items")
+      .select("store_id, quantity, status, tag, bifurcation, sku")
+      .in("status", ["Undelivered", "Return in Transit"])
+      .ilike("sku", params.sku.trim())
+      .range(offset, offset + pageSize - 1);
+
+    if (countryVariants.length > 0) {
+      query = query.in("country", countryVariants);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const batch = data ?? [];
+    for (const row of batch) {
+      if ((row.sku ?? "").trim().toUpperCase() !== skuUpper) continue;
+      if ((row.bifurcation ?? "").trim() !== bifurcation) continue;
+
+      const qty = Number(row.quantity) || 0;
+      const storeId = Number(row.store_id) || 0;
+      const status = String(row.status ?? "");
+
+      if (!byStore.has(storeId)) {
+        byStore.set(storeId, { undelivered_qty: 0, returning_qty: 0 });
+      }
+      const entry = byStore.get(storeId)!;
+
+      if (status === "Undelivered" && !isFaTag(row.tag)) {
+        entry.undelivered_qty += qty;
+        undeliveredTotal += qty;
+      } else if (status === "Return in Transit") {
+        entry.returning_qty += qty;
+        returningTotal += qty;
+      }
+    }
+
+    hasMore = batch.length === pageSize;
+    offset += pageSize;
+  }
+
+  return {
+    skuTotals: {
+      undelivered_qty: undeliveredTotal,
+      returning_qty: returningTotal,
+    },
+    byStore,
+  };
+}
+
 export async function getNdReportSummary(params: {
   filters: NdReportFilters;
   page?: number;
@@ -246,7 +327,7 @@ export async function getNdSkuDetails(params: {
     p_to_date: normalizeOptionalFilter(params.toDate),
   };
 
-  const [detailsRes, suggestionsRes, stuckRes] = await Promise.all([
+  const [detailsRes, suggestionsRes, stuckRes, statusQty] = await Promise.all([
     supabase.rpc("get_ops_nd_sku_details", rpcFilters),
     supabase.rpc("get_ops_nd_movement_suggestions", {
       p_country: rpcFilters.p_country,
@@ -254,6 +335,11 @@ export async function getNdSkuDetails(params: {
       p_sku: rpcFilters.p_sku,
     }),
     supabase.rpc("get_ops_nd_stuck_orders", rpcFilters),
+    fetchSkuStatusQuantities({
+      sku: params.sku,
+      country: params.country,
+      bifurcation: params.bifurcation,
+    }),
   ]);
 
   if (detailsRes.error) {
@@ -277,13 +363,11 @@ export async function getNdSkuDetails(params: {
       ? (detailsPayload.rows as Record<string, unknown>[])
       : [];
 
-  const skuTotalsRaw =
-    detailsPayload && !Array.isArray(detailsPayload)
-      ? (detailsPayload.sku_totals as Record<string, unknown> | undefined)
-      : undefined;
-
-  const rows = detailRows.map((row: Record<string, unknown>) => ({
-      store_id: Number(row.store_id) || 0,
+  const rows = detailRows.map((row: Record<string, unknown>) => {
+    const storeId = Number(row.store_id) || 0;
+    const storeStatus = statusQty.byStore.get(storeId);
+    return {
+      store_id: storeId,
       user_id: row.user_id == null ? null : Number(row.user_id),
       store_name:
         row.store_name == null
@@ -291,8 +375,8 @@ export async function getNdSkuDetails(params: {
           : formatStoreDisplayName(String(row.store_name)),
       nd_orders: Number(row.nd_orders) || 0,
       nd_quantity: Number(row.nd_quantity) || 0,
-      undelivered_qty: Number(row.undelivered_qty) || 0,
-      returning_qty: Number(row.returning_qty) || 0,
+      undelivered_qty: storeStatus?.undelivered_qty ?? 0,
+      returning_qty: storeStatus?.returning_qty ?? 0,
       ops_remarks: row.ops_remarks == null ? null : String(row.ops_remarks),
       growth_feedback:
         row.growth_feedback == null ? null : String(row.growth_feedback),
@@ -301,8 +385,8 @@ export async function getNdSkuDetails(params: {
         row.remark_updated_by == null ? null : String(row.remark_updated_by),
       remark_updated_at:
         row.remark_updated_at == null ? null : String(row.remark_updated_at),
-    }),
-  );
+    };
+  });
 
   const movementSuggestions = (
     Array.isArray(suggestionsRes.data) ? suggestionsRes.data : []
@@ -331,10 +415,7 @@ export async function getNdSkuDetails(params: {
     rows,
     stuckOrders,
     movementSuggestions,
-    skuTotals: {
-      undelivered_qty: Number(skuTotalsRaw?.undelivered_qty) || 0,
-      returning_qty: Number(skuTotalsRaw?.returning_qty) || 0,
-    },
+    skuTotals: statusQty.skuTotals,
   };
 }
 
