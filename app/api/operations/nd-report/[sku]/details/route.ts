@@ -34,7 +34,9 @@ export async function GET(
       ok: true,
       sku: decodeURIComponent(sku),
       rows: result.rows,
+      stuck_orders: result.stuckOrders,
       movement_suggestions: result.movementSuggestions,
+      sku_totals: result.skuTotals,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to load SKU details";

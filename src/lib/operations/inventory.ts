@@ -6,9 +6,21 @@ export interface InventoryRow {
   product_name: string;
   sku: string;
   available_quantity: number;
+  po_quantity: number;
+  movement_quantity: number;
   country: string;
   category: string;
   fulfilment_route?: string | null;
+}
+
+function numericField(row: Record<string, unknown>, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = row[key];
+    if (value == null || value === "") continue;
+    const num = Number(value);
+    if (!Number.isNaN(num)) return num;
+  }
+  return 0;
 }
 
 export function normalizeSku(value: string): string {
@@ -64,6 +76,22 @@ export function normalizeInventoryRows(raw: unknown): InventoryRow[] {
         product_name: String(r.sku_title ?? ""),
         sku: normalizeSku(rawSku) || rawSku.trim(),
         available_quantity: Number(r.quantity ?? 0),
+        po_quantity: numericField(
+          r,
+          "po_quantity",
+          "po_qty",
+          "PO_quantity",
+          "PO Qty",
+          "po quantity",
+        ),
+        movement_quantity: numericField(
+          r,
+          "movement_quantity",
+          "movement_qty",
+          "in_transit_quantity",
+          "Movement Qty",
+          "movement quantity",
+        ),
         country: String(r.warehouse_name ?? r.Warehouse_name ?? ""),
         category: String(r.category ?? r.Category ?? ""),
       };

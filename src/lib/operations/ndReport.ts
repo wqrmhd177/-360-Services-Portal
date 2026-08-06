@@ -18,11 +18,20 @@ export type NdSkuSummaryRow = {
   bifurcation: string;
   sku: string;
   title: string;
-  nd_orders: number;
   nd_quantity: number;
-  store_count: number;
   fulfilment_route: string | null;
-  suggestion_count: number;
+  min_nd_date: string | null;
+  po_qty: number;
+  movement_qty: number;
+  /** @deprecated retained for KPI totals only */
+  nd_orders?: number;
+  store_count?: number;
+  suggestion_count?: number;
+};
+
+export type NdSkuOrderTotals = {
+  undelivered_qty: number;
+  returning_qty: number;
 };
 
 export type NdReportTotals = {
@@ -38,8 +47,8 @@ export type NdStoreDetailRow = {
   store_name: string | null;
   nd_orders: number;
   nd_quantity: number;
-  po_qty: number | null;
-  in_transit_inventory: number | null;
+  undelivered_qty: number;
+  returning_qty: number;
   ops_remarks: string | null;
   growth_feedback: string | null;
   status: NdRemarkStatus;
@@ -95,9 +104,20 @@ type RpcSummaryPayload = {
   mv_refreshed_at?: string | null;
 };
 
+function normalizeCountryListParam(
+  country: string | null | undefined,
+): string | null {
+  if (!country?.trim()) return null;
+  const parts = country
+    .split(",")
+    .map((part) => normalizeCountryFilterParam(part.trim()) ?? part.trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(",") : null;
+}
+
 function toRpcFilters(filters: NdReportFilters) {
   return {
-    p_country: normalizeCountryFilterParam(filters.country),
+    p_country: normalizeCountryListParam(filters.country),
     p_bifurcation: normalizeOptionalFilter(filters.bifurcation),
     p_from_date: normalizeOptionalFilter(filters.fromDate),
     p_to_date: normalizeOptionalFilter(filters.toDate),
@@ -111,11 +131,27 @@ function mapSummaryRow(row: NdSkuSummaryRow): NdSkuSummaryRow {
     bifurcation: String(row.bifurcation ?? ""),
     sku: String(row.sku ?? ""),
     title: String(row.title ?? ""),
-    nd_orders: Number(row.nd_orders) || 0,
     nd_quantity: Number(row.nd_quantity) || 0,
-    store_count: Number(row.store_count) || 0,
     fulfilment_route: row.fulfilment_route ?? null,
-    suggestion_count: Number(row.suggestion_count) || 0,
+    min_nd_date: row.min_nd_date == null ? null : String(row.min_nd_date),
+    po_qty: Number(row.po_qty) || 0,
+    movement_qty: Number(row.movement_qty) || 0,
+  };
+}
+
+export async function getNdSyncTimestamps(): Promise<{
+  mvRefreshedAt: string | null;
+  inventoryRefreshedAt: string | null;
+}> {
+  const supabase = getOpsDb();
+  const [{ data: mvData }, inventorySync] = await Promise.all([
+    supabase.from("ops_nd_sku_summary").select("mv_refreshed_at").limit(1).maybeSingle(),
+    getLastSync("inventory"),
+  ]);
+
+  return {
+    mvRefreshedAt: (mvData as { mv_refreshed_at?: string } | null)?.mv_refreshed_at ?? null,
+    inventoryRefreshedAt: inventorySync?.synced_at ?? null,
   };
 }
 
@@ -199,6 +235,7 @@ export async function getNdSkuDetails(params: {
   rows: NdStoreDetailRow[];
   stuckOrders: NdStuckOrderRow[];
   movementSuggestions: NdMovementSuggestion[];
+  skuTotals: NdSkuOrderTotals;
 }> {
   const supabase = getOpsDb();
   const rpcFilters = {
@@ -229,8 +266,23 @@ export async function getNdSkuDetails(params: {
     throw new Error(stuckRes.error.message);
   }
 
-  const rows = (Array.isArray(detailsRes.data) ? detailsRes.data : []).map(
-    (row: Record<string, unknown>) => ({
+  const detailsPayload = detailsRes.data as
+    | Record<string, unknown>
+    | NdStoreDetailRow[]
+    | null;
+
+  const detailRows = Array.isArray(detailsPayload)
+    ? detailsPayload
+    : Array.isArray(detailsPayload?.rows)
+      ? (detailsPayload.rows as Record<string, unknown>[])
+      : [];
+
+  const skuTotalsRaw =
+    detailsPayload && !Array.isArray(detailsPayload)
+      ? (detailsPayload.sku_totals as Record<string, unknown> | undefined)
+      : undefined;
+
+  const rows = detailRows.map((row: Record<string, unknown>) => ({
       store_id: Number(row.store_id) || 0,
       user_id: row.user_id == null ? null : Number(row.user_id),
       store_name:
@@ -239,9 +291,8 @@ export async function getNdSkuDetails(params: {
           : formatStoreDisplayName(String(row.store_name)),
       nd_orders: Number(row.nd_orders) || 0,
       nd_quantity: Number(row.nd_quantity) || 0,
-      po_qty: row.po_qty == null ? null : Number(row.po_qty),
-      in_transit_inventory:
-        row.in_transit_inventory == null ? null : Number(row.in_transit_inventory),
+      undelivered_qty: Number(row.undelivered_qty) || 0,
+      returning_qty: Number(row.returning_qty) || 0,
       ops_remarks: row.ops_remarks == null ? null : String(row.ops_remarks),
       growth_feedback:
         row.growth_feedback == null ? null : String(row.growth_feedback),
@@ -276,7 +327,15 @@ export async function getNdSkuDetails(params: {
     }),
   );
 
-  return { rows, stuckOrders, movementSuggestions };
+  return {
+    rows,
+    stuckOrders,
+    movementSuggestions,
+    skuTotals: {
+      undelivered_qty: Number(skuTotalsRaw?.undelivered_qty) || 0,
+      returning_qty: Number(skuTotalsRaw?.returning_qty) || 0,
+    },
+  };
 }
 
 export async function upsertNdStoreRemark(params: {
@@ -479,4 +538,8 @@ export async function getInventoryFulfilmentRouteLogs(
   }));
 }
 
-export { formatPortalTimestamp, formatPortalTimestamp as formatPstTimestamp } from "@/lib/portalTimezone";
+export {
+  formatPortalTimestamp,
+  formatPortalTimestamp as formatPstTimestamp,
+  formatPortalSyncLabel,
+} from "@/lib/portalTimezone";

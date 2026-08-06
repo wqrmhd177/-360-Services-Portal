@@ -48,6 +48,8 @@ export async function syncInventoryFromMetabase(): Promise<{
         product_name: r.product_name,
         sku: r.sku,
         available_quantity: r.available_quantity,
+        po_quantity: r.po_quantity,
+        movement_quantity: r.movement_quantity,
         country: r.country,
         category: r.category,
         synced_at: syncedAt,
@@ -99,6 +101,8 @@ export async function fetchInventoryPage(
     product_name: String(r.product_name ?? ""),
     sku: String(r.sku ?? ""),
     available_quantity: Number(r.available_quantity ?? 0),
+    po_quantity: Number(r.po_quantity ?? 0),
+    movement_quantity: Number(r.movement_quantity ?? 0),
     country: String(r.country ?? ""),
     category: String(r.category ?? ""),
   }));

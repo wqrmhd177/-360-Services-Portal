@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import SkuPerformanceFilterBar from "@/components/operations/SkuPerformanceFilterBar";
+import NdReportFilterBar from "@/components/operations/NdReportFilterBar";
 import { NdReportSection } from "@/components/operations/NdReportSection";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
-import { getNdFilterOptions } from "@/lib/operations/ndReport";
+import { getNdFilterOptions, getNdSyncTimestamps } from "@/lib/operations/ndReport";
+import { formatPortalSyncLabel } from "@/lib/portalTimezone";
 import { dedupeCountryFilterOptions } from "@/lib/country-normalization";
 import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
 import { getPortalSession } from "@/lib/session";
@@ -51,19 +52,32 @@ export default async function OperationsNdReportPage({
   }
 
   const sp = mergeSearchParams(await searchParams);
-  const filterOptions = await loadFilterOptions();
+  const [filterOptions, syncTimestamps] = await Promise.all([
+    loadFilterOptions(),
+    getNdSyncTimestamps(),
+  ]);
+
+  const ndSyncLabel = formatPortalSyncLabel(
+    syncTimestamps.mvRefreshedAt,
+    "ND data last updated",
+  );
+  const inventorySyncLabel = formatPortalSyncLabel(
+    syncTimestamps.inventoryRefreshedAt,
+    "Inventory last synced",
+  );
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold text-[var(--foreground)]">ND Report</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Approved orders that cannot be fulfilled from available inventory. Order date filter uses
-          order date; allocation is FIFO by approved date.
-        </p>
+        {(ndSyncLabel || inventorySyncLabel) && (
+          <p className="text-xs text-[var(--muted)]">
+            {[ndSyncLabel, inventorySyncLabel].filter(Boolean).join(" · ")}
+          </p>
+        )}
       </div>
 
-      <SkuPerformanceFilterBar
+      <NdReportFilterBar
         options={{
           countries: filterOptions.countries,
           bifurcations: filterOptions.bifurcations,

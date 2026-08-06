@@ -1,7 +1,8 @@
 import { NdReportPaginationClient } from "@/components/operations/NdReportPaginationClient";
 import { NdReportTable } from "@/components/operations/NdReportTable";
+import { KpiCard, KPI_COMPACT_GRID_CLASS } from "@/components/orders/kpi-card";
 import { getNdReportSummaryCached } from "@/lib/operations/cache";
-import { formatPstTimestamp } from "@/lib/operations/ndReport";
+import { formatNumber } from "@/lib/utils";
 
 export async function NdReportSection({
   searchParams,
@@ -35,20 +36,29 @@ export async function NdReportSection({
 
   return (
     <>
-      <div className="space-y-1 text-xs text-[var(--muted)]">
-        {result.mvRefreshedAt ? (
-          <p>ND data refreshed: {formatPstTimestamp(result.mvRefreshedAt)}</p>
-        ) : null}
-        {result.inventoryRefreshedAt ? (
-          <p>Inventory synced: {formatPstTimestamp(result.inventoryRefreshedAt)}</p>
-        ) : null}
+      <div className={KPI_COMPACT_GRID_CLASS}>
+        <KpiCard compact title="ND SKUs" value={formatNumber(result.totals.nd_skus)} variant="items" />
+        <KpiCard
+          compact
+          title="ND Orders"
+          value={formatNumber(result.totals.nd_orders)}
+          variant="orders"
+        />
+        <KpiCard
+          compact
+          title="ND Quantity"
+          value={formatNumber(result.totals.nd_quantity)}
+          variant="units"
+        />
+        <KpiCard
+          compact
+          title="Affected Stores"
+          value={formatNumber(result.totals.affected_stores)}
+          variant="delivered"
+        />
       </div>
 
-      <NdReportTable
-        rows={result.data}
-        totals={result.totals}
-        filterQuery={filterQuery.toString()}
-      />
+      <NdReportTable rows={result.data} filterQuery={filterQuery.toString()} />
 
       <NdReportPaginationClient
         currentPage={page}

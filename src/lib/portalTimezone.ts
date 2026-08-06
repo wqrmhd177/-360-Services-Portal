@@ -143,6 +143,15 @@ export function formatPortalTimestamp(iso: string | null): string {
   }
 }
 
+/** User-friendly sync label for portal pages (Pacific Time). */
+export function formatPortalSyncLabel(
+  iso: string | null | undefined,
+  prefix: string,
+): string | null {
+  if (!iso) return null;
+  return `${prefix}: ${formatPortalTimestamp(iso)}`;
+}
+
 /** Format a portal yyyy-MM-dd calendar day in PST/PDT (not browser local or UTC). */
 export function formatPortalYmdLabel(
   ymd: string,

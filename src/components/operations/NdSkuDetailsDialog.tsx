@@ -5,13 +5,11 @@ import { History, Package, X, ChevronDown, ChevronRight } from "lucide-react";
 import { PortalDialogLoading } from "@/components/layout/portal-loading";
 import { NdRemarkHistoryModal } from "@/components/operations/NdRemarkHistoryModal";
 import { NdStoreOrdersInline } from "@/components/operations/NdStoreOrdersInline";
-import {
-  NdRemarkStatusCell,
-  NdRemarkTextCell,
-} from "@/components/operations/NdStoreRemarkEditor";
+import { NdRemarkTextCell } from "@/components/operations/NdStoreRemarkEditor";
 import type {
   NdMovementSuggestion,
   NdRemarkStatus,
+  NdSkuOrderTotals,
   NdSkuSummaryRow,
   NdStuckOrderRow,
   NdStoreDetailRow,
@@ -36,6 +34,10 @@ export function NdSkuDetailsDialog({
   const [stores, setStores] = useState<NdStoreDetailRow[]>([]);
   const [stuckOrders, setStuckOrders] = useState<NdStuckOrderRow[]>([]);
   const [suggestions, setSuggestions] = useState<NdMovementSuggestion[]>([]);
+  const [skuTotals, setSkuTotals] = useState<NdSkuOrderTotals>({
+    undelivered_qty: 0,
+    returning_qty: 0,
+  });
   const [historyStore, setHistoryStore] = useState<NdStoreDetailRow | null>(null);
   const [expandedStoreId, setExpandedStoreId] = useState<number | null>(null);
 
@@ -70,12 +72,17 @@ export function NdSkuDetailsDialog({
         setStores(json.rows ?? []);
         setStuckOrders(json.stuck_orders ?? []);
         setSuggestions(json.movement_suggestions ?? []);
+        setSkuTotals({
+          undelivered_qty: Number(json.sku_totals?.undelivered_qty) || 0,
+          returning_qty: Number(json.sku_totals?.returning_qty) || 0,
+        });
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load details");
         setStores([]);
         setStuckOrders([]);
         setSuggestions([]);
+        setSkuTotals({ undelivered_qty: 0, returning_qty: 0 });
       } finally {
         setLoading(false);
       }
@@ -88,6 +95,7 @@ export function NdSkuDetailsDialog({
       setStores([]);
       setStuckOrders([]);
       setSuggestions([]);
+      setSkuTotals({ undelivered_qty: 0, returning_qty: 0 });
       setError(null);
       setHistoryStore(null);
       setExpandedStoreId(null);
@@ -99,15 +107,17 @@ export function NdSkuDetailsDialog({
     return () => controller.abort();
   }, [open, row, fetchDetails]);
 
-  const totals = useMemo(
+  const ndTotals = useMemo(
     () => ({
       ndOrders: stores.reduce((sum, s) => sum + s.nd_orders, 0),
       ndQuantity: stores.reduce((sum, s) => sum + s.nd_quantity, 0),
-      inTransit: stores.reduce((sum, s) => sum + (s.in_transit_inventory ?? 0), 0),
-      poQty: stores.reduce((sum, s) => sum + (s.po_qty ?? 0), 0),
     }),
     [stores],
   );
+
+  const headerLine = row
+    ? [row.title, row.sku, row.country, row.bifurcation].filter(Boolean).join(" · ")
+    : "";
 
   const saveStoreRemark = useCallback(
     async (
@@ -202,29 +212,22 @@ export function NdSkuDetailsDialog({
             "sm:max-h-[min(90vh,44rem)] sm:max-w-6xl sm:rounded-2xl",
           )}
         >
-          <div className="relative flex shrink-0 items-start gap-3 border-b border-[var(--card-border)] px-5 py-4">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+          <div className="relative flex shrink-0 items-center gap-3 border-b border-[var(--card-border)] px-5 py-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
               <Package className="h-4 w-4 text-amber-600" strokeWidth={2.5} />
             </div>
-            <div className="min-w-0 flex-1">
-              <h2
-                id="nd-details-dialog-title"
-                className="truncate text-base font-semibold tracking-tight text-[var(--foreground)]"
-                title={row.title}
-              >
-                {row.title}
-              </h2>
-              <p className="mt-0.5 font-mono text-xs text-[var(--muted)]">{row.sku}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {row.country}
-                {row.bifurcation ? ` · ${row.bifurcation}` : ""}
-              </p>
-            </div>
+            <h2
+              id="nd-details-dialog-title"
+              className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-[var(--foreground)]"
+              title={headerLine}
+            >
+              {headerLine}
+            </h2>
             <button
               type="button"
               onClick={requestClose}
               aria-label="Close"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--card-border)] bg-[var(--card)] text-[var(--muted)] shadow-sm transition-colors hover:bg-[var(--table-header)] hover:text-[var(--foreground)]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--card-border)] bg-[var(--card)] text-[var(--muted)] shadow-sm transition-colors hover:bg-[var(--table-header)] hover:text-[var(--foreground)]"
             >
               <X className="h-4 w-4" strokeWidth={2.5} />
             </button>
@@ -250,7 +253,7 @@ export function NdSkuDetailsDialog({
             ) : null}
 
             {!loading && !error && suggestions.length > 0 ? (
-              <div className="border-b border-[var(--card-border)] px-5 py-4">
+              <div className="border-b border-[var(--card-border)] px-5 py-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                   Movement Suggestions
                 </h3>
@@ -280,18 +283,18 @@ export function NdSkuDetailsDialog({
 
             {!loading && !error && stores.length > 0 ? (
               <>
-                <div className="border-b border-[var(--card-border)] bg-gradient-to-r from-[var(--table-header)]/60 to-[var(--table-header)]/20 px-5 py-3">
+                <div className="border-b border-[var(--card-border)] bg-gradient-to-r from-[var(--table-header)]/60 to-[var(--table-header)]/20 px-5 py-2.5">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                       Totals
                     </span>
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex flex-wrap gap-3">
                       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-1.5">
                         <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
                           ND Orders
                         </p>
                         <p className="text-sm font-semibold tabular-nums">
-                          {formatNumber(totals.ndOrders)}
+                          {formatNumber(ndTotals.ndOrders)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-1.5">
@@ -299,39 +302,42 @@ export function NdSkuDetailsDialog({
                           ND Qty
                         </p>
                         <p className="text-sm font-semibold tabular-nums">
-                          {formatNumber(totals.ndQuantity)}
+                          {formatNumber(ndTotals.ndQuantity)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-1.5">
                         <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          PO Qty
+                          Undelivered Qty
                         </p>
-                        <p className="text-sm font-semibold tabular-nums text-[var(--muted)]">—</p>
+                        <p className="text-sm font-semibold tabular-nums">
+                          {formatNumber(skuTotals.undelivered_qty)}
+                        </p>
                       </div>
                       <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-3 py-1.5">
                         <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
-                          In-Transit
+                          Returning Qty
                         </p>
-                        <p className="text-sm font-semibold tabular-nums text-[var(--muted)]">—</p>
+                        <p className="text-sm font-semibold tabular-nums">
+                          {formatNumber(skuTotals.returning_qty)}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <table className="w-full min-w-[1100px] text-sm">
+                <table className="w-full min-w-[960px] text-sm">
                   <thead className="sticky top-0 z-10 border-b bg-[var(--table-header)] text-left text-[10px] uppercase tracking-wide text-[var(--muted)]">
                     <tr>
-                      <th className="px-4 py-3">Store Name</th>
-                      <th className="px-3 py-3">User ID</th>
-                      <th className="px-3 py-3">Store ID</th>
-                      <th className="px-3 py-3 text-right">ND Orders</th>
-                      <th className="px-3 py-3 text-right">ND Qty</th>
-                      <th className="px-3 py-3 text-right">PO Qty</th>
-                      <th className="px-3 py-3 text-right">In-Transit</th>
-                      <th className="px-3 py-3">Ops Remarks</th>
-                      <th className="px-3 py-3">Growth Feedback</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3 text-center">Log</th>
+                      <th className="px-4 py-2.5">Store Name</th>
+                      <th className="px-3 py-2.5">User ID</th>
+                      <th className="px-3 py-2.5">Store ID</th>
+                      <th className="px-3 py-2.5 text-right">ND Orders</th>
+                      <th className="px-3 py-2.5 text-right">ND Qty</th>
+                      <th className="px-3 py-2.5 text-right">Undelivered Qty</th>
+                      <th className="px-3 py-2.5 text-right">Returning Qty</th>
+                      <th className="px-3 py-2.5">Ops Remarks</th>
+                      <th className="px-3 py-2.5">Growth Feedback</th>
+                      <th className="px-3 py-2.5 text-center">Log</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -342,18 +348,16 @@ export function NdSkuDetailsDialog({
 
                       return (
                         <Fragment key={store.store_id}>
-                          <tr
-                            className="border-b border-[var(--card-border)] last:border-b-0 hover:bg-[var(--table-row-hover)]"
-                          >
+                          <tr className="border-b border-[var(--card-border)] last:border-b-0 hover:bg-[var(--table-row-hover)]">
                             <td
-                              className="max-w-[160px] truncate px-4 py-3 font-medium"
+                              className="max-w-[160px] truncate px-4 py-2 font-medium"
                               title={displayName !== "—" ? displayName : undefined}
                             >
                               {displayName}
                             </td>
-                            <td className="px-3 py-3 tabular-nums">{store.user_id ?? "—"}</td>
-                            <td className="px-3 py-3 tabular-nums">{store.store_id || "—"}</td>
-                            <td className="px-3 py-3 text-right tabular-nums">
+                            <td className="px-3 py-2 tabular-nums">{store.user_id ?? "—"}</td>
+                            <td className="px-3 py-2 tabular-nums">{store.store_id || "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
                               {store.nd_orders > 0 ? (
                                 <button
                                   type="button"
@@ -372,12 +376,16 @@ export function NdSkuDetailsDialog({
                                 formatNumber(store.nd_orders)
                               )}
                             </td>
-                            <td className="px-3 py-3 text-right tabular-nums">
+                            <td className="px-3 py-2 text-right tabular-nums">
                               {formatNumber(store.nd_quantity)}
                             </td>
-                            <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
-                            <td className="px-3 py-3 text-right text-[var(--muted)]">—</td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber(store.undelivered_qty)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatNumber(store.returning_qty)}
+                            </td>
+                            <td className="px-3 py-2">
                               <NdRemarkTextCell
                                 value={store.ops_remarks}
                                 placeholder="Ops remarks"
@@ -388,7 +396,7 @@ export function NdSkuDetailsDialog({
                                 }}
                               />
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-2">
                               <NdRemarkTextCell
                                 value={store.growth_feedback}
                                 placeholder="Growth feedback"
@@ -399,15 +407,7 @@ export function NdSkuDetailsDialog({
                                 }}
                               />
                             </td>
-                            <td className="px-3 py-3">
-                              <NdRemarkStatusCell
-                                value={store.status}
-                                onSave={async (next) => {
-                                  await saveStoreRemark(store, { status: next });
-                                }}
-                              />
-                            </td>
-                            <td className="px-3 py-3 text-center">
+                            <td className="px-3 py-2 text-center">
                               <button
                                 type="button"
                                 onClick={() => setHistoryStore(store)}
@@ -420,7 +420,7 @@ export function NdSkuDetailsDialog({
                           </tr>
                           {isExpanded ? (
                             <tr key={`${store.store_id}-orders`} className="bg-[var(--table-header)]/30">
-                              <td colSpan={11} className="px-4 pb-3 pt-0">
+                              <td colSpan={10} className="px-4 pb-3 pt-0">
                                 <NdStoreOrdersInline orders={storeOrders} />
                               </td>
                             </tr>

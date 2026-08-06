@@ -31,6 +31,16 @@ Open the **Supabase SQL Editor** and run each file **in this order**:
 15. **`patch_kpi_returning_status.sql`** — Orders in Returning card: `Return in Transit` only, aged from `final_action_date_undelivered` (rebuilds order-detail MVs + status drill-down RPC)
 16. **`patch_nd_report_order_details.sql`** — ND stuck-order list with approved dates; inventory-aware FIFO allocation (country+SKU pool fallback). **Approved status only**; only excess quantity (above available stock) counts as ND.
 17. **`patch_kpi_dispatching_shipment_date.sql`** — Dispatching KPI ages from `shipment_date_log`; drill-down day/country/total counts use unique `order_id` (no double-count for multi-SKU orders).
+18. **`patch_security_lockdown.sql`** — RLS on all public tables; revoke anon/authenticated; service role only (see [SECURITY_SETUP.md](./SECURITY_SETUP.md)).
+19. **`patch_nd_report_ux.sql`** — ND Report UX overhaul: inventory PO/Movement qty columns, rebuilt `ops_nd_sku_summary` MV (`min_nd_date`, `po_qty`, `movement_qty`), multi-select country/bifurcation filters, Undelivered/Returning qty in SKU details RPC. Run **after step 16**. Then refresh:
+
+```sql
+SELECT refresh_ops_orders_summaries_simple();
+REFRESH MATERIALIZED VIEW ops_nd_allocations;
+REFRESH MATERIALIZED VIEW ops_nd_sku_summary;
+```
+
+Re-run inventory sync after deploy so PO/Movement qty populate (Metabase must expose those fields when available).
 
 Then refresh materialized views once:
 

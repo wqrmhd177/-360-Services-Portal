@@ -1,17 +1,18 @@
 "use client";
 
 import type { NdStuckOrderRow } from "@/lib/operations/ndReport";
+import { formatPortalYmdMedium } from "@/lib/portalTimezone";
 import { formatNumber } from "@/lib/utils";
 
 function formatApprovedDate(value: string | null): string {
   if (!value) return "—";
+  const ymd = value.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    return formatPortalYmdMedium(ymd);
+  }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return value;
 }
 
 function sortOrders(orders: NdStuckOrderRow[]): NdStuckOrderRow[] {
@@ -47,7 +48,7 @@ export function NdStoreOrdersInline({ orders }: { orders: NdStuckOrderRow[] }) {
             key={`${order.order_id}-${order.store_id}-${order.sku}`}
             className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-[var(--card-border)]/60 bg-[var(--card)] px-2.5 py-1.5 text-xs"
           >
-            <span className="tabular-nums whitespace-nowrap text-[var(--foreground)]">
+            <span className="whitespace-nowrap tabular-nums text-[var(--foreground)]">
               {formatApprovedDate(order.approved_date)}
             </span>
             <span className="text-[var(--muted)]">·</span>

@@ -79,6 +79,8 @@ function sortMatches(query: string, rows: InventoryMatch[]): InventoryMatch[] {
       {
         sku: a.sku,
         available_quantity: a.quantity,
+        po_quantity: 0,
+        movement_quantity: 0,
         country: a.warehouse_name,
         category: a.category ?? "",
         user_id: "—",
@@ -88,6 +90,8 @@ function sortMatches(query: string, rows: InventoryMatch[]): InventoryMatch[] {
       {
         sku: b.sku,
         available_quantity: b.quantity,
+        po_quantity: 0,
+        movement_quantity: 0,
         country: b.warehouse_name,
         category: b.category ?? "",
         user_id: "—",
