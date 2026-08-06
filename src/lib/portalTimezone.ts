@@ -129,15 +129,33 @@ export function eachPortalCalendarDay(fromYmd: string, toYmd: string): string[] 
   return days;
 }
 
+export function parsePortalInstant(iso: string): Date | null {
+  const trimmed = iso.trim();
+  if (!trimmed) return null;
+
+  let normalized = trimmed;
+  if (normalized.includes(" ") && !normalized.includes("T")) {
+    normalized = normalized.replace(" ", "T");
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(normalized)) {
+    normalized = `${normalized}Z`;
+  }
+
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function formatPortalTimestamp(iso: string | null): string {
   if (!iso) return "—";
+  const d = parsePortalInstant(iso);
+  if (!d) return iso;
   try {
     return new Intl.DateTimeFormat("en-GB", {
       timeZone: PORTAL_TIMEZONE,
       dateStyle: "medium",
       timeStyle: "short",
       timeZoneName: "short",
-    }).format(new Date(iso));
+    }).format(d);
   } catch {
     return iso;
   }

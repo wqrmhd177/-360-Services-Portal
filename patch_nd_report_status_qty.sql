@@ -58,7 +58,13 @@ AS $$
       store_id,
       COALESCE(SUM(quantity) FILTER (
         WHERE status = 'Undelivered'
-          AND (tag IS NULL OR TRIM(tag) = '' OR tag NOT ILIKE 'FA%%')
+          AND (
+            tag IS NULL
+            OR TRIM(tag) = ''
+            OR tag ILIKE 'FA - Request to Return'
+            OR tag ILIKE 'FA - Hold for Working'
+            OR tag NOT ILIKE 'FA%%'
+          )
       ), 0)::INTEGER AS undelivered_qty,
       COALESCE(SUM(quantity) FILTER (
         WHERE status = 'Return in Transit'
@@ -70,7 +76,13 @@ AS $$
     SELECT
       COALESCE(SUM(quantity) FILTER (
         WHERE status = 'Undelivered'
-          AND (tag IS NULL OR TRIM(tag) = '' OR tag NOT ILIKE 'FA%%')
+          AND (
+            tag IS NULL
+            OR TRIM(tag) = ''
+            OR tag ILIKE 'FA - Request to Return'
+            OR tag ILIKE 'FA - Hold for Working'
+            OR tag NOT ILIKE 'FA%%'
+          )
       ), 0)::INTEGER AS undelivered_qty,
       COALESCE(SUM(quantity) FILTER (
         WHERE status = 'Return in Transit'

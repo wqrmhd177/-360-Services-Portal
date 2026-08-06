@@ -1,8 +1,10 @@
 "use client";
 
 import { Suspense, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import DashboardHeader from "@/components/DashboardHeader";
+import { cn } from "@/lib/utils";
 
 interface DashboardChromeProps {
   children: ReactNode;
@@ -22,9 +24,30 @@ function SidebarFallback({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function DashboardMain({
+  children,
+  collapsed,
+  onToggleSidebar,
+}: {
+  children: ReactNode;
+  collapsed: boolean;
+  onToggleSidebar: () => void;
+}) {
+  const pathname = usePathname();
+  const hideTopBar = pathname?.includes("/operations/nd-report") ?? false;
+
+  return (
+    <main className="flex-1 overflow-y-auto">
+      {!hideTopBar ? (
+        <DashboardHeader collapsed={collapsed} onToggleSidebar={onToggleSidebar} />
+      ) : null}
+      <div className={cn("p-8", hideTopBar && "pt-4")}>{children}</div>
+    </main>
+  );
+}
+
 export default function DashboardChrome({ children }: DashboardChromeProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
-
   const toggle = () => setIsCollapsed((v) => !v);
 
   return (
@@ -32,13 +55,11 @@ export default function DashboardChrome({ children }: DashboardChromeProps) {
       <Suspense fallback={<SidebarFallback collapsed={isCollapsed} />}>
         <Sidebar collapsed={isCollapsed} onToggle={toggle} />
       </Suspense>
-      <main className="flex-1 overflow-y-auto">
-        <DashboardHeader collapsed={isCollapsed} onToggleSidebar={toggle} />
-        <div className="p-8">
+      <Suspense fallback={<div className="flex-1 overflow-y-auto p-8">{children}</div>}>
+        <DashboardMain collapsed={isCollapsed} onToggleSidebar={toggle}>
           {children}
-        </div>
-      </main>
+        </DashboardMain>
+      </Suspense>
     </div>
   );
 }
-

@@ -1,7 +1,7 @@
 import { SkuPerformanceTable } from "@/components/operations/SkuPerformanceTable";
 import { SkuPerformancePaginationClient } from "@/components/operations/SkuPerformancePaginationClient";
 import { getSkuPerformanceSummaryCached } from "@/lib/operations/cache";
-import { formatPstTimestamp } from "@/lib/operations/skuPerformance";
+import { formatPortalSyncLabel } from "@/lib/portalTimezone";
 
 export async function SkuPerformanceSection({
   searchParams,
@@ -33,15 +33,20 @@ export async function SkuPerformanceSection({
     sortDirection: "desc",
   });
 
+  const ordersSyncLabel = formatPortalSyncLabel(
+    result.mvRefreshedAt,
+    "Orders data last updated",
+  );
+  const inventorySyncLabel = formatPortalSyncLabel(
+    result.inventoryRefreshedAt,
+    "Inventory last synced",
+  );
+
   return (
     <>
       <div className="space-y-1 text-xs text-[var(--muted)]">
-        {result.mvRefreshedAt ? (
-          <p>Orders data refreshed: {formatPstTimestamp(result.mvRefreshedAt)}</p>
-        ) : null}
-        {result.inventoryRefreshedAt ? (
-          <p>Inventory synced: {formatPstTimestamp(result.inventoryRefreshedAt)}</p>
-        ) : null}
+        {ordersSyncLabel ? <p>{ordersSyncLabel}</p> : null}
+        {inventorySyncLabel ? <p>{inventorySyncLabel}</p> : null}
         {result.inventoryWarning ? (
           <p className="text-amber-600">{result.inventoryWarning}</p>
         ) : null}

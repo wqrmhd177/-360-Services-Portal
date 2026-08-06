@@ -1,4 +1,5 @@
 import { normalizeCountryFilterParam, countryFilterVariants } from "@/lib/country-normalization";
+import { isNdUndeliveredLine } from "@/lib/operations/ndUndeliveredTags";
 import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { getLastSync, getOpsDb } from "@/lib/operations/opsDb";
 import { normalizeOptionalFilter } from "@/lib/orders/filteredItems";
@@ -160,11 +161,6 @@ function mapRemarkStatus(value: unknown): NdRemarkStatus {
   return "Open";
 }
 
-function isFaTag(tag: unknown): boolean {
-  const t = tag == null ? "" : String(tag).trim();
-  return t !== "" && t.toUpperCase().startsWith("FA");
-}
-
 /** Undelivered / Returning qty from live orders — status only, no date filter. */
 async function fetchSkuStatusQuantities(params: {
   sku: string;
@@ -219,7 +215,7 @@ async function fetchSkuStatusQuantities(params: {
       }
       const entry = byStore.get(storeId)!;
 
-      if (status === "Undelivered" && !isFaTag(row.tag)) {
+      if (isNdUndeliveredLine(status, row.tag)) {
         entry.undelivered_qty += qty;
         undeliveredTotal += qty;
       } else if (status === "Return in Transit") {

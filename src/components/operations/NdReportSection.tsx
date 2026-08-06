@@ -3,7 +3,6 @@ import { NdReportPaginationClient } from "@/components/operations/NdReportPagina
 import { NdReportTable } from "@/components/operations/NdReportTable";
 import { KpiCard, KPI_COMPACT_GRID_CLASS } from "@/components/orders/kpi-card";
 import { getNdReportSummaryCached } from "@/lib/operations/cache";
-import { formatPortalSyncLabel } from "@/lib/portalTimezone";
 import { formatNumber } from "@/lib/utils";
 
 export async function NdReportSection({
@@ -38,16 +37,6 @@ export async function NdReportSection({
     sortDir: "desc",
   });
 
-  const ndSyncLabel = formatPortalSyncLabel(
-    result.mvRefreshedAt,
-    "ND data last updated",
-  );
-  const inventorySyncLabel = formatPortalSyncLabel(
-    result.inventoryRefreshedAt,
-    "Inventory last synced",
-  );
-  const syncLine = [ndSyncLabel, inventorySyncLabel].filter(Boolean).join(" · ");
-
   return (
     <div className="space-y-2">
       <div className={KPI_COMPACT_GRID_CLASS}>
@@ -73,10 +62,6 @@ export async function NdReportSection({
       </div>
 
       <NdReportFilterBar options={filterOptions} />
-
-      {syncLine ? (
-        <p className="text-[11px] text-[var(--muted)]">{syncLine}</p>
-      ) : null}
 
       <NdReportTable rows={result.data} filterQuery={filterQuery.toString()} />
 

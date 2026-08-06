@@ -1,7 +1,9 @@
 /**
- * ND Report unit tests — FIFO allocation math and eligibility rules.
+ * ND Report unit tests — FIFO allocation math, eligibility, and undelivered tag rules.
  * Run: npx tsx scripts/run-nd-report-tests.ts
  */
+
+import { isNdUndeliveredLine } from "../src/lib/operations/ndUndeliveredTags";
 
 type OrderLine = {
   orderId: number;
@@ -101,8 +103,25 @@ function testTieBreakerOrderId() {
   assert(result.find((r) => r.orderId === 2)?.ndQty === 1, "Higher order_id is ND");
 }
 
+function testUndeliveredTags() {
+  assert(isNdUndeliveredLine("Undelivered", null), "blank tag undelivered counts");
+  assert(isNdUndeliveredLine("Undelivered", ""), "empty tag undelivered counts");
+  assert(
+    isNdUndeliveredLine("Undelivered", "FA - Request to Return"),
+    "FA request to return counts",
+  );
+  assert(
+    isNdUndeliveredLine("Undelivered", "FA - Hold for Working"),
+    "FA hold for working counts",
+  );
+  assert(!isNdUndeliveredLine("Undelivered", "FA - Other"), "other FA tags excluded");
+  assert(isNdUndeliveredLine("Undelivered", "Manual review"), "non-FA tag counts");
+  assert(!isNdUndeliveredLine("Shipped", "FA - Request to Return"), "wrong status excluded");
+}
+
 const tests: Array<[string, () => void]> = [
   ["eligibility rules", testEligibility],
+  ["undelivered tag rules", testUndeliveredTags],
   ["FIFO full first order", testFifoFullFirstOrder],
   ["partial allocation", testPartialAllocation],
   ["zero inventory", testZeroInventory],
