@@ -104,8 +104,6 @@ function testTieBreakerOrderId() {
 }
 
 function testUndeliveredTags() {
-  assert(isNdUndeliveredLine("Undelivered", null), "blank tag undelivered counts");
-  assert(isNdUndeliveredLine("Undelivered", ""), "empty tag undelivered counts");
   assert(
     isNdUndeliveredLine("Undelivered", "FA - Request to Return"),
     "FA request to return counts",
@@ -114,8 +112,10 @@ function testUndeliveredTags() {
     isNdUndeliveredLine("Undelivered", "FA - Hold for Working"),
     "FA hold for working counts",
   );
+  assert(!isNdUndeliveredLine("Undelivered", null), "blank tag excluded");
+  assert(!isNdUndeliveredLine("Undelivered", ""), "empty tag excluded");
   assert(!isNdUndeliveredLine("Undelivered", "FA - Other"), "other FA tags excluded");
-  assert(isNdUndeliveredLine("Undelivered", "Manual review"), "non-FA tag counts");
+  assert(!isNdUndeliveredLine("Undelivered", "Manual review"), "non-FA tag excluded");
   assert(!isNdUndeliveredLine("Shipped", "FA - Request to Return"), "wrong status excluded");
 }
 
