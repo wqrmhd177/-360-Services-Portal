@@ -90,6 +90,17 @@ export function deriveEffectivePermissions(input: {
   return { zambeelPerms, paRole, productListing, operations };
 }
 
+/** True when user may access Zambeel 360 modules (any department or admin). */
+export function hasZambeelAccess(input: {
+  role?: UserRole | string | null;
+  isAdmin?: boolean;
+  permissions?: UserPermissions;
+}): boolean {
+  if (input.isAdmin) return true;
+  const { zambeelPerms } = deriveEffectivePermissions(input);
+  return zambeelPerms.length > 0;
+}
+
 export function formatZambeelPerms(perms: string[] | undefined): string {
   if (!perms?.length) return "None";
   return perms.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(", ");

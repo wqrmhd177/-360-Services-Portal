@@ -600,10 +600,19 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 collapsed={collapsed}
                 label="Zambeel 360"
                 icon={<Layers className={iconClassLg} />}
-                active={pathname.match(/\/dashboard\/(growth|approver|procurement|finance)/) != null}
+                active={pathname.match(/\/dashboard\/(growth|approver|procurement|finance|movements)/) != null}
               />
               {zambeelOpen && !collapsed && (
                 <div className="mt-0.5 space-y-0.5 border-l border-portal-700 pl-2">
+                  <NavLink
+                    href="/dashboard/movements"
+                    pathname={pathname}
+                    collapsed={collapsed}
+                    icon={<Truck className={iconClass} />}
+                    label="Movements"
+                    indent
+                    matchPrefix="/dashboard/movements"
+                  />
                   {showGrowth && (
                     <div>
                       <DeptToggle

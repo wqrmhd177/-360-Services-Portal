@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import NewPRForm from "./NewPRForm";
 
 interface PageProps {
@@ -5,8 +6,9 @@ interface PageProps {
 }
 
 export default function NewPRPage({ searchParams }: PageProps) {
-  const initialService =
-    searchParams.service === "Movements" ? "Movements" : "Zambeel 360";
+  if (searchParams.service === "Movements") {
+    redirect("/dashboard/movements/new");
+  }
 
-  return <NewPRForm initialService={initialService} />;
+  return <NewPRForm initialService="Zambeel 360" />;
 }
