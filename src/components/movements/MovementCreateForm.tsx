@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { MovementHead, MovementShippingMode } from "@/types/movements";
 import { MOVEMENT_COUNTRY_OPTIONS } from "@/types/movements";
 import { isPhase2MovementHead } from "@/lib/movements/status";
@@ -41,33 +41,59 @@ function SkuCountryRow({
 }: {
   label: string;
   line: LineState;
-  onChange: (next: LineState) => void;
+  onChange: Dispatch<SetStateAction<LineState>>;
 }) {
-  const lookup = useCallback(async () => {
-    if (!line.sku.trim() || !line.country.trim()) return;
-    onChange({ ...line, loading: true });
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const requestIdRef = useRef(0);
+
+  const runLookup = useCallback(async (sku: string, country: string) => {
+    const trimmedSku = sku.trim();
+    const trimmedCountry = country.trim();
+    if (!trimmedSku || !trimmedCountry) return;
+
+    const reqId = ++requestIdRef.current;
+    onChangeRef.current((prev) => ({ ...prev, loading: true }));
+
     try {
-      const params = new URLSearchParams({ sku: line.sku.trim(), country: line.country.trim() });
+      const params = new URLSearchParams({ sku: trimmedSku, country: trimmedCountry });
       const res = await fetch(`/api/movements/inventory-lookup?${params.toString()}`);
       const json = await res.json();
+      if (reqId !== requestIdRef.current) return;
       if (!res.ok) throw new Error(json.error ?? "Lookup failed");
-      onChange({
-        ...line,
-        loading: false,
-        productName: json.product_name ?? "",
-        availableQty: json.found ? Number(json.available_quantity) : 0,
+
+      onChangeRef.current((prev) => {
+        if (prev.sku.trim() !== trimmedSku || prev.country.trim() !== trimmedCountry) {
+          return { ...prev, loading: false };
+        }
+        return {
+          ...prev,
+          loading: false,
+          productName: json.product_name ?? "",
+          availableQty: json.found ? Number(json.available_quantity) : 0,
+        };
       });
     } catch {
-      onChange({ ...line, loading: false, productName: "", availableQty: null });
+      if (reqId !== requestIdRef.current) return;
+      onChangeRef.current((prev) => {
+        if (prev.sku.trim() !== trimmedSku || prev.country.trim() !== trimmedCountry) {
+          return { ...prev, loading: false };
+        }
+        return { ...prev, loading: false, productName: "", availableQty: null };
+      });
     }
-  }, [line, onChange]);
+  }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (line.sku.trim().length >= 3) void lookup();
-    }, 400);
-    return () => clearTimeout(t);
-  }, [line.sku, line.country, lookup]);
+    const trimmedSku = line.sku.trim();
+    if (trimmedSku.length < 3) return;
+
+    const timer = setTimeout(() => {
+      void runLookup(line.sku, line.country);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [line.sku, line.country, runLookup]);
 
   return (
     <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
@@ -78,7 +104,7 @@ function SkuCountryRow({
           <input
             type="text"
             value={line.sku}
-            onChange={(e) => onChange({ ...line, sku: e.target.value })}
+            onChange={(e) => onChange((prev) => ({ ...prev, sku: e.target.value }))}
             className="input w-full"
             placeholder="Enter SKU"
           />
@@ -87,7 +113,7 @@ function SkuCountryRow({
           <span className="mb-1 block text-xs font-medium text-gray-500">Country</span>
           <select
             value={line.country}
-            onChange={(e) => onChange({ ...line, country: e.target.value })}
+            onChange={(e) => onChange((prev) => ({ ...prev, country: e.target.value }))}
             className="input w-full"
           >
             {MOVEMENT_COUNTRY_OPTIONS.map((c) => (
@@ -97,21 +123,26 @@ function SkuCountryRow({
             ))}
           </select>
         </label>
-        <button type="button" onClick={() => void lookup()} className="btn-secondary shrink-0">
+        <button
+          type="button"
+          onClick={() => void runLookup(line.sku, line.country)}
+          disabled={line.loading || !line.sku.trim()}
+          className="btn-secondary min-w-[9.5rem] shrink-0 disabled:opacity-60"
+        >
           {line.loading ? "Checking…" : "Check inventory"}
         </button>
       </div>
-      <div className="flex flex-wrap gap-4 text-sm">
+      <div className="flex min-h-[1.25rem] flex-wrap gap-4 text-sm">
         <span>
           <span className="text-gray-500">Product: </span>
-          <span className="font-medium">{line.productName || "—"}</span>
+          <span className="font-medium">{line.loading ? "…" : line.productName || "—"}</span>
         </span>
-        {line.availableQty != null && (
-          <span>
-            <span className="text-gray-500">Available: </span>
-            <span className="font-medium tabular-nums">{line.availableQty}</span>
+        <span>
+          <span className="text-gray-500">Available: </span>
+          <span className="font-medium tabular-nums">
+            {line.loading ? "…" : line.availableQty != null ? line.availableQty : "—"}
           </span>
-        )}
+        </span>
       </div>
     </div>
   );
