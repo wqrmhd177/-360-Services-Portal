@@ -31,7 +31,7 @@ const SHIPPING_OPTIONS: { value: MovementShippingMode; label: string }[] = [
 ];
 
 function emptyLine(): LineState {
-  return { sku: "", country: "UAE", productName: "", availableQty: null, loading: false };
+  return { sku: "", country: "United Arab Emirates", productName: "", availableQty: null, loading: false };
 }
 
 function SkuCountryRow({

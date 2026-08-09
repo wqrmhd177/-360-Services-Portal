@@ -92,14 +92,6 @@ export const SHIPPING_MODE_LABELS: Record<MovementShippingMode, string> = {
 };
 
 export const MOVEMENT_COUNTRY_OPTIONS = [
-  "UAE",
-  "KSA",
-  "KWT",
-  "QTR",
-  "OMN",
-  "BHR",
-  "IRQ",
-  "PAK",
   "United Arab Emirates",
   "Saudi Arabia",
   "Kuwait",
