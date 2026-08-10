@@ -6,8 +6,91 @@ import {
 import { clearInventorySkuCache } from "@/lib/metabaseInventory";
 import { clearInventoryLookupCache } from "@/lib/inventoryLookup";
 import { getOpsDb, getOpsServiceDb, logSync, refreshInventorySummary } from "@/lib/operations/opsDb";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BATCH = 500;
+
+/** Which optional ops_inventory_items columns exist in Supabase (movement_quantity added later). */
+type InventoryInsertMode = "full" | "po_only" | "base";
+
+function isMissingColumnError(message: string, column: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes(column.toLowerCase()) && lower.includes("schema cache");
+}
+
+function buildInventoryInsertRow(
+  row: InventoryRow,
+  syncedAt: string,
+  mode: InventoryInsertMode,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    user_id: row.user_id === "—" ? null : row.user_id,
+    username: row.username === "—" ? null : row.username,
+    product_name: row.product_name,
+    sku: row.sku,
+    available_quantity: row.available_quantity,
+    country: row.country,
+    category: row.category,
+    synced_at: syncedAt,
+  };
+
+  if (mode === "full" || mode === "po_only") {
+    payload.po_quantity = row.po_quantity;
+  }
+  if (mode === "full") {
+    payload.movement_quantity = row.movement_quantity;
+  }
+
+  return payload;
+}
+
+async function detectInventoryInsertMode(
+  supabase: SupabaseClient,
+  sample: InventoryRow,
+  syncedAt: string,
+): Promise<InventoryInsertMode> {
+  const modes: InventoryInsertMode[] = ["full", "po_only", "base"];
+
+  for (const mode of modes) {
+    const { data, error } = await supabase
+      .from("ops_inventory_items")
+      .insert([buildInventoryInsertRow(sample, syncedAt, mode)])
+      .select("id")
+      .maybeSingle();
+
+    if (!error) {
+      if (data?.id != null) {
+        await supabase.from("ops_inventory_items").delete().eq("id", data.id);
+      }
+      return mode;
+    }
+
+    if (mode === "full" && isMissingColumnError(error.message, "movement_quantity")) {
+      continue;
+    }
+    if (
+      (mode === "full" || mode === "po_only") &&
+      isMissingColumnError(error.message, "po_quantity")
+    ) {
+      continue;
+    }
+
+    throw new Error(error.message);
+  }
+
+  return "base";
+}
+
+async function insertInventoryBatch(
+  supabase: SupabaseClient,
+  rows: InventoryRow[],
+  syncedAt: string,
+  mode: InventoryInsertMode,
+) {
+  const slice = rows.map((row) => buildInventoryInsertRow(row, syncedAt, mode));
+  const { error } = await supabase.from("ops_inventory_items").insert(slice);
+  if (error) throw new Error(error.message);
+}
 
 export async function syncInventoryFromMetabase(): Promise<{
   ok: boolean;
@@ -31,6 +114,11 @@ export async function syncInventoryFromMetabase(): Promise<{
     const supabase = getOpsServiceDb();
     const syncedAt = new Date().toISOString();
 
+    const insertMode =
+      rows.length > 0
+        ? await detectInventoryInsertMode(supabase, rows[0], syncedAt)
+        : "base";
+
     const { error: delErr } = await supabase
       .from("ops_inventory_items")
       .delete()
@@ -42,24 +130,7 @@ export async function syncInventoryFromMetabase(): Promise<{
     }
 
     for (let i = 0; i < rows.length; i += BATCH) {
-      const slice = rows.slice(i, i + BATCH).map((r) => ({
-        user_id: r.user_id === "—" ? null : r.user_id,
-        username: r.username === "—" ? null : r.username,
-        product_name: r.product_name,
-        sku: r.sku,
-        available_quantity: r.available_quantity,
-        po_quantity: r.po_quantity,
-        movement_quantity: r.movement_quantity,
-        country: r.country,
-        category: r.category,
-        synced_at: syncedAt,
-      }));
-
-      const { error } = await supabase.from("ops_inventory_items").insert(slice);
-      if (error) {
-        await logSync("inventory", 0, "failed", error.message);
-        return { ok: false, rowCount: 0, error: error.message };
-      }
+      await insertInventoryBatch(supabase, rows.slice(i, i + BATCH), syncedAt, insertMode);
     }
 
     await refreshInventorySummary();
