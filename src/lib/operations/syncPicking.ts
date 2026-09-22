@@ -234,7 +234,7 @@ export async function syncPickingImagesUntil(
       throw new Error(error.message);
     }
 
-    const rows = ((data ?? []) as PendingImageRow[]).filter((row) =>
+    const rows = ((data ?? []) as unknown as PendingImageRow[]).filter((row) =>
       Boolean(row.sku && isPendingRow(row, schema)),
     );
     if (rows.length === 0) {

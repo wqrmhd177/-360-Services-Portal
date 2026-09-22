@@ -183,11 +183,12 @@ export function opComparisonWindows(
   return { lastFrom, lastTo, prevFrom, prevTo };
 }
 
-function withFactFilters<T extends {
-  gte: (column: string, value: string) => T;
-  lte: (column: string, value: string) => T;
-  in: (column: string, values: string[]) => T;
-}>(query: T, canonical: string | null, from: string | null, to: string | null): T {
+function withFactFilters(
+  query: any,
+  canonical: string | null,
+  from: string | null,
+  to: string | null,
+): any {
   let next = query;
   if (from) next = next.gte("order_date", from);
   if (to) next = next.lte("order_date", to);
@@ -261,12 +262,7 @@ async function headCount(
   canonical: string | null,
   from: string,
   to: string,
-  apply: (
-    query: {
-      eq: (column: string, value: string) => unknown;
-      ilike: (column: string, value: string) => unknown;
-    },
-  ) => unknown,
+  apply: (query: any) => any,
 ): Promise<number> {
   const supabase = getOpsServiceDb();
   const filtered = withFactFilters(
@@ -275,8 +271,7 @@ async function headCount(
     from,
     to,
   );
-  const query = apply(filtered as never) as PromiseLike<{ count: number | null }>;
-  const { count } = await query;
+  const { count } = await apply(filtered);
   return count ?? 0;
 }
 
