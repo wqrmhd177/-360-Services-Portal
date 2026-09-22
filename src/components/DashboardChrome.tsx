@@ -34,14 +34,14 @@ function DashboardMain({
   onToggleSidebar: () => void;
 }) {
   const pathname = usePathname();
-  const hideTopBar = pathname?.includes("/operations/nd-report") ?? false;
+  const isOperations = pathname?.startsWith("/dashboard/operations") ?? false;
 
   return (
-    <main className="flex-1 overflow-y-auto">
-      {!hideTopBar ? (
+    <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      {!isOperations ? (
         <DashboardHeader collapsed={collapsed} onToggleSidebar={onToggleSidebar} />
       ) : null}
-      <div className={cn("p-8", hideTopBar && "pt-4")}>{children}</div>
+      <div className={cn("min-w-0 p-8", isOperations && "px-5 py-3")}>{children}</div>
     </main>
   );
 }

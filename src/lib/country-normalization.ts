@@ -3,7 +3,16 @@
  * Metabase may use UAE, United Arab Emirates, KSA, Saudi Arabia, etc. — treat as one.
  */
 
-export type CountryCanonical = "United Arab Emirates" | "Saudi Arabia";
+export type CountryCanonical =
+  | "United Arab Emirates"
+  | "Saudi Arabia"
+  | "Qatar"
+  | "Oman"
+  | "Bahrain"
+  | "Iraq"
+  | "Pakistan"
+  | "Kuwait"
+  | "United States";
 
 type CountryGroup = {
   canonical: CountryCanonical;
@@ -13,11 +22,51 @@ type CountryGroup = {
 const COUNTRY_GROUPS: readonly CountryGroup[] = [
   {
     canonical: "United Arab Emirates",
-    aliases: ["UAE", "United Arab Emirates", "U.A.E.", "U.A.E"],
+    aliases: [
+      "UAE",
+      "United Arab Emirates",
+      "United Arab Emirate",
+      "U.A.E.",
+      "U.A.E",
+    ],
   },
   {
     canonical: "Saudi Arabia",
-    aliases: ["KSA", "Saudi Arabia", "Saudia Arabia", "Kingdom of Saudi Arabia"],
+    aliases: [
+      "KSA",
+      "Saudi Arabia",
+      "Saudia Arabia",
+      "Kingdom of Saudi Arabia",
+      "Saudi Arab",
+    ],
+  },
+  {
+    canonical: "Qatar",
+    aliases: ["Qatar", "QA", "State of Qatar"],
+  },
+  {
+    canonical: "Oman",
+    aliases: ["Oman", "OM", "Sultanate of Oman"],
+  },
+  {
+    canonical: "Bahrain",
+    aliases: ["Bahrain", "BH", "Kingdom of Bahrain"],
+  },
+  {
+    canonical: "Iraq",
+    aliases: ["Iraq", "IQ"],
+  },
+  {
+    canonical: "Pakistan",
+    aliases: ["PAK", "Pakistan", "Pak", "PK"],
+  },
+  {
+    canonical: "Kuwait",
+    aliases: ["Kuwait", "KW", "State of Kuwait"],
+  },
+  {
+    canonical: "United States",
+    aliases: ["USA", "US", "U.S.A.", "U.S.", "United States", "United States of America"],
   },
 ];
 
@@ -43,7 +92,7 @@ export function normalizeOrderCountry(raw: string | undefined | null): string {
   // Fuzzy fallbacks for minor typos / spacing variants in Metabase exports.
   if (
     key === "uae" ||
-    key.includes("united arab emirates") ||
+    key.includes("united arab emirate") ||
     key.replace(/\./g, "") === "uae"
   ) {
     return "United Arab Emirates";
@@ -53,9 +102,23 @@ export function normalizeOrderCountry(raw: string | undefined | null): string {
     key === "ksa" ||
     key.includes("saudi arabia") ||
     key.includes("saudia arabia") ||
-    key.includes("kingdom of saudi arabia")
+    key.includes("kingdom of saudi arabia") ||
+    key === "saudi arab"
   ) {
     return "Saudi Arabia";
+  }
+
+  if (key === "pak" || key === "pk" || key === "pakistan") {
+    return "Pakistan";
+  }
+
+  if (
+    key === "usa" ||
+    key === "us" ||
+    key.replace(/\./g, "") === "usa" ||
+    key.includes("united states")
+  ) {
+    return "United States";
   }
 
   return trimmed;

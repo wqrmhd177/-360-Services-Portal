@@ -104,7 +104,7 @@ function SkuPerformanceFilterBarInner({ options }: SkuPerformanceFilterBarProps)
   }, [pathname, router]);
 
   return (
-    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm sm:p-4">
+    <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-2.5 shadow-sm">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         <FilterSelect
           label="Country"
@@ -160,7 +160,7 @@ function SkuPerformanceFilterBarInner({ options }: SkuPerformanceFilterBarProps)
         </label>
       </div>
 
-      <div className="mt-3 flex justify-end gap-2 border-t border-[var(--card-border)] pt-3">
+      <div className="mt-2 flex justify-end gap-2 border-t border-[var(--card-border)] pt-2">
         <button
           type="button"
           onClick={resetFilters}
@@ -186,7 +186,7 @@ export default function SkuPerformanceFilterBar(props: SkuPerformanceFilterBarPr
   return (
     <Suspense
       fallback={
-        <div className="h-28 animate-pulse rounded-2xl border border-[var(--card-border)] bg-[var(--table-header)]" />
+        <div className="h-20 animate-pulse rounded-xl border border-[var(--card-border)] bg-[var(--table-header)]" />
       }
     >
       <SkuPerformanceFilterBarInner {...props} />

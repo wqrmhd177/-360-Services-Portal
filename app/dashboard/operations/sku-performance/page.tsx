@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import SkuPerformanceFilterBar from "@/components/operations/SkuPerformanceFilterBar";
 import { SkuPerformanceSection } from "@/components/operations/SkuPerformanceSection";
+import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
 import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
@@ -37,13 +38,12 @@ export default async function SkuPerformancePage({
   const filterOptions = await fetchCachedFilterOptionsFromDb();
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--foreground)]">SKU Performance</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Order metrics by SKU with seller breakdown. All Operations dates use PST.
-        </p>
-      </div>
+    <div className="space-y-3">
+      <OperationsPageHeader
+        title="SKU Performance"
+        subtitle="Order metrics by SKU with seller breakdown. All Operations dates use PST."
+        showRefresh
+      />
 
       <SkuPerformanceFilterBar
         options={{

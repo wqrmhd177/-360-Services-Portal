@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { NdReportSection } from "@/components/operations/NdReportSection";
+import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
 import { getNdFilterOptions, getNdSyncTimestamps } from "@/lib/operations/ndReport";
@@ -67,13 +68,8 @@ export default async function OperationsNdReportPage({
   const syncLine = [ndSyncLabel, inventorySyncLabel].filter(Boolean).join(" · ");
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="text-2xl font-bold text-[var(--foreground)]">ND Report</h1>
-        {syncLine ? (
-          <p className="text-xs text-[var(--muted)]">{syncLine}</p>
-        ) : null}
-      </div>
+    <div className="space-y-3">
+      <OperationsPageHeader title="ND Report" subtitle={syncLine} showRefresh />
 
       <Suspense fallback={<PortalPageLoading label="Loading ND report…" />}>
         <NdReportSection searchParams={sp} filterOptions={filterOptions} />

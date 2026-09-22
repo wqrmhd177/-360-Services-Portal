@@ -2,7 +2,7 @@
 
 import { ExternalLink, Loader2, Radio, RefreshCw } from "lucide-react";
 import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
-import { ListPageHeader } from "@/components/lists/ListPageHeader";
+import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
 import type { ChannelListRow } from "@/lib/operations/channelList";
@@ -36,35 +36,32 @@ export default function ChannelListPage() {
   const busy = loading || syncing || bootstrapping;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <ListPageHeader
+    <div className="space-y-3">
+      <OperationsPageHeader
         title="Channel List"
         subtitle="Stores and channels cached in Supabase for fast access"
-        actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <input
-              type="text"
-              placeholder="Search by store name, store link, store ID, or user ID…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="input w-full sm:w-72"
-            />
-            <button
-              type="button"
-              onClick={runSync}
-              disabled={busy}
-              className="btn-primary inline-flex shrink-0 items-center gap-2 disabled:opacity-60"
-            >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Sync
-            </button>
-          </div>
-        }
-      />
+      >
+        <input
+          type="text"
+          placeholder="Search by store name, store link, store ID, or user ID…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input h-9 w-full sm:w-72"
+        />
+        <button
+          type="button"
+          onClick={runSync}
+          disabled={busy}
+          className="btn-primary inline-flex h-9 shrink-0 items-center gap-2 px-3 text-xs disabled:opacity-60"
+        >
+          {syncing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Sync
+        </button>
+      </OperationsPageHeader>
 
       <SyncStatusBar
         lastSyncedAt={lastSyncedAt}

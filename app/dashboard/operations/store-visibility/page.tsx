@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import OrdersFilterBar from "@/components/operations/OrdersFilterBar";
 import { StoreVisibilitySection } from "@/components/operations/StoreVisibilitySection";
+import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { defaultOrdersSearchParams } from "@/components/operations/OrdersAnalyticsSection";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
 import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
@@ -39,12 +40,8 @@ export default async function StoreVisibilityPage({
   const storeId = typeof sp.store_id === "string" ? sp.store_id : "";
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--foreground)]">
-          Operations — Store Visibility
-        </h1>
-      </div>
+    <div className="space-y-3">
+      <OperationsPageHeader title="Store Visibility" showRefresh />
 
       <OrdersFilterBar
         options={{

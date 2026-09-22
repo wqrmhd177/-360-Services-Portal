@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OrdersFilterBar from "@/components/operations/OrdersFilterBar";
+import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { formatPortalTimestamp } from "@/lib/portalTimezone";
 
 type SyncJobStatus = "pending" | "running" | "success" | "failed";
@@ -166,37 +167,35 @@ export function OrdersPageShell({
   }, [stopPolling]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--foreground)]">Operations — Orders</h1>
-          {lastSyncedAt ? (
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              Last synced: {formatPortalTimestamp(lastSyncedAt)}
-            </p>
-          ) : null}
-          {syncMessage ? (
-            <p
-              className={`text-xs mt-0.5 ${
-                syncStatus === "failed" ? "text-red-600" : "text-teal-600"
-              }`}
-            >
-              {syncMessage}
-              {syncing ? " — do not close this tab." : ""}
-            </p>
-          ) : null}
-          {error && syncStatus !== "failed" ? (
-            <p className="text-xs mt-0.5 text-red-600">{error}</p>
-          ) : null}
-        </div>
+    <div className="space-y-3">
+      <OperationsPageHeader
+        title="Dashboard"
+        subtitle={
+          <>
+            {lastSyncedAt ? (
+              <p>Last synced: {formatPortalTimestamp(lastSyncedAt)}</p>
+            ) : null}
+            {syncMessage ? (
+              <p className={syncStatus === "failed" ? "text-red-600" : "text-teal-600"}>
+                {syncMessage}
+                {syncing ? " — do not close this tab." : ""}
+              </p>
+            ) : null}
+            {error && syncStatus !== "failed" ? (
+              <p className="text-red-600">{error}</p>
+            ) : null}
+          </>
+        }
+      >
         <button
-          onClick={runSync}
+          type="button"
+          onClick={() => void runSync()}
           disabled={syncing}
-          className="btn-primary disabled:opacity-60"
+          className="btn-primary h-9 px-3 text-xs disabled:opacity-60"
         >
           {syncing ? "Syncing…" : "Sync Data"}
         </button>
-      </div>
+      </OperationsPageHeader>
 
       <OrdersFilterBar
         options={filterOptions}

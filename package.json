@@ -10,7 +10,9 @@
     "test:orders": "npx tsx scripts/run-order-analytics-tests.ts",
     "validate:orders": "node scripts/validate-order-counts.js",
     "sync:orders": "py -3 scripts/sync_orders.py",
-    "sync:orders:rest": "py -3 scripts/sync_orders.py --rest"
+    "sync:orders:rest": "py -3 scripts/sync_orders.py --rest",
+    "sync:op-performance": "py -3 scripts/sync_op_performance.py",
+    "sync:picking-images": "npx tsx scripts/sync-picking-images.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.0",

@@ -20,7 +20,7 @@ export async function OrdersStatusSection({
   const data = await getOperationsStatusKpisCached(searchParams);
   if (data.filteredCount === 0) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
         <p className="text-sm font-medium text-amber-900">
           No orders data for this date range. Click Sync Data to load from Metabase.
         </p>

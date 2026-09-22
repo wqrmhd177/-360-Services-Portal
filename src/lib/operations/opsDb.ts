@@ -1,7 +1,13 @@
 import { createSupabaseServiceClient } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type OpsSource = "inventory" | "channel_list" | "orders";
+export type OpsSource =
+  | "inventory"
+  | "channel_list"
+  | "orders"
+  | "op_performance"
+  | "ticketing"
+  | "picking";
 
 let _opsDb: SupabaseClient | null = null;
 
@@ -14,6 +20,36 @@ export function getOpsDb() {
 
 export function getOpsServiceDb() {
   return createSupabaseServiceClient();
+}
+
+export async function getOpFactsLastSynced(): Promise<string | null> {
+  try {
+    const supabase = getOpsDb();
+    const { data } = await supabase
+      .from("ops_op_facts")
+      .select("synced_at")
+      .order("synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return (data?.synced_at as string | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getTicketFactsLastSynced(): Promise<string | null> {
+  try {
+    const supabase = getOpsDb();
+    const { data } = await supabase
+      .from("ops_ticket_facts")
+      .select("synced_at")
+      .order("synced_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return (data?.synced_at as string | undefined) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getLastSync(source: OpsSource) {

@@ -121,7 +121,7 @@ function OrdersFilterBarInner({
   const hasFacetFilters = !!(country || bifurcation || (showStoreFilter && storeId));
 
   return (
-    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-3 shadow-sm sm:p-4">
+    <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-2.5 shadow-sm">
       <div
         className={cn(
           "grid gap-3",
@@ -177,7 +177,7 @@ function OrdersFilterBarInner({
       </div>
 
       {hasFacetFilters ? (
-        <div className="mt-3 flex justify-end border-t border-[var(--card-border)] pt-3">
+        <div className="mt-2 flex justify-end border-t border-[var(--card-border)] pt-2">
           <button
             type="button"
             onClick={clearFacetFilters}
@@ -195,7 +195,7 @@ export default function OrdersFilterBar(props: OrdersFilterBarProps) {
   return (
     <Suspense
       fallback={
-        <div className="h-24 animate-pulse rounded-2xl border border-[var(--card-border)] bg-[var(--table-header)]" />
+        <div className="h-20 animate-pulse rounded-xl border border-[var(--card-border)] bg-[var(--table-header)]" />
       }
     >
       <OrdersFilterBarInner {...props} />

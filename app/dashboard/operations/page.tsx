@@ -1,10 +1,5 @@
-import ComingSoonPage from "@/components/ComingSoonPage";
+import { redirect } from "next/navigation";
 
 export default function OperationsDashboardPage() {
-  return (
-    <ComingSoonPage
-      title="Operations Dashboard"
-      description="Overview of orders, inventory, and operational metrics."
-    />
-  );
+  redirect("/dashboard/operations/orders");
 }

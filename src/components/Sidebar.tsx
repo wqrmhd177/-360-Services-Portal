@@ -28,6 +28,7 @@ import {
   BarChart3,
   Warehouse,
   Eye,
+  Activity,
 } from "lucide-react";
 import { deriveEffectivePermissions } from "@/lib/permissions";
 import type { UserPermissions } from "@/lib/permissions";
@@ -919,8 +920,11 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               />
               {opsOpen && !collapsed && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                  <NavLink href="/dashboard/operations" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent />
-                  <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Orders" indent matchPrefix="/operations/orders" />
+                  <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
+                  <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
+                  <NavLink href="/dashboard/operations/op-performance" pathname={pathname} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
+                  <NavLink href="/dashboard/operations/ticketing" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
+                  <NavLink href="/dashboard/operations/picking" pathname={pathname} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
                   <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
                   <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
                   <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />

@@ -50,7 +50,7 @@ export default async function OrdersPage({
       }}
       lastSyncedAt={lastSync?.synced_at ?? null}
     >
-      <section className="space-y-6">
+      <section className="space-y-4">
         <Suspense fallback={<PortalPageLoading label="Loading status KPIs" />}>
           <OrdersStatusSection searchParams={sp} />
         </Suspense>
