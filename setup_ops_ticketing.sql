@@ -245,7 +245,9 @@ END $$;
 DO $$
 BEGIN
   ALTER TABLE ops_sync_log ADD CONSTRAINT ops_sync_log_source_check
-    CHECK (source IN ('inventory', 'channel_list', 'orders', 'op_performance', 'ticketing'));
+    CHECK (source IN (
+      'inventory', 'channel_list', 'orders', 'op_performance', 'ticketing', 'picking'
+    ));
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN undefined_table THEN NULL;
@@ -254,7 +256,9 @@ END $$;
 DO $$
 BEGIN
   ALTER TABLE ops_sync_jobs ADD CONSTRAINT ops_sync_jobs_source_check
-    CHECK (source IN ('inventory', 'channel_list', 'orders', 'op_performance', 'ticketing'));
+    CHECK (source IN (
+      'inventory', 'channel_list', 'orders', 'op_performance', 'ticketing', 'picking'
+    ));
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN undefined_table THEN NULL;
