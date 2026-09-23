@@ -15,7 +15,6 @@ import {
   PickingAddProductDialog,
   PickingBulkUploadDialog,
   PickingDocumentDialog,
-  PickingEditButton,
   PickingPictureLightbox,
 } from "@/components/operations/PickingProductDialogs";
 import { ListPagination } from "@/components/lists/ListPagination";
@@ -465,9 +464,8 @@ export default function ProductPicturesPage() {
                 <col className="w-8" />
                 <col className="w-[4.5rem]" />
                 <col />
-                <col className="w-[26%]" />
-                <col className="w-[6.5rem]" />
-                <col className="w-12" />
+                <col className="w-[24%]" />
+                <col className="w-[7.5rem]" />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-[11px] font-medium uppercase tracking-wider text-gray-500">
@@ -482,8 +480,7 @@ export default function ProductPicturesPage() {
                   <th className="px-1 py-3 text-center">Picture</th>
                   <th className="px-2 py-3 text-left">Product name</th>
                   <th className="px-2 py-3 text-left">SKU</th>
-                  <th className="px-1 py-3 text-right">Updated</th>
-                  <th className="px-1 py-3 text-right"> </th>
+                  <th className="px-2 py-3 text-right">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -512,20 +509,22 @@ export default function ProductPicturesPage() {
                       )}
                     </td>
                     <td className="px-2 py-2 align-middle text-sm font-medium text-gray-900">
-                      <span className="line-clamp-2 break-words" title={row.product_name}>
+                      <button
+                        type="button"
+                        className="line-clamp-2 break-words text-left hover:text-portal-700 hover:underline"
+                        title={`Edit ${row.product_name}`}
+                        onClick={() => setEditing(row)}
+                      >
                         {row.product_name}
-                      </span>
+                      </button>
                     </td>
                     <td className="px-2 py-2 align-middle font-mono text-[11px] text-gray-700">
                       <span className="block truncate" title={row.sku}>
                         {row.sku}
                       </span>
                     </td>
-                    <td className="px-1 py-2 text-right align-middle text-[10px] leading-tight text-gray-500">
+                    <td className="px-2 py-2 text-right align-middle text-[10px] leading-tight text-gray-500">
                       {row.updated_at ? formatPortalTimestamp(row.updated_at) : "—"}
-                    </td>
-                    <td className="px-1 py-2 text-right align-middle">
-                      <PickingEditButton onClick={() => setEditing(row)} />
                     </td>
                   </tr>
                 ))}

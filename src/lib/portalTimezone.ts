@@ -140,6 +140,10 @@ export function parsePortalInstant(iso: string): Date | null {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(normalized)) {
     normalized = `${normalized}Z`;
   }
+  // Postgres sometimes returns a trailing "+" without offset (e.g. "...883416+").
+  if (/^\d{4}-\d{2}-\d{2}T/.test(normalized) && normalized.endsWith("+")) {
+    normalized = `${normalized}00:00`;
+  }
 
   const d = new Date(normalized);
   return Number.isNaN(d.getTime()) ? null : d;
