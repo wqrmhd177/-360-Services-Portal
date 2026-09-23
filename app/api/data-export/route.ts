@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
   if (!session?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!session.isAdmin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const type = request.nextUrl.searchParams.get("type") as ExportType | null;
   if (!type || !["qr", "pr", "po"].includes(type)) {

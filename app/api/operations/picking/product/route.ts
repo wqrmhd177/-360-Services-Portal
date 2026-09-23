@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       image_url: imageUrl,
       source: "manual",
       created_by: session?.email ?? null,
+      pictureChanged: Boolean(imageUrl),
     });
     return NextResponse.json({ ok: true, item: product });
   } catch (err) {

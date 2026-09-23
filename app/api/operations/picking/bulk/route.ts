@@ -3,7 +3,8 @@ import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { getPortalSession } from "@/lib/session";
 import { parseCsv } from "@/lib/operations/opSheet";
 import { productNameFromSheet } from "@/lib/operations/pickingSheet";
-import { upsertPickingProductRows } from "@/lib/operations/picking";
+import { lookupPickingProducts, upsertPickingProductRows } from "@/lib/operations/picking";
+import { recordPickingBulkImport } from "@/lib/operations/pickingAudit";
 import { pickingSkuFromFileName, uploadPickingImage } from "@/lib/operations/pickingUploads";
 
 export const maxDuration = 300;
@@ -161,6 +162,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const existingRows = await lookupPickingProducts(rows.map((row) => row.sku));
+    const existingSkus = new Set(existingRows.map((row) => row.sku.toLowerCase()));
+
     const written = await upsertPickingProductRows(
       rows.map((row) => ({
         sku: row.sku,
@@ -176,6 +180,15 @@ export async function POST(request: NextRequest) {
       })),
       session?.email ?? null,
     );
+
+    for (const row of rows) {
+      await recordPickingBulkImport({
+        sku: row.sku,
+        product_name: row.product_name,
+        changed_by: session?.email ?? null,
+        created: !existingSkus.has(row.sku.toLowerCase()),
+      });
+    }
 
     return NextResponse.json({
       ok: true,

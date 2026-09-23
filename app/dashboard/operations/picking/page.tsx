@@ -16,7 +16,9 @@ import {
   PickingBulkUploadDialog,
   PickingDocumentDialog,
   PickingEditButton,
+  PickingHistoryButton,
   PickingPictureLightbox,
+  PickingProductHistoryDialog,
 } from "@/components/operations/PickingProductDialogs";
 import { ListPagination } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
@@ -104,6 +106,7 @@ export default function ProductPicturesPage() {
   const [grnDocOpen, setGrnDocOpen] = useState(false);
   const [pickingDocOpen, setPickingDocOpen] = useState(false);
   const [editing, setEditing] = useState<PickingProduct | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<PickingProduct | null>(null);
   const [preview, setPreview] = useState<PickingProduct | null>(null);
   const [selected, setSelected] = useState<Record<string, PickingProduct>>({});
   const [imageSyncing, setImageSyncing] = useState(false);
@@ -516,7 +519,10 @@ export default function ProductPicturesPage() {
                       {row.sku}
                     </td>
                     <td className="px-2 py-3 text-right align-middle">
-                      <PickingEditButton onClick={() => setEditing(row)} />
+                      <div className="inline-flex items-center justify-end gap-1">
+                        <PickingHistoryButton onClick={() => setHistoryProduct(row)} />
+                        <PickingEditButton onClick={() => setEditing(row)} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -571,6 +577,11 @@ export default function ProductPicturesPage() {
         onDownload={(payload) => downloadDocument("awb", payload)}
       />
       <PickingPictureLightbox product={preview} onClose={() => setPreview(null)} />
+      <PickingProductHistoryDialog
+        open={Boolean(historyProduct)}
+        product={historyProduct}
+        onClose={() => setHistoryProduct(null)}
+      />
     </div>
   );
 }

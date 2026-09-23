@@ -178,3 +178,25 @@ CREATE POLICY "product_images_select"
   ON storage.objects FOR SELECT
   TO public
   USING (bucket_id = 'product_images');
+
+CREATE TABLE IF NOT EXISTS ops_picking_product_logs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sku          TEXT NOT NULL,
+  action       TEXT NOT NULL
+               CHECK (action IN ('created', 'name_changed', 'sku_changed', 'picture_changed', 'bulk_import')),
+  summary      TEXT NOT NULL,
+  old_value    TEXT,
+  new_value    TEXT,
+  changed_by   TEXT,
+  changed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ops_picking_product_logs_sku
+  ON ops_picking_product_logs (sku, changed_at DESC);
+
+ALTER TABLE ops_picking_product_logs DISABLE ROW LEVEL SECURITY;
+
+COMMENT ON TABLE ops_picking_product_logs IS
+  'Audit trail for Product Pictures catalog changes (SKU, name, picture, bulk import).';
+
+GRANT ALL ON TABLE ops_picking_product_logs TO service_role;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Pencil, Upload, X } from "lucide-react";
+import { Download, History, Loader2, Pencil, Upload, X } from "lucide-react";
 import type { PickingProduct } from "@/lib/operations/picking";
+import type { PickingProductLog } from "@/lib/operations/pickingAudit";
 import {
   pickingSkuFromFileName,
   parseSkuDocumentText,
@@ -1048,5 +1049,159 @@ export function PickingEditButton({ onClick }: { onClick: () => void }) {
       <Pencil className="h-3.5 w-3.5" />
       Edit
     </button>
+  );
+}
+
+function formatPickingLogTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function PickingHistoryButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="btn-secondary inline-flex h-8 w-8 items-center justify-center px-0 text-[11px]"
+      onClick={onClick}
+      title="View change history"
+      aria-label="View change history"
+    >
+      <History className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+export function PickingProductHistoryDialog({
+  open,
+  product,
+  onClose,
+}: {
+  open: boolean;
+  product: PickingProduct | null;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [logs, setLogs] = useState<PickingProductLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open) {
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !product?.sku) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setLogs([]);
+    fetch(`/api/operations/picking/logs?sku=${encodeURIComponent(product.sku)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load history");
+        return data;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setLogs(Array.isArray(data.logs) ? data.logs : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Could not load history");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, product?.sku]);
+
+  const requestClose = () => {
+    dialogRef.current?.close();
+    onClose();
+  };
+
+  return (
+    <dialog ref={dialogRef} className={dialogShell} onCancel={requestClose}>
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-portal-200 bg-white shadow-xl">
+        <div className="flex items-start justify-between border-b border-portal-100 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-portal-900">Change history</h2>
+            {product && (
+              <p className="mt-1 text-sm text-portal-600">
+                {product.product_name} · <span className="font-mono">{product.sku}</span>
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={requestClose}
+            className="rounded-lg p-1 text-portal-500 hover:bg-portal-50 hover:text-portal-800"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-portal-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading history…
+            </div>
+          ) : error ? (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          ) : logs.length === 0 ? (
+            <p className="py-8 text-center text-sm text-portal-500">No changes recorded yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {logs.map((log) => (
+                <li
+                  key={log.id}
+                  className="rounded-xl border border-portal-100 bg-portal-50/60 px-3 py-3 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-portal-900">{log.summary}</p>
+                    <time className="shrink-0 text-[11px] text-portal-500">
+                      {formatPickingLogTime(log.changed_at)}
+                    </time>
+                  </div>
+                  {(log.old_value || log.new_value) && (
+                    <div className="mt-2 space-y-1 text-xs text-portal-700">
+                      {log.old_value && (
+                        <p>
+                          <span className="font-medium text-portal-500">Before:</span> {log.old_value}
+                        </p>
+                      )}
+                      {log.new_value && (
+                        <p>
+                          <span className="font-medium text-portal-500">After:</span> {log.new_value}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-portal-500">
+                    {log.changed_by ? `Updated by ${log.changed_by}` : "Updated by system"}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </dialog>
   );
 }

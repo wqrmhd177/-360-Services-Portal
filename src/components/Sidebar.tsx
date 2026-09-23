@@ -378,7 +378,8 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     permissions: session.permissions,
   });
 
-  const showZambeel = isAdmin || zambeelPerms.length > 0;
+  const zambeel360Enabled = false;
+  const showZambeel = zambeel360Enabled && (isAdmin || zambeelPerms.length > 0);
   const showGrowth = isAdmin || zambeelPerms.includes("growth");
   const showApprover = isAdmin || zambeelPerms.includes("approver");
   const showProcurement = isAdmin || zambeelPerms.includes("procurement");
@@ -431,17 +432,19 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </div>
       </div>
 
-      <div className="border-b border-portal-700 p-4">
-        <button
-          type="button"
-          onClick={openSearch}
-          className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-white transition-colors hover:bg-portal-800 focus:outline-none focus:ring-2 focus:ring-portal-400 focus:ring-offset-2 focus:ring-offset-portal-900"
-          title="Search"
-        >
-          <Search className="h-4 w-4 text-portal-200" />
-          {!collapsed && <span>Search</span>}
-        </button>
-      </div>
+      {showZambeel && (
+        <div className="border-b border-portal-700 p-4">
+          <button
+            type="button"
+            onClick={openSearch}
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-white transition-colors hover:bg-portal-800 focus:outline-none focus:ring-2 focus:ring-portal-400 focus:ring-offset-2 focus:ring-offset-portal-900"
+            title="Search"
+          >
+            <Search className="h-4 w-4 text-portal-200" />
+            {!collapsed && <span>Search</span>}
+          </button>
+        </div>
+      )}
 
       {searchOpen && (
         <div
@@ -851,6 +854,37 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </div>
           )}
 
+          {showOps && (
+            <div>
+              <SectionToggle
+                open={opsOpen}
+                onToggle={() => setOpsOpen((p) => !p)}
+                onSidebarExpand={() => {
+                  onToggle?.();
+                  setOpsOpen(true);
+                }}
+                collapsed={collapsed}
+                label="Operations"
+                icon={<BarChart3 className={iconClassLg} />}
+                active={pathname.startsWith("/dashboard/operations")}
+              />
+              {opsOpen && !collapsed && (
+                <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
+                  <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
+                  <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
+                  <NavLink href="/dashboard/operations/op-performance" pathname={pathname} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
+                  <NavLink href="/dashboard/operations/ticketing" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
+                  <NavLink href="/dashboard/operations/picking" pathname={pathname} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
+                  <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
+                  <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
+                  <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
+                  <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
+                  <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
+                </div>
+              )}
+            </div>
+          )}
+
           {showPa && (
             <div>
               <SectionToggle
@@ -904,56 +938,22 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             </div>
           )}
 
-          {showOps && (
-            <div>
-              <SectionToggle
-                open={opsOpen}
-                onToggle={() => setOpsOpen((p) => !p)}
-                onSidebarExpand={() => {
-                  onToggle?.();
-                  setOpsOpen(true);
-                }}
-                collapsed={collapsed}
-                label="Operations"
-                icon={<BarChart3 className={iconClassLg} />}
-                active={pathname.startsWith("/dashboard/operations")}
-              />
-              {opsOpen && !collapsed && (
-                <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                  <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
-                  <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
-                  <NavLink href="/dashboard/operations/op-performance" pathname={pathname} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
-                  <NavLink href="/dashboard/operations/ticketing" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
-                  <NavLink href="/dashboard/operations/picking" pathname={pathname} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
-                  <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
-                  <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
-                  <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
-                  <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
-                  <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
-                </div>
-              )}
-            </div>
+          {isAdmin && (
+            <NavLink
+              href="/dashboard/admin/users"
+              pathname={pathname}
+              collapsed={collapsed}
+              icon={<Settings className={iconClassLg} />}
+              label="Admin Users"
+              matchPrefix="/dashboard/admin/users"
+            />
           )}
         </div>
       </nav>
 
       <div className="border-t border-portal-700 p-4">
         <div className="flex flex-col gap-1">
-          {isAdmin && (
-            <Link
-              href="/dashboard/admin/users"
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                pathname.startsWith("/dashboard/admin/users")
-                  ? "bg-portal-700 text-white"
-                  : "text-portal-100 hover:bg-portal-800"
-              }`}
-              title="User Settings"
-            >
-              <Settings className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>User Settings</span>}
-            </Link>
-          )}
-          {(isAdmin || zambeelPerms.includes("procurement")) && (
+          {showZambeel && (isAdmin || zambeelPerms.includes("procurement")) && (
             <Link
               href="/dashboard/procurement/announcement"
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-portal-100 transition-colors hover:bg-portal-800"
@@ -963,15 +963,17 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               {!collapsed && <span>Announcement</span>}
             </Link>
           )}
-          <button
-            type="button"
-            onClick={() => setDataDownloadOpen(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-portal-100 transition-colors hover:bg-portal-800"
-            title="Data Download"
-          >
-            <Download className="h-5 w-5 shrink-0" />
-            {!collapsed && <span>Data Download</span>}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setDataDownloadOpen(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-portal-100 transition-colors hover:bg-portal-800"
+              title="Data Download"
+            >
+              <Download className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>Data Download</span>}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSignOut}

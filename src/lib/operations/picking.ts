@@ -4,6 +4,7 @@ import {
   escapePickingIlike,
   parsePickingSearchTokens,
 } from "@/lib/operations/pickingParse";
+import { recordPickingProductChanges } from "@/lib/operations/pickingAudit";
 
 export type PickingProduct = {
   sku: string;
@@ -122,6 +123,7 @@ export async function savePickingProduct(row: {
   image_url?: string | null;
   source: "sheet" | "manual" | "bulk";
   created_by?: string | null;
+  pictureChanged?: boolean;
 }): Promise<PickingProduct> {
   const sku = row.sku.trim();
   const originalSku = (row.originalSku ?? "").trim();
@@ -139,9 +141,24 @@ export async function savePickingProduct(row: {
       created_by: row.created_by,
     });
     await deletePickingProduct(originalSku);
+    await recordPickingProductChanges({
+      before: current,
+      after: saved,
+      changed_by: row.created_by,
+      pictureChanged: row.pictureChanged,
+    });
     return saved;
   }
-  return upsertPickingProduct(row);
+
+  const before = await getPickingProduct(sku);
+  const saved = await upsertPickingProduct(row);
+  await recordPickingProductChanges({
+    before,
+    after: saved,
+    changed_by: row.created_by,
+    pictureChanged: row.pictureChanged,
+  });
+  return saved;
 }
 
 export async function upsertPickingProduct(row: {
