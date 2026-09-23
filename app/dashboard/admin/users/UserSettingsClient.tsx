@@ -2,17 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ZAMBEEL_DEPARTMENT_OPTIONS,
+  MAIN_TAB_OPTIONS,
   PA_ROLE_OPTIONS,
+  PORTAL_DEPARTMENT_OPTIONS,
+  PORTAL_ROLE_OPTIONS,
   deriveEffectivePermissions,
+  formatMainTabs,
   formatPaRole,
-  formatZambeelPerms,
+  formatPortalDepartment,
+  formatPortalRole,
   parsePermissions,
-  type UserPermissions,
-  type ZambeelDepartment,
+  type PortalDepartment,
+  type PortalRole,
   type ProductAvailabilityRole,
+  type UserPermissions,
 } from "@/lib/permissions";
-import { ASSIGNABLE_ROLE_OPTIONS, formatSignupTeamLabel, type UserRole } from "@/lib/simpleAuth";
 
 type ProfileRow = {
   id: string;
@@ -25,38 +29,74 @@ type ProfileRow = {
 
 type EditState = {
   isPortalAdmin: boolean;
-  departmentRole: UserRole;
-  zambeel360: ZambeelDepartment[];
-  product_availability: ProductAvailabilityRole | "";
-  product_listing: boolean;
-  operations: boolean;
+  portal_role: PortalRole;
+  department: PortalDepartment | "";
+  tabs: {
+    operations: boolean;
+    product_availability: boolean;
+    product_listing: boolean;
+  };
+  pa_workflow_role: ProductAvailabilityRole;
 };
 
 function userToEditState(user: ProfileRow): EditState {
   const parsed = parsePermissions(user.permissions);
   const isPortalAdmin = user.role === "admin";
-  const departmentRole: UserRole = isPortalAdmin
-    ? "growth"
-    : user.role && ASSIGNABLE_ROLE_OPTIONS.some((o) => o.value === user.role)
-      ? (user.role as UserRole)
-      : "growth";
+  const effective = deriveEffectivePermissions({
+    role: user.role,
+    isAdmin: isPortalAdmin,
+    permissions: parsed,
+    team: user.team,
+  });
 
   return {
     isPortalAdmin,
-    departmentRole,
-    zambeel360: parsed?.zambeel360 ?? [],
-    product_availability: parsed?.product_availability ?? "",
-    product_listing: parsed?.product_listing ?? false,
-    operations: parsed?.operations ?? false,
+    portal_role: isPortalAdmin ? "admin" : effective.portalRole,
+    department: (effective.department ?? "") as PortalDepartment | "",
+    tabs: {
+      operations: effective.tabs.operations,
+      product_availability: effective.tabs.product_availability,
+      product_listing: effective.tabs.product_listing,
+    },
+    pa_workflow_role: effective.paRole ?? "agent",
   };
 }
 
 function editStateToPermissions(state: EditState): UserPermissions {
+  if (state.isPortalAdmin) {
+    return {
+      portal_role: "admin",
+      department: state.department || null,
+      tabs: {
+        home: true,
+        operations: true,
+        product_availability: true,
+        product_listing: true,
+        admin_users: true,
+      },
+      product_availability: "manager",
+      product_listing: true,
+      operations: true,
+      zambeel360: [],
+    };
+  }
+
+  const tabs = {
+    home: true,
+    operations: state.tabs.operations,
+    product_availability: state.tabs.product_availability,
+    product_listing: state.tabs.product_listing,
+    admin_users: false,
+  };
+
   return {
-    zambeel360: state.zambeel360,
-    product_availability: state.product_availability || null,
-    product_listing: state.product_listing,
-    operations: state.operations,
+    portal_role: state.portal_role,
+    department: state.department || null,
+    tabs,
+    product_availability: state.tabs.product_availability ? state.pa_workflow_role : null,
+    product_listing: state.tabs.product_listing,
+    operations: state.tabs.operations,
+    zambeel360: [],
   };
 }
 
@@ -105,16 +145,16 @@ export default function UserSettingsClient() {
     setSaveError(null);
   };
 
-  const toggleZambeel = (dept: ZambeelDepartment) => {
+  const toggleTab = (key: keyof EditState["tabs"]) => {
     if (!editState) return;
     setEditState((prev) => {
       if (!prev) return prev;
-      const has = prev.zambeel360.includes(dept);
+      const next = !prev.tabs[key];
       return {
         ...prev,
-        zambeel360: has
-          ? prev.zambeel360.filter((d) => d !== dept)
-          : [...prev.zambeel360, dept],
+        tabs: { ...prev.tabs, [key]: next },
+        pa_workflow_role:
+          key === "product_availability" && !next ? prev.pa_workflow_role : prev.pa_workflow_role,
       };
     });
   };
@@ -129,7 +169,11 @@ export default function UserSettingsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           permissions: editStateToPermissions(editState),
-          role: editState.isPortalAdmin ? "admin" : editState.departmentRole,
+          role: editState.isPortalAdmin
+            ? "admin"
+            : editState.tabs.product_availability
+              ? editState.pa_workflow_role
+              : "agent",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -140,8 +184,8 @@ export default function UserSettingsClient() {
         prev.map((u) =>
           u.id === editingUser.id
             ? { ...u, permissions: data.user.permissions, role: data.user.role }
-            : u
-        )
+            : u,
+        ),
       );
       closeEdit();
     } catch (err) {
@@ -184,19 +228,17 @@ export default function UserSettingsClient() {
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Email</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Team</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Zambeel 360</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Product Availability</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Product Listing</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Operations</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">Department</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">Portal role</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">Main tabs</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">PA role</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No users found.
                   </td>
                 </tr>
@@ -206,6 +248,7 @@ export default function UserSettingsClient() {
                     role: user.role,
                     isAdmin: user.role === "admin",
                     permissions: parsePermissions(user.permissions),
+                    team: user.team,
                   });
                   return (
                     <tr key={user.id} className="hover:bg-gray-50">
@@ -214,26 +257,20 @@ export default function UserSettingsClient() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{user.email}</td>
                       <td className="px-4 py-3 text-gray-600">
-                        {formatSignupTeamLabel(user.team)}
+                        {formatPortalDepartment(effective.department, user.team)}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {!user.role
-                          ? "None"
-                          : user.role === "admin"
-                            ? "Portal Admin"
-                            : user.role}
+                        {user.role === "admin"
+                          ? "Admin"
+                          : formatPortalRole(effective.portalRole)}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {formatZambeelPerms(effective.zambeelPerms)}
+                        {formatMainTabs(effective.tabs)}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {formatPaRole(effective.paRole)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {effective.productListing ? "Yes" : "No"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {effective.operations ? "Yes" : "No"}
+                        {effective.tabs.product_availability
+                          ? formatPaRole(effective.paRole)
+                          : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -262,15 +299,14 @@ export default function UserSettingsClient() {
           onClick={closeEdit}
         >
           <div
-            className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="edit-user-title" className="text-lg font-semibold text-gray-900">
-              Edit permissions
+              Edit user access
             </h2>
             <p className="mt-1 text-sm text-gray-500">
               {editingUser.full_name || editingUser.email} ({editingUser.email})
-              {editingUser.team ? ` · Team: ${formatSignupTeamLabel(editingUser.team)}` : ""}
             </p>
 
             <div className="mt-6 space-y-5">
@@ -281,7 +317,7 @@ export default function UserSettingsClient() {
                     checked={editState.isPortalAdmin}
                     onChange={(e) =>
                       setEditState((prev) =>
-                        prev ? { ...prev, isPortalAdmin: e.target.checked } : prev
+                        prev ? { ...prev, isPortalAdmin: e.target.checked } : prev,
                       )
                     }
                     className="mt-0.5 rounded border-gray-300 text-portal-700 focus:ring-portal-500"
@@ -289,113 +325,120 @@ export default function UserSettingsClient() {
                   <span>
                     <span className="block text-sm font-medium text-gray-900">Portal Admin</span>
                     <span className="mt-0.5 block text-xs text-gray-600">
-                      Full access to all modules, User Settings, and edit rights across the portal.
-                      Only existing admins can grant this.
+                      Full read/write access to all tabs, including Admin Users and Data Download.
                     </span>
                   </span>
                 </label>
               </div>
 
               {!editState.isPortalAdmin && (
-                <div>
-                  <label htmlFor="department-role" className="text-sm font-medium text-gray-900">
-                    Primary role
-                  </label>
-                  <select
-                    id="department-role"
-                    value={editState.departmentRole}
-                    onChange={(e) =>
-                      setEditState((prev) =>
-                        prev
-                          ? { ...prev, departmentRole: e.target.value as UserRole }
-                          : prev
-                      )
-                    }
-                    className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
-                  >
-                    {ASSIGNABLE_ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {!editState.isPortalAdmin && (
                 <>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Zambeel 360</p>
-                <div className="mt-2 flex flex-wrap gap-3">
-                  {ZAMBEEL_DEPARTMENT_OPTIONS.map((opt) => (
-                    <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={editState.zambeel360.includes(opt.value)}
-                        onChange={() => toggleZambeel(opt.value)}
-                        className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
-                      />
-                      {opt.label}
+                  <div>
+                    <label htmlFor="portal-role" className="text-sm font-medium text-gray-900">
+                      Portal role
                     </label>
-                  ))}
-                </div>
-              </div>
+                    <select
+                      id="portal-role"
+                      value={editState.portal_role}
+                      onChange={(e) =>
+                        setEditState((prev) =>
+                          prev
+                            ? { ...prev, portal_role: e.target.value as PortalRole }
+                            : prev,
+                        )
+                      }
+                      className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
+                    >
+                      {PORTAL_ROLE_OPTIONS.filter((opt) => opt.value !== "admin").map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label} — {opt.hint}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label htmlFor="pa-role" className="text-sm font-medium text-gray-900">
-                  Product Availability
-                </label>
-                <select
-                  id="pa-role"
-                  value={editState.product_availability}
-                  onChange={(e) =>
-                    setEditState((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            product_availability: e.target.value as EditState["product_availability"],
-                          }
-                        : prev
-                    )
-                  }
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
-                >
-                  {PA_ROLE_OPTIONS.map((opt) => (
-                    <option key={opt.value || "none"} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label htmlFor="department" className="text-sm font-medium text-gray-900">
+                      Department
+                    </label>
+                    <select
+                      id="department"
+                      value={editState.department}
+                      onChange={(e) =>
+                        setEditState((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                department: e.target.value as PortalDepartment | "",
+                              }
+                            : prev,
+                        )
+                      }
+                      className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
+                    >
+                      <option value="">Not set</option>
+                      {PORTAL_DEPARTMENT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="flex flex-wrap gap-6">
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={editState.product_listing}
-                    onChange={(e) =>
-                      setEditState((prev) =>
-                        prev ? { ...prev, product_listing: e.target.checked } : prev
-                      )
-                    }
-                    className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
-                  />
-                  Product Listing access
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={editState.operations}
-                    onChange={(e) =>
-                      setEditState((prev) =>
-                        prev ? { ...prev, operations: e.target.checked } : prev
-                      )
-                    }
-                    className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
-                  />
-                  Operations access
-                </label>
-              </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Main tab access</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Home is always available. Sub-tabs inherit the same access as their main tab.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {MAIN_TAB_OPTIONS.map((tab) => (
+                        <label
+                          key={tab.key}
+                          className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={editState.tabs[tab.key]}
+                            onChange={() => toggleTab(tab.key)}
+                            className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
+                          />
+                          {tab.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {editState.tabs.product_availability && (
+                    <div>
+                      <label htmlFor="pa-role" className="text-sm font-medium text-gray-900">
+                        Product Availability workflow role
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Controls which requests this user sees inside Product Availability.
+                      </p>
+                      <select
+                        id="pa-role"
+                        value={editState.pa_workflow_role}
+                        onChange={(e) =>
+                          setEditState((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  pa_workflow_role: e.target.value as ProductAvailabilityRole,
+                                }
+                              : prev,
+                          )
+                        }
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
+                      >
+                        {PA_ROLE_OPTIONS.filter((opt) => opt.value).map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </>
               )}
             </div>

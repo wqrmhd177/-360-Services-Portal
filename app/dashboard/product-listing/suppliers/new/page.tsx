@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
-import { createSupplier, generateSupplierCode } from "@/lib/productListing/supplierHelpers";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SUPPLIER_TYPES = ["Trader", "Wholesaler", "Retailer", "Selling from Home"] as const;
@@ -257,49 +256,67 @@ export default function NewSupplierPage() {
     setSaving(true);
     setSubmitError("");
     try {
-      const code = await generateSupplierCode();
+      const codeRes = await fetch("/api/product-listing/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "next_supplier_code" }),
+      });
+      const codeJson = await codeRes.json().catch(() => ({}));
+      if (!codeRes.ok || !codeJson.code) {
+        setSubmitError(codeJson.error || "Could not generate supplier code.");
+        return;
+      }
+
       const session = await fetch("/api/auth/session").then((r) => r.json());
       const createdBy = session?.session?.email ?? "";
 
-      const result = await createSupplier({
-        supplier_code: code,
-        shop_name: form.shopName,
-        owner_name: form.ownerName || null,
-        email: null,
-        phone: form.phone,
-        whatsapp: form.whatsapp,
-        country: form.country,
-        city: form.city || null,
-        currency: form.currency,
-        supplier_type: form.supplierType || null,
-        category: form.category.length > 0 ? form.category : null,
-        pickup_address: null,
-        pickup_city: null,
-        return_address: null,
-        return_city: null,
-        payment_method: null,
-        bank_title: null,
-        bank_name: null,
-        bank_country: null,
-        iban: null,
-        bank_account_number: null,
-        bank_account_title: null,
-        paypal_email: null,
-        paypal_account_name: null,
-        exchange_name: null,
-        exchange_account_name: null,
-        exchange_id: null,
-        exchange_country: null,
-        binance_wallet: null,
-        status: "approved",
-        archived: false,
-        created_by: createdBy,
+      const createRes = await fetch("/api/product-listing/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_supplier",
+          supplier: {
+            supplier_code: codeJson.code,
+            shop_name: form.shopName,
+            owner_name: form.ownerName || null,
+            email: null,
+            phone: form.phone,
+            whatsapp: form.whatsapp,
+            country: form.country,
+            city: form.city || null,
+            currency: form.currency,
+            supplier_type: form.supplierType || null,
+            category: form.category.length > 0 ? form.category : null,
+            pickup_address: null,
+            pickup_city: null,
+            return_address: null,
+            return_city: null,
+            payment_method: null,
+            bank_title: null,
+            bank_name: null,
+            bank_country: null,
+            iban: null,
+            bank_account_number: null,
+            bank_account_title: null,
+            paypal_email: null,
+            paypal_account_name: null,
+            exchange_name: null,
+            exchange_account_name: null,
+            exchange_id: null,
+            exchange_country: null,
+            binance_wallet: null,
+            status: "approved",
+            archived: false,
+            created_by: createdBy,
+          },
+        }),
       });
-
-      if (!result) {
-        setSubmitError("Failed to create supplier. Please try again.");
+      const createJson = await createRes.json().catch(() => ({}));
+      if (!createRes.ok || !createJson.supplier) {
+        setSubmitError(createJson.error || "Failed to create supplier. Please try again.");
         return;
       }
+
       router.push("/dashboard/product-listing/suppliers");
     } catch {
       setSubmitError("Unexpected error. Please try again.");

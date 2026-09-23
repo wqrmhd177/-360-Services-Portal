@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import {
+  isPortalDepartment,
+  isPortalRole,
   isProductAvailabilityRole,
-  isZambeelDepartment,
+  type MainTabAccess,
+  type PortalDepartment,
+  type PortalRole,
+  type ProductAvailabilityRole,
   type UserPermissions,
-  type ZambeelDepartment,
 } from "@/lib/permissions";
 import { isAssignableRole, type UserRole } from "@/lib/simpleAuth";
 
@@ -13,26 +17,49 @@ function validatePermissions(body: unknown): UserPermissions | null {
   if (!body || typeof body !== "object") return null;
   const raw = body as Record<string, unknown>;
 
-  const zambeel360 = Array.isArray(raw.zambeel360)
-    ? raw.zambeel360.filter((v): v is ZambeelDepartment => typeof v === "string" && isZambeelDepartment(v))
-    : [];
+  const portal_role =
+    typeof raw.portal_role === "string" && isPortalRole(raw.portal_role)
+      ? (raw.portal_role as PortalRole)
+      : "manager";
+
+  const department =
+    raw.department === null
+      ? null
+      : typeof raw.department === "string" && isPortalDepartment(raw.department)
+        ? (raw.department as PortalDepartment)
+        : null;
 
   const product_availability =
     raw.product_availability === null
       ? null
       : typeof raw.product_availability === "string" &&
           isProductAvailabilityRole(raw.product_availability)
-        ? raw.product_availability
+        ? (raw.product_availability as ProductAvailabilityRole)
         : null;
 
   const product_listing = raw.product_listing === true;
   const operations = raw.operations === true;
 
+  let tabs: Partial<MainTabAccess> | undefined;
+  if (raw.tabs && typeof raw.tabs === "object") {
+    const tabRaw = raw.tabs as Record<string, unknown>;
+    tabs = {
+      home: tabRaw.home !== false,
+      operations: tabRaw.operations === true,
+      product_availability: tabRaw.product_availability === true,
+      product_listing: tabRaw.product_listing === true,
+      admin_users: tabRaw.admin_users === true,
+    };
+  }
+
   return {
-    zambeel360,
+    portal_role,
+    department,
+    tabs,
     product_availability,
     product_listing,
     operations,
+    zambeel360: [],
   };
 }
 
@@ -45,7 +72,7 @@ function validateRole(role: unknown): UserRole | null {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   const session = getPortalSession();
   if (!session?.isAdmin) {
@@ -80,27 +107,21 @@ export async function PATCH(
     updated_at: new Date().toISOString(),
   };
 
-  if (roleToSave !== undefined) {
+  if (roleToSave) {
     update.role = roleToSave;
   }
 
-  try {
-    const supabase = createSupabaseClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .update(update)
-      .eq("id", params.id)
-      .select("id, email, full_name, role, permissions")
-      .single();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(update)
+    .eq("id", params.id)
+    .select("id,email,full_name,role,team,permissions")
+    .single();
 
-    if (error) {
-      console.error("Failed to update user permissions:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ user: data });
-  } catch (error) {
-    console.error("User permissions update error:", error);
-    return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json({ user: data });
 }

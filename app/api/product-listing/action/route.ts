@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/session";
-import { fetchAllSuppliers } from "@/lib/productListing/supplierHelpers";
+import { createSupplier, fetchAllSuppliers, generateSupplierCode } from "@/lib/productListing/supplierHelpers";
 import { createPriceHistoryEntry } from "@/lib/productListing/priceHistoryHelpers";
 import { createVariantStatusChangeRequest } from "@/lib/productListing/variantStatusChangeHelpers";
 
@@ -28,6 +28,23 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const action = String(body.action ?? "");
+
+    if (action === "next_supplier_code") {
+      const code = await generateSupplierCode();
+      return NextResponse.json({ code });
+    }
+
+    if (action === "create_supplier") {
+      const payload = body.supplier;
+      if (!payload || typeof payload !== "object") {
+        return NextResponse.json({ error: "supplier payload required" }, { status: 400 });
+      }
+      const created = await createSupplier(payload as never);
+      if (!created) {
+        return NextResponse.json({ error: "Failed to create supplier" }, { status: 500 });
+      }
+      return NextResponse.json({ supplier: created });
+    }
 
     if (action === "save_variant_changes") {
       const productId = Number(body.productId);

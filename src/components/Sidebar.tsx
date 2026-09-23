@@ -372,7 +372,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   const role = session.role ?? null;
   const isAdmin = !!session.isAdmin;
-  const { zambeelPerms, paRole, productListing, operations } = deriveEffectivePermissions({
+  const { zambeelPerms, tabs } = deriveEffectivePermissions({
     role,
     isAdmin,
     permissions: session.permissions,
@@ -384,9 +384,9 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const showApprover = isAdmin || zambeelPerms.includes("approver");
   const showProcurement = isAdmin || zambeelPerms.includes("procurement");
   const showFinance = isAdmin || zambeelPerms.includes("finance");
-  const showPa = isAdmin || !!paRole || role === "growth";
-  const showPl = isAdmin || productListing;
-  const showOps = isAdmin || operations;
+  const showPa = tabs.product_availability;
+  const showPl = tabs.product_listing;
+  const showOps = tabs.operations;
 
   const isOnSellerPayments = pathname.includes("/finance/seller-payments");
   const effectiveSellerPaymentsOpen = sellerPaymentsOpen || isOnSellerPayments;

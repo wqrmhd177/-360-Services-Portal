@@ -16,9 +16,7 @@ import {
   PickingBulkUploadDialog,
   PickingDocumentDialog,
   PickingEditButton,
-  PickingHistoryButton,
   PickingPictureLightbox,
-  PickingProductHistoryDialog,
 } from "@/components/operations/PickingProductDialogs";
 import { ListPagination } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
@@ -106,7 +104,6 @@ export default function ProductPicturesPage() {
   const [grnDocOpen, setGrnDocOpen] = useState(false);
   const [pickingDocOpen, setPickingDocOpen] = useState(false);
   const [editing, setEditing] = useState<PickingProduct | null>(null);
-  const [historyProduct, setHistoryProduct] = useState<PickingProduct | null>(null);
   const [preview, setPreview] = useState<PickingProduct | null>(null);
   const [selected, setSelected] = useState<Record<string, PickingProduct>>({});
   const [imageSyncing, setImageSyncing] = useState(false);
@@ -462,18 +459,19 @@ export default function ProductPicturesPage() {
               : "No catalog yet. Sync Data, add a product, or bulk upload pictures."}
           </div>
         ) : (
-          <div>
+          <div className="overflow-hidden">
             <table className="w-full table-fixed divide-y divide-gray-100 text-sm">
               <colgroup>
-                <col className="w-10" />
-                <col className="w-[88px]" />
+                <col className="w-8" />
+                <col className="w-[4.5rem]" />
                 <col />
-                <col className="w-[30%]" />
-                <col className="w-[92px]" />
+                <col className="w-[26%]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-12" />
               </colgroup>
               <thead>
-                <tr className="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
-                  <th className="px-2 py-3 text-center">
+                <tr className="bg-gray-50 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+                  <th className="px-1 py-3 text-center">
                     <input
                       type="checkbox"
                       checked={allOnPageSelected}
@@ -481,16 +479,17 @@ export default function ProductPicturesPage() {
                       aria-label="Select all on this page"
                     />
                   </th>
-                  <th className="px-2 py-3 text-center">Picture</th>
-                  <th className="px-3 py-3 text-left">Product name</th>
-                  <th className="px-3 py-3 text-center">SKU</th>
-                  <th className="px-2 py-3 text-right">Actions</th>
+                  <th className="px-1 py-3 text-center">Picture</th>
+                  <th className="px-2 py-3 text-left">Product name</th>
+                  <th className="px-2 py-3 text-left">SKU</th>
+                  <th className="px-1 py-3 text-right">Updated</th>
+                  <th className="px-1 py-3 text-right"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {items.map((row) => (
                   <tr key={row.sku} className="hover:bg-gray-50">
-                    <td className="px-2 py-3 text-center align-middle">
+                    <td className="px-1 py-2 text-center align-middle">
                       <input
                         type="checkbox"
                         checked={Boolean(selected[row.sku])}
@@ -498,31 +497,35 @@ export default function ProductPicturesPage() {
                         aria-label={`Select ${row.sku}`}
                       />
                     </td>
-                    <td className="px-2 py-2 text-center align-middle">
+                    <td className="px-1 py-2 text-center align-middle">
                       {row.image_url ? (
                         <ProductThumb
                           src={row.image_url}
                           alt={row.product_name}
-                          className="mx-auto h-16 w-16 rounded-md border border-gray-200 object-contain bg-white"
+                          className="mx-auto h-14 w-14 rounded-md border border-gray-200 object-contain bg-white"
                           onClick={() => setPreview(row)}
                         />
                       ) : (
-                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-gray-200 text-[10px] text-gray-400">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-gray-200 text-[10px] text-gray-400">
                           No picture
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-3 align-middle font-medium text-gray-900 break-words">
-                      {row.product_name}
+                    <td className="px-2 py-2 align-middle text-sm font-medium text-gray-900">
+                      <span className="line-clamp-2 break-words" title={row.product_name}>
+                        {row.product_name}
+                      </span>
                     </td>
-                    <td className="px-3 py-3 align-middle text-right font-mono text-xs text-gray-700 break-all">
-                      {row.sku}
+                    <td className="px-2 py-2 align-middle font-mono text-[11px] text-gray-700">
+                      <span className="block truncate" title={row.sku}>
+                        {row.sku}
+                      </span>
                     </td>
-                    <td className="px-2 py-3 text-right align-middle">
-                      <div className="inline-flex items-center justify-end gap-1">
-                        <PickingHistoryButton onClick={() => setHistoryProduct(row)} />
-                        <PickingEditButton onClick={() => setEditing(row)} />
-                      </div>
+                    <td className="px-1 py-2 text-right align-middle text-[10px] leading-tight text-gray-500">
+                      {row.updated_at ? formatPortalTimestamp(row.updated_at) : "—"}
+                    </td>
+                    <td className="px-1 py-2 text-right align-middle">
+                      <PickingEditButton onClick={() => setEditing(row)} />
                     </td>
                   </tr>
                 ))}
@@ -577,11 +580,6 @@ export default function ProductPicturesPage() {
         onDownload={(payload) => downloadDocument("awb", payload)}
       />
       <PickingPictureLightbox product={preview} onClose={() => setPreview(null)} />
-      <PickingProductHistoryDialog
-        open={Boolean(historyProduct)}
-        product={historyProduct}
-        onClose={() => setHistoryProduct(null)}
-      />
     </div>
   );
 }
