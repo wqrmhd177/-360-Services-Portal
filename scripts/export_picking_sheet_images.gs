@@ -34,6 +34,35 @@ var PickingSheetImageExport = {
   ],
 };
 
+/**
+ * Master Products sheet config.
+ * Column layout: A=Product Name, B=SKU, C=In-cell Image, D=Image URL (auto-filled).
+ * Use separate document properties so progress is tracked independently.
+ */
+var MasterProductsExport = {
+  sheetName: "Master Products",
+  folderName: "Master Product Images",
+  imageCol: 3,   // column C — in-cell image
+  linkCol:  4,   // column D — Drive URL written here
+  skuCol:   2,   // column B — SKU
+  startRow: 2,
+  batchSize: 300,
+  heavyBatchSize: 30,
+  maxRuntimeMs: 5 * 60 * 1000,
+  nextDelayMs: 60 * 1000,
+  propFolder:   "masterImgFolderId",
+  propTempSs:   "masterImgTempSsId",
+  propProgress: "masterImgProgress",
+  propNextRow:  "masterImgNextRow",
+  dummySheet:   "_master_img_dummy",
+  helperNames: [
+    "_master_img_dummy",
+    "_master_img_one",
+    "_master_img_tmp",
+    "_master_img_clone",
+  ],
+};
+
 var pickingImgUsedHeavy_ = false;
 
 function pickingImgAddMenu() {
@@ -47,6 +76,154 @@ function pickingImgAddMenu() {
     .addItem("Reset progress", "pickingImgResetProgress")
     .addItem("Remove dummy / helper tabs", "pickingImgRemoveDummyTabs")
     .addToUi();
+
+  SpreadsheetApp.getUi()
+    .createMenu("Master products")
+    .addItem("Export images", "masterImgExportBatch")
+    .addItem("Retry missing links", "masterImgRetryMissing")
+    .addSeparator()
+    .addItem("Stop auto export", "masterImgRemoveTrigger")
+    .addItem("Reset progress", "masterImgResetProgress")
+    .addToUi();
+}
+
+// ─── Master Products helpers — thin wrappers that swap the config object ────
+
+function masterImgGetCfg() { return MasterProductsExport; }
+
+function masterImgGetFolder() {
+  var props = PropertiesService.getDocumentProperties();
+  var cfg = MasterProductsExport;
+  var id = props.getProperty(cfg.propFolder);
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  var folders = DriveApp.getFoldersByName(cfg.folderName);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(cfg.folderName);
+  try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  props.setProperty(cfg.propFolder, folder.getId());
+  return folder;
+}
+
+function masterImgLoadProgress() {
+  var cfg = MasterProductsExport;
+  var raw = PropertiesService.getDocumentProperties().getProperty(cfg.propProgress);
+  if (raw) { try { return JSON.parse(raw); } catch (e) {} }
+  return { sheetIndex: 0, row: cfg.startRow, dummyOnly: false };
+}
+
+function masterImgSaveProgress(progress) {
+  PropertiesService.getDocumentProperties().setProperty(
+    MasterProductsExport.propProgress,
+    JSON.stringify(progress)
+  );
+}
+
+function masterImgScheduleNext() {
+  masterImgRemoveTrigger();
+  ScriptApp.newTrigger("masterImgExportBatch")
+    .timeBased()
+    .after(MasterProductsExport.nextDelayMs)
+    .create();
+}
+
+function masterImgRemoveTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "masterImgExportBatch") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+}
+
+function masterImgRetryMissing() {
+  var props = PropertiesService.getDocumentProperties();
+  props.deleteProperty(MasterProductsExport.propProgress);
+  props.deleteProperty(MasterProductsExport.propNextRow);
+  masterImgSaveProgress({ sheetIndex: 0, row: MasterProductsExport.startRow, dummyOnly: false });
+  masterImgExportBatch();
+}
+
+function masterImgResetProgress() {
+  masterImgRemoveTrigger();
+  var props = PropertiesService.getDocumentProperties();
+  props.deleteProperty(MasterProductsExport.propProgress);
+  props.deleteProperty(MasterProductsExport.propNextRow);
+  SpreadsheetApp.getActive().toast("Master Products export stopped and progress reset.", "Master products", 6);
+}
+
+function masterImgExportBatch() {
+  DriveApp.getRootFolder();
+  var cfg = MasterProductsExport;
+  var started = Date.now();
+  var ss = SpreadsheetApp.getActive();
+  var progress = masterImgLoadProgress();
+  var sheet = ss.getSheetByName(cfg.sheetName);
+  if (!sheet) {
+    ss.toast("Sheet '" + cfg.sheetName + "' not found. Create a tab named 'Master Products'.", "Master products", 10);
+    return;
+  }
+  var folder = masterImgGetFolder();
+  var cols = { imageCol: cfg.imageCol, linkCol: cfg.linkCol, skuCol: cfg.skuCol };
+  var done = 0, skipped = 0, failed = 0, processed = 0, heavy = 0;
+  var row = Math.max(cfg.startRow, Number(progress.row) || cfg.startRow);
+  var lastRow = sheet.getLastRow();
+
+  var overGrid = {};
+  try {
+    var images = sheet.getImages();
+    for (var i = 0; i < images.length; i++) {
+      var anchor = images[i].getAnchorCell();
+      if (!anchor) continue;
+      var r = anchor.getRow();
+      if (!overGrid[r]) overGrid[r] = [];
+      overGrid[r].push(images[i]);
+    }
+  } catch (e) {}
+
+  for (; row <= lastRow; row++) {
+    if (Date.now() - started > cfg.maxRuntimeMs) break;
+    if (heavy >= cfg.heavyBatchSize) break;
+    if (processed >= cfg.batchSize && heavy === 0) break;
+
+    var sku = String(sheet.getRange(row, cols.skuCol).getDisplayValue() || "").trim();
+    var existing = String(sheet.getRange(row, cols.linkCol).getDisplayValue() || "").trim();
+    processed++;
+
+    if (/^https?:\/\//i.test(existing)) { skipped++; continue; }
+
+    var fileKey = pickingImgFileKey(sku, cfg.sheetName, row);
+    try {
+      var blob = pickingImgBlobFromRow(sheet, row, cols, overGrid, folder, fileKey);
+      if (!blob) { skipped++; continue; }
+      pickingImgWriteLink(sheet, cols, row, blob, folder, fileKey);
+      if (pickingImgUsedHeavy_) heavy++;
+      done++;
+    } catch (e) {
+      sheet.getRange(row, cols.linkCol).setNote("Export error: " + e);
+      failed++;
+    }
+
+    if (done % 10 === 0) {
+      masterImgSaveProgress({ sheetIndex: 0, row: row + 1 });
+      ss.toast("Master Products: " + done + " exported so far…", "Master products", 3);
+    }
+  }
+
+  masterImgSaveProgress({ sheetIndex: 0, row: row });
+
+  if (row <= lastRow) {
+    masterImgScheduleNext();
+    ss.toast(
+      "Batch done: " + done + " exported, " + skipped + " skipped. Auto-resuming in 1 min…",
+      "Master products", 10
+    );
+  } else {
+    PropertiesService.getDocumentProperties().deleteProperty(cfg.propProgress);
+    masterImgRemoveTrigger();
+    ss.toast(
+      "All rows done. Exported " + done + ", skipped " + skipped + ", failed " + failed + ". Run portal Sync Products now.",
+      "Master products", 12
+    );
+  }
 }
 
 function pickingImgGetFolder() {

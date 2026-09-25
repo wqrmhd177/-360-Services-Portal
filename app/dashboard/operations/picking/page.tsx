@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   FileText,
-  Image as ImageIcon,
+  FileWarning,
   ListChecks,
   Loader2,
   Plus,
@@ -105,94 +105,45 @@ export default function ProductPicturesPage() {
   const [editing, setEditing] = useState<PickingProduct | null>(null);
   const [preview, setPreview] = useState<PickingProduct | null>(null);
   const [selected, setSelected] = useState<Record<string, PickingProduct>>({});
-  const [imageSyncing, setImageSyncing] = useState(false);
-  const [imageSyncMessage, setImageSyncMessage] = useState<string | null>(null);
-  const [pendingPictures, setPendingPictures] = useState<number | null>(null);
-  const [storedPictures, setStoredPictures] = useState<number | null>(null);
+  const [masterSyncing, setMasterSyncing] = useState(false);
+  const [masterSyncMessage, setMasterSyncMessage] = useState<string | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState(false);
 
-  const busy = loading || syncing || bootstrapping || imageSyncing;
+  const busy = loading || syncing || bootstrapping || masterSyncing;
   const selectedList = useMemo(() => Object.values(selected), [selected]);
   const selectedCount = selectedList.length;
   const allOnPageSelected =
     items.length > 0 && items.every((item) => Boolean(selected[item.sku]));
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/operations/picking/sync-images")
-      .then((res) => readApiJson(res))
-      .then((json) => {
-        if (cancelled || json.error) return;
-        setPendingPictures(Number(json.pending ?? 0));
-        setStoredPictures(Number(json.stored ?? 0));
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [lastSyncedAt]);
-
-  const syncPictures = async () => {
-    setImageSyncing(true);
-    setImageSyncMessage("Copying pictures into Supabase…");
-    let copiedTotal = 0;
-    let failedTotal = 0;
-    let remainingNow: number | null = pendingPictures;
-    const started = Date.now();
-    const render = (remaining: number | null) => {
-      const secs = Math.max(1, Math.round((Date.now() - started) / 1000));
-      const rate = copiedTotal > 0 ? Math.round(copiedTotal / secs) : 0;
-      setImageSyncMessage(
-        `Copied ${copiedTotal.toLocaleString()} pictures` +
-          (failedTotal ? `, ${failedTotal} failed` : "") +
-          (remaining != null && remaining > 0
-            ? ` · ${remaining.toLocaleString()} left`
-            : "") +
-          (rate ? ` · ${rate}/s` : ""),
-      );
-    };
-    const tick = window.setInterval(() => render(remainingNow), 1000);
+  const syncProducts = async () => {
+    setMasterSyncing(true);
+    setMasterSyncMessage("Syncing products and pictures from Master Sheet…");
     try {
-      for (let round = 0; round < 120; round += 1) {
-        const res = await fetch("/api/operations/picking/sync-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            maxMs: 50_000,
-            concurrency: 8,
-            pageSize: 100,
-          }),
-        });
-        const json = await readApiJson(res);
-        if (!res.ok) {
-          throw new Error(String(json.error ?? "Picture sync failed"));
-        }
-        copiedTotal += Number(json.copied ?? 0);
-        failedTotal += Number(json.failed ?? 0);
-        remainingNow = Number(json.remaining ?? 0);
-        setPendingPictures(remainingNow);
-        if (json.stored != null) setStoredPictures(Number(json.stored));
-        render(remainingNow);
-        if (remainingNow <= 0 || json.done) break;
-        if (Number(json.copied ?? 0) === 0 && !json.timedOut) break;
-      }
-      if (failedTotal && (remainingNow ?? 0) > 0) {
-        setImageSyncMessage(
-          `Copied ${copiedTotal.toLocaleString()} pictures, ${failedTotal} failed. Share the Drive folder as Anyone with the link, then click Sync pictures again.`,
-        );
-      } else {
-        render(remainingNow);
-      }
+      const res = await fetch("/api/operations/picking/sync-master", { method: "POST" });
+      const json = await readApiJson(res);
+      if (!res.ok) throw new Error(String(json.error ?? "Sync failed"));
+      const added = Number(json.added ?? 0);
+      const updated = Number(json.updated ?? 0);
+      const skipped = Number(json.skipped ?? 0);
+      const copied = Number(json.imagesCopied ?? 0);
+      const parts: string[] = [];
+      if (added) parts.push(`${added} new product${added === 1 ? "" : "s"}`);
+      if (updated) parts.push(`${updated} updated`);
+      if (skipped) parts.push(`${skipped} unchanged`);
+      if (copied) parts.push(`${copied} picture${copied === 1 ? "" : "s"} copied`);
+      setMasterSyncMessage(parts.length ? parts.join(" · ") : "Everything is up to date.");
       await load(currentPage, search);
     } catch (err) {
-      setImageSyncMessage(
-        err instanceof Error ? err.message : "Picture sync failed",
-      );
+      setMasterSyncMessage(err instanceof Error ? err.message : "Sync failed");
     } finally {
-      window.clearInterval(tick);
-      setImageSyncing(false);
+      setMasterSyncing(false);
     }
+  };
+
+  const openMissingReport = () => {
+    const popup = window.open("/api/operations/picking/missing-report", "_blank");
+    if (!popup) alert("Allow pop-ups to open the report.");
   };
 
   const toggleRow = (product: PickingProduct) => {
@@ -352,53 +303,36 @@ export default function ProductPicturesPage() {
         </button>
         <button
           type="button"
-          onClick={() => void runSync()}
+          onClick={() => void syncProducts()}
           disabled={busy}
           className="btn-primary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs disabled:opacity-60"
         >
-          {syncing || bootstrapping ? (
+          {masterSyncing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
-          Sync Data
+          Sync Products
         </button>
         <button
           type="button"
-          onClick={() => void syncPictures()}
+          onClick={openMissingReport}
           disabled={busy}
           className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs disabled:opacity-60"
         >
-          {imageSyncing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ImageIcon className="h-4 w-4" />
-          )}
-          Sync pictures
+          <FileWarning className="h-4 w-4" />
+          Missing Pictures List
         </button>
       </div>
 
       <p className="text-[11px] text-[var(--muted)]">
-        {imageSyncing || imageSyncMessage
-          ? imageSyncMessage
+        {masterSyncing || masterSyncMessage
+          ? masterSyncMessage
           : busy
-            ? bootstrapping || syncing
-              ? "Syncing Product Images from Google Sheets…"
-              : "Loading catalog…"
+            ? "Loading catalog…"
             : lastSyncedAt
               ? `Last synced: ${formatPortalTimestamp(lastSyncedAt)}`
-              : "Not synced yet — run setup_ops_picking.sql, then Sync Data."}
-        {!imageSyncing && pendingPictures != null
-          ? pendingPictures > 0
-            ? ` · ${pendingPictures.toLocaleString()} pictures waiting to copy${
-                storedPictures
-                  ? ` · ${storedPictures.toLocaleString()} already in Supabase`
-                  : ""
-              }`
-            : storedPictures
-              ? ` · ${storedPictures.toLocaleString()} pictures in Supabase`
-              : " · All pictures are in Supabase"
-          : ""}
+              : "Not synced yet — click Sync Products to import from your Master Products sheet."}
         {warning ? ` ${warning}` : ""}
       </p>
 

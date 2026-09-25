@@ -1,4 +1,5 @@
 import { pickingDocumentLabel } from "@/lib/operations/pickingSheet";
+import type { PickingProduct } from "@/lib/operations/picking";
 
 export type PickingDocType = "grn" | "awb";
 
@@ -259,4 +260,105 @@ function awbBody(options: PickingDocOptions, totalQty: number): string {
     </tr>
     ${rows}
   </table>`;
+}
+
+// ─── Missing Pictures Report ──────────────────────────────────────────────────
+
+function escapeHtmlAttr(str: string): string {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Returns a print-ready A4 HTML page listing all products that have no image.
+ * Warehouse team can print this and physically mark items once photos are taken.
+ */
+export function buildMissingPicturesReportHtml(rows: PickingProduct[]): string {
+  const missing = rows.filter((r) => !r.image_url);
+  const today = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const rowHtml = missing
+    .map(
+      (r, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td class="sku">${escapeHtmlAttr(r.sku)}</td>
+      <td class="name">${escapeHtmlAttr(r.product_name ?? r.sku)}</td>
+      <td class="notes"></td>
+    </tr>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Missing Pictures – ${escapeHtmlAttr(today)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    color: #111;
+    padding: 18mm 14mm;
+  }
+  h1 { font-size: 16pt; margin-bottom: 4px; }
+  .subtitle { font-size: 10pt; color: #555; margin-bottom: 14px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+  thead tr { background: #1a1a2e; color: #fff; }
+  thead th {
+    padding: 7px 8px;
+    text-align: left;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tbody tr { border-bottom: 1px solid #e5e7eb; }
+  tbody tr:nth-child(even) { background: #f9fafb; }
+  td { padding: 6px 8px; vertical-align: top; }
+  .num  { width: 36px;  color: #888; font-size: 9pt; text-align: right; }
+  .sku  { width: 130px; font-family: monospace; font-size: 10pt; color: #1a1a2e; }
+  .name { width: 55%; }
+  .notes { width: auto; color: #ccc; font-style: italic; font-size: 9pt; }
+  tfoot td { padding-top: 10px; font-size: 9pt; color: #888; }
+  @media print {
+    body { padding: 10mm; }
+    thead { display: table-header-group; }
+    tr    { page-break-inside: avoid; }
+    @page { margin: 12mm 10mm; }
+  }
+</style>
+</head>
+<body>
+<h1>Products Without Pictures</h1>
+<p class="subtitle">Generated ${escapeHtmlAttr(today)} &nbsp;·&nbsp; ${missing.length} product${missing.length === 1 ? "" : "s"} need photos</p>
+<table>
+  <thead>
+    <tr>
+      <th class="num">#</th>
+      <th class="sku">SKU</th>
+      <th class="name">Product Name</th>
+      <th class="notes">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rowHtml || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#888;">All products have pictures 🎉</td></tr>'}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="4">Total: ${missing.length} product${missing.length === 1 ? "" : "s"} without a picture.</td></tr>
+  </tfoot>
+</table>
+<script>window.onload = function(){ window.print(); };</script>
+</body>
+</html>`;
 }

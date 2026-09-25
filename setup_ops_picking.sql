@@ -200,3 +200,84 @@ COMMENT ON TABLE ops_picking_product_logs IS
   'Audit trail for Product Pictures catalog changes (SKU, name, picture, bulk import).';
 
 GRANT ALL ON TABLE ops_picking_product_logs TO service_role;
+
+-- ─── merge_picking_products RPC ───────────────────────────────────────────────
+-- Smart-merge rows from the Master Products Google Sheet:
+--   INSERT rows whose SKU does not yet exist.
+--   UPDATE only if a non-null image URL arrives and the current image_url is
+--     either null or a Drive/external URL (never overwrites a Supabase URL).
+--   Skip otherwise.
+-- Returns the number of rows actually written (inserted + updated).
+
+CREATE OR REPLACE FUNCTION merge_picking_products(p_rows JSONB)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  r           JSONB;
+  v_sku       TEXT;
+  v_name      TEXT;
+  v_image_url TEXT;
+  v_sheet_url TEXT;
+  existing    ops_picking_products%ROWTYPE;
+  written     INT := 0;
+BEGIN
+  FOR r IN SELECT * FROM jsonb_array_elements(p_rows)
+  LOOP
+    v_sku       := trim(r->>'sku');
+    v_name      := trim(r->>'product_name');
+    v_image_url := trim(r->>'image_url');
+    v_sheet_url := trim(r->>'sheet_image_url');
+
+    IF v_sku IS NULL OR v_sku = '' THEN
+      CONTINUE;
+    END IF;
+
+    SELECT * INTO existing
+    FROM ops_picking_products
+    WHERE sku = v_sku
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+      -- INSERT new SKU
+      INSERT INTO ops_picking_products (
+        sku, product_name, image_url, sheet_image_url, source, updated_at
+      ) VALUES (
+        v_sku,
+        COALESCE(NULLIF(v_name, ''), v_sku),
+        NULLIF(v_image_url, ''),
+        NULLIF(v_sheet_url, ''),
+        'sheet',
+        NOW()
+      )
+      ON CONFLICT (sku) DO NOTHING;
+      written := written + 1;
+
+    ELSIF v_image_url IS NOT NULL AND v_image_url <> ''
+      AND (
+        existing.image_url IS NULL
+        OR (
+          existing.image_url NOT LIKE '%/storage/v1/object/public/product_images/%'
+          AND existing.image_url <> v_image_url
+        )
+      )
+    THEN
+      -- UPDATE only when a new Drive URL has arrived
+      UPDATE ops_picking_products SET
+        product_name    = COALESCE(NULLIF(v_name, ''), existing.product_name),
+        image_url       = v_image_url,
+        sheet_image_url = NULLIF(v_sheet_url, ''),
+        source          = 'sheet',
+        updated_at      = NOW()
+      WHERE sku = v_sku;
+      written := written + 1;
+
+    END IF;
+  END LOOP;
+
+  RETURN written;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION merge_picking_products(JSONB) TO service_role;

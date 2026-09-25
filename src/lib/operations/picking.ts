@@ -266,3 +266,25 @@ export async function getPickingLastSynced(): Promise<string | null> {
   const last = await getLastSync("picking");
   return last?.synced_at ?? null;
 }
+
+/**
+ * Fetch every product (no pagination). Used for the missing-pictures report.
+ * Ordered alphabetically by product name.
+ */
+export async function getAllPickingProducts(): Promise<PickingProduct[]> {
+  const supabase = getOpsServiceDb();
+  const all: PickingProduct[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("ops_picking_products")
+      .select("sku,product_name,image_url,source,updated_at")
+      .order("product_name", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all.push(...(data as PickingProduct[]));
+    if (data.length < pageSize) break;
+  }
+  return all;
+}

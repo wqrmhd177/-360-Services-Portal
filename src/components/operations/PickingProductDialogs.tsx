@@ -193,6 +193,7 @@ export function PickingBulkUploadDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [rows, setRows] = useState<BulkPictureRow[]>([]);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -214,6 +215,7 @@ export function PickingBulkUploadDialog({
   const requestClose = () => {
     clearPreviews(rows);
     setRows([]);
+    setCsvFile(null);
     setError(null);
     setResult(null);
     dialogRef.current?.close();
@@ -242,11 +244,11 @@ export function PickingBulkUploadDialog({
   };
 
   const handleUpload = async () => {
-    if (rows.length === 0) {
-      setError("Drop or choose product pictures first. Name each file as the SKU.");
+    if (rows.length === 0 && !csvFile) {
+      setError("Drop pictures or upload a CSV/Excel file with SKUs first.");
       return;
     }
-    if (rows.some((row) => !row.sku.trim())) {
+    if (rows.length > 0 && rows.some((row) => !row.sku.trim())) {
       setError("Every picture needs a SKU.");
       return;
     }
@@ -255,6 +257,9 @@ export function PickingBulkUploadDialog({
     setResult(null);
     try {
       const form = new FormData();
+      if (csvFile) {
+        form.append("file", csvFile);
+      }
       for (const row of rows) {
         form.append("images", row.file);
         form.append("skus", row.sku.trim());
@@ -266,12 +271,17 @@ export function PickingBulkUploadDialog({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Upload failed");
-      setResult(
-        `Saved ${Number(json.rowCount ?? 0).toLocaleString()} products` +
-          (json.withImages ? ` (${json.withImages} with pictures)` : ""),
-      );
+      const added = Number(json.added ?? json.rowCount ?? 0);
+      const existing = Number(json.existing ?? 0);
+      const withImages = Number(json.withImages ?? 0);
+      const parts: string[] = [];
+      if (added > 0) parts.push(`${added} new SKU${added === 1 ? "" : "s"} registered`);
+      if (existing > 0) parts.push(`${existing} already existed`);
+      if (withImages > 0) parts.push(`${withImages} with pictures`);
+      setResult(parts.join(" · ") || "Done.");
       clearPreviews(rows);
       setRows([]);
+      setCsvFile(null);
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -292,16 +302,57 @@ export function PickingBulkUploadDialog({
           </button>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          Choose pictures only. The file name is the SKU, then fill the product name if you want.
-          Example: <code>KPA-N-TY-ZAM.jpg</code>.
+          Upload a CSV/Excel with SKU and Product Name to register products without images, or drop
+          pictures (file name = SKU) to attach photos.
         </p>
-        <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-portal-200 bg-portal-50/60 px-4 py-8 text-center hover:border-portal-400">
+
+        {/* CSV / Excel upload */}
+        <div className="mt-4">
+          <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Register SKUs via CSV (no images needed)</p>
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-portal-300 bg-portal-50/60 px-4 py-3 text-sm hover:border-portal-500">
+            <Upload className="h-4 w-4 shrink-0 text-portal-700" />
+            <span className="min-w-0 flex-1 truncate text-portal-900">
+              {csvFile ? csvFile.name : "Upload CSV or Excel (SKU, Product Name columns)"}
+            </span>
+            {csvFile ? (
+              <button
+                type="button"
+                className="text-[var(--muted)] hover:text-red-500"
+                onClick={(e) => { e.preventDefault(); setCsvFile(null); }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) { setCsvFile(f); setError(null); setResult(null); }
+              }}
+            />
+          </label>
+          <p className="mt-1 text-[10px] text-[var(--muted)]">
+            Required column: <code>SKU</code>. Optional: <code>Product Name</code>.
+            Warehouse team adds photos later via "Bulk pictures".
+          </p>
+        </div>
+
+        <div className="my-4 flex items-center gap-2 text-xs text-[var(--muted)]">
+          <div className="h-px flex-1 bg-[var(--card-border)]" />
+          or attach pictures
+          <div className="h-px flex-1 bg-[var(--card-border)]" />
+        </div>
+
+        <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-portal-200 bg-portal-50/60 px-4 py-8 text-center hover:border-portal-400">
           <Upload className="mb-2 h-6 w-6 text-portal-700" />
           <span className="text-sm font-medium text-portal-900">
             Drop pictures here or click to choose
           </span>
           <span className="mt-1 text-xs text-[var(--muted)]">
-            JPG, PNG, GIF, or WebP — one picture per SKU
+            JPG, PNG, GIF, or WebP — file name = SKU (e.g. <code>KPA-N-TY-ZAM.jpg</code>)
           </span>
           <input
             type="file"
@@ -396,7 +447,7 @@ export function PickingBulkUploadDialog({
             onClick={() => void handleUpload()}
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {uploading ? "Uploading…" : "Upload pictures"}
+            {uploading ? "Uploading…" : csvFile && rows.length === 0 ? "Register SKUs" : "Upload"}
           </button>
         </div>
       </div>

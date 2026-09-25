@@ -190,9 +190,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const addedCount = rows.filter((row) => !existingSkus.has(row.sku.toLowerCase())).length;
+    const existingCount = rows.length - addedCount;
+
     return NextResponse.json({
       ok: true,
       rowCount: written,
+      added: addedCount,
+      existing: existingCount,
+      total: rows.length,
       withImages: rows.filter((row) => row.image_url).length,
     });
   } catch (err) {
