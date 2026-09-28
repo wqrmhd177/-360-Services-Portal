@@ -685,44 +685,76 @@ function pickingImgExportTinyFromSheet(oneSheet) {
 function pickingImgBlobViaDummyTab(sourceSheet, row, imageCol) {
   pickingImgUsedHeavy_ = true;
   var ss = sourceSheet.getParent();
-  var stageCol = 26;
-  var src = sourceSheet.getRange(row, imageCol);
-  var stage = sourceSheet.getRange(row, stageCol);
   var dummy = pickingImgDummyTab(ss);
 
+  // Ensure dummy tab has at least 1 row and 1 column to accept the paste.
   try {
+    if (dummy.getMaxRows() < 1) dummy.insertRows(1);
+    if (dummy.getMaxColumns() < 1) dummy.insertColumns(1);
+  } catch (e) {}
+
+  try {
+    // ── Try 1: copy via Apps Script API directly into the dummy tab ──────────
+    var apiOk = pickingImgApiCopyPaste(
+      ss.getId(),
+      sourceSheet.getSheetId(),
+      row,
+      imageCol,
+      dummy.getSheetId(),
+      1,
+      1,
+    );
+    SpreadsheetApp.flush();
+    var blob = pickingImgBlobFromRange(dummy.getRange(1, 1));
+    if (blob) return blob;
+
+    // ── Try 2: use a staging column on the source sheet ───────────────────────
+    // Pick a column that is guaranteed to be within the sheet's dimensions.
+    var lastCol = sourceSheet.getLastColumn();
+    var stageCol = Math.max(lastCol + 2, imageCol + 1);
+    // Expand the sheet if needed.
+    if (sourceSheet.getMaxColumns() < stageCol) {
+      try {
+        sourceSheet.insertColumnsAfter(
+          sourceSheet.getMaxColumns(),
+          stageCol - sourceSheet.getMaxColumns(),
+        );
+      } catch (expandErr) {
+        stageCol = sourceSheet.getMaxColumns();
+      }
+    }
+    var src   = sourceSheet.getRange(row, imageCol);
+    var stage = sourceSheet.getRange(row, stageCol);
     try {
       src.copyTo(stage, SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
     } catch (copyErr) {
       pickingImgApiCopyPaste(
         ss.getId(),
         sourceSheet.getSheetId(),
-        row,
-        imageCol,
+        row, imageCol,
         sourceSheet.getSheetId(),
-        row,
-        stageCol,
+        row, stageCol,
       );
     }
     SpreadsheetApp.flush();
-    var blob = pickingImgBlobFromRange(stage);
-    if (blob) return blob;
+    blob = pickingImgBlobFromRange(stage);
+    if (blob) {
+      try { stage.clearContent(); } catch (e) {}
+      return blob;
+    }
 
+    // ── Try 3: move staged cell → dummy tab ───────────────────────────────────
     try {
       stage.moveTo(dummy.getRange(1, 1));
     } catch (moveErr) {
       pickingImgApiCopyPaste(
         ss.getId(),
         sourceSheet.getSheetId(),
-        row,
-        imageCol,
+        row, stageCol,
         dummy.getSheetId(),
-        1,
-        1,
+        1, 1,
       );
-      try {
-        stage.clearContent();
-      } catch (e) {}
+      try { stage.clearContent(); } catch (e) {}
     }
     SpreadsheetApp.flush();
     blob = pickingImgBlobFromRange(dummy.getRange(1, 1));
@@ -733,9 +765,7 @@ function pickingImgBlobViaDummyTab(sourceSheet, row, imageCol) {
     console.log("dummy tab row " + row + ": " + err);
     return null;
   } finally {
-    try {
-      stage.clearContent();
-    } catch (e2) {}
+    try { dummy.clearContent(); } catch (e2) {}
   }
 }
 
