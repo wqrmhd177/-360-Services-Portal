@@ -336,7 +336,7 @@ export function PickingBulkUploadDialog({
           </label>
           <p className="mt-1 text-[10px] text-[var(--muted)]">
             Required column: <code>SKU</code>. Optional: <code>Product Name</code>.
-            Warehouse team adds photos later via "Bulk pictures".
+            Warehouse team adds photos later via &ldquo;Bulk pictures&rdquo;.
           </p>
         </div>
 
