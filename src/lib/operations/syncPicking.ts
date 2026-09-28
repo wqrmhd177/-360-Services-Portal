@@ -340,82 +340,129 @@ export type MasterSyncResult = {
   error?: string;
 };
 
+// ─── shared smart-merge helper ────────────────────────────────────────────────
+
+async function smartMergeRows(
+  sheetRows: PickingProductRow[],
+  createdBy: string | null,
+): Promise<{ added: number; updated: number; skipped: number }> {
+  if (sheetRows.length === 0) return { added: 0, updated: 0, skipped: 0 };
+
+  const allSkus = sheetRows.map((r) => r.sku);
+  const existingRows = await lookupPickingProducts(allSkus);
+  const existingMap = new Map(existingRows.map((r) => [r.sku.toLowerCase(), r]));
+
+  const toInsert: PickingProductRow[] = [];
+  const toUpdate: PickingProductRow[] = [];
+  let skipped = 0;
+
+  for (const row of sheetRows) {
+    const existing = existingMap.get(row.sku.toLowerCase());
+    if (!existing) {
+      toInsert.push(row);
+      continue;
+    }
+    // Only update when a new Drive URL arrives — never clobber a Supabase URL.
+    const hasNewImage =
+      row.sheet_image_url &&
+      existing.image_url !== row.sheet_image_url &&
+      !existing.image_url?.includes("/storage/v1/object/public/product_images/");
+    if (hasNewImage) {
+      toUpdate.push({ ...row, product_name: row.product_name });
+      continue;
+    }
+    skipped++;
+  }
+
+  const rowsToWrite = [...toInsert, ...toUpdate];
+  if (rowsToWrite.length > 0) {
+    await upsertPickingProductRows(rowsToWrite, createdBy);
+  }
+  return { added: toInsert.length, updated: toUpdate.length, skipped };
+}
+
 /**
- * Smart merge from the Master Products Google Sheet:
- * - INSERT rows whose SKU is not in the DB
- * - UPDATE only if a new image URL (Drive link) arrives for an existing SKU
- * - Skip rows where the SKU already exists and nothing changed
- * Then copies pending Drive images into Supabase.
+ * Unified "Sync Products" flow:
+ *
+ * 1. ALWAYS syncs from the original Product Images sheet (PICKING_SHEET_ID).
+ *    This catches any SKUs not yet in the DB and any new Drive image URLs.
+ * 2. If MASTER_PICKING_SHEET_ID is also set, smart-merges from that sheet too.
+ * 3. Copies any pending Drive → Supabase images.
+ *
+ * Returns combined add / update / skip counts + images copied.
  */
 export async function syncMasterPickingSheet(
   createdBy?: string | null,
 ): Promise<MasterSyncResult> {
+  let totalAdded = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+
   try {
-    const csv = await fetchMasterProductsSheetCsv();
-    const sheetRows = factsFromMasterProductsCsv(csv);
-    if (sheetRows.length === 0) {
-      return { ok: true, added: 0, updated: 0, skipped: 0, imagesCopied: 0, imagesFailed: 0 };
+    // ── Step 1: sync from old Product Images sheet (always) ──────────────────
+    try {
+      const oldCsv = await fetchPickingSheetCsv();
+      const oldRows = factsFromPickingCsv(oldCsv);
+      const oldMerge = await smartMergeRows(oldRows, createdBy ?? null);
+      totalAdded   += oldMerge.added;
+      totalUpdated += oldMerge.updated;
+      totalSkipped += oldMerge.skipped;
+      await logSync("picking", oldRows.length, "success");
+    } catch (oldErr) {
+      const msg = oldErr instanceof Error ? oldErr.message : "Old sheet sync failed";
+      try { await logSync("picking", 0, "failed", msg); } catch { /* ignore */ }
+      // Don't abort — continue to image-copy step even if sheet is unreachable.
     }
 
-    // Batch-lookup which SKUs already exist.
-    const allSkus = sheetRows.map((r) => r.sku);
-    const existingRows = await lookupPickingProducts(allSkus);
-    const existingMap = new Map(existingRows.map((r) => [r.sku.toLowerCase(), r]));
-
-    const toInsert: PickingProductRow[] = [];
-    const toUpdate: PickingProductRow[] = [];
-    let skipped = 0;
-
-    for (const row of sheetRows) {
-      const existing = existingMap.get(row.sku.toLowerCase());
-      if (!existing) {
-        toInsert.push(row);
-        continue;
+    // ── Step 2: sync from Master Products sheet (only if env var is set) ─────
+    const masterId = process.env.MASTER_PICKING_SHEET_ID ?? "";
+    if (masterId) {
+      try {
+        const masterCsv = await fetchMasterProductsSheetCsv();
+        const masterRows = factsFromMasterProductsCsv(masterCsv);
+        const masterMerge = await smartMergeRows(masterRows, createdBy ?? null);
+        totalAdded   += masterMerge.added;
+        totalUpdated += masterMerge.updated;
+        totalSkipped += masterMerge.skipped;
+      } catch {
+        // Master sheet is optional — skip silently.
       }
-      // Only update if a new Drive URL has arrived (never clobber a manually set Supabase URL).
-      const hasNewImage =
-        row.sheet_image_url &&
-        existing.image_url !== row.sheet_image_url &&
-        !existing.image_url?.includes("/storage/v1/object/public/product_images/");
-      if (hasNewImage) {
-        toUpdate.push({ ...row, product_name: existing.image_url ? existing.image_url.includes("/storage") ? row.product_name : existing.image_url.split("/").pop() ?? row.product_name : row.product_name });
-        // keep existing product_name to avoid overwriting manual edits
-        toUpdate[toUpdate.length - 1].product_name = row.product_name;
-        continue;
-      }
-      skipped++;
     }
 
-    // Write new + updated rows.
-    const rowsToWrite = [...toInsert, ...toUpdate];
-    if (rowsToWrite.length > 0) {
-      await upsertPickingProductRows(rowsToWrite, createdBy ?? null);
-    }
-
-    await logSync("picking", rowsToWrite.length, "success");
-
-    // Copy pending Drive images to Supabase.
+    // ── Step 3: copy pending Drive URLs → Supabase ───────────────────────────
     let imagesCopied = 0;
     let imagesFailed = 0;
     try {
-      const imageResult = await syncPickingImagesUntil({ maxMs: 50_000, concurrency: 8, pageSize: 100 });
+      const imageResult = await syncPickingImagesUntil({
+        maxMs: 50_000,
+        concurrency: 8,
+        pageSize: 100,
+      });
       imagesCopied = imageResult.copied;
       imagesFailed = imageResult.failed;
     } catch {
-      // Image sync is best-effort — don't fail the whole sync.
+      // Image sync is best-effort — don't fail the whole operation.
     }
 
     return {
       ok: true,
-      added: toInsert.length,
-      updated: toUpdate.length,
-      skipped,
+      added: totalAdded,
+      updated: totalUpdated,
+      skipped: totalSkipped,
       imagesCopied,
       imagesFailed,
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Master sync failed";
+    const msg = err instanceof Error ? err.message : "Sync failed";
     try { await logSync("picking", 0, "failed", msg); } catch { /* ignore */ }
-    return { ok: false, added: 0, updated: 0, skipped: 0, imagesCopied: 0, imagesFailed: 0, error: msg };
+    return {
+      ok: false,
+      added: 0,
+      updated: 0,
+      skipped: 0,
+      imagesCopied: 0,
+      imagesFailed: 0,
+      error: msg,
+    };
   }
 }
