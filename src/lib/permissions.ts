@@ -46,7 +46,7 @@ export interface UserPermissions {
   portal_role?: PortalRole;
   department?: PortalDepartment | null;
   tabs?: Partial<MainTabAccess>;
-  /** Per main-tab or sub-tab read/write/none overrides. Omit keys to inherit portal role default. */
+  /** Per sub-menu read/write/none. Access is configured only here (not from portal role). */
   featureAccess?: Partial<FeatureAccessMap>;
 }
 
@@ -69,17 +69,16 @@ export const PRODUCT_LISTING_SUBTAB_OPTIONS: { key: string; label: string }[] = 
   { key: "product_listing.product_updates", label: "Product Updates" },
 ];
 
-export type FeatureAccessOverride = "" | FeatureAccessLevel;
+export type FeatureAccessOverride = FeatureAccessLevel;
 
-export const FEATURE_ACCESS_OVERRIDE_OPTIONS: {
-  value: FeatureAccessOverride;
-  label: string;
-}[] = [
-  { value: "", label: "Inherit default" },
+export const FEATURE_ACCESS_LEVEL_OPTIONS: { value: FeatureAccessLevel; label: string }[] = [
   { value: "read", label: "Read only" },
   { value: "write", label: "Read & write" },
   { value: "none", label: "No access" },
 ];
+
+/** @deprecated Use FEATURE_ACCESS_LEVEL_OPTIONS */
+export const FEATURE_ACCESS_OVERRIDE_OPTIONS = FEATURE_ACCESS_LEVEL_OPTIONS;
 
 function mainTabForFeatureKey(featureKey: string): MainTab | null {
   if (featureKey === "operations" || featureKey.startsWith("operations.")) {
@@ -96,6 +95,13 @@ function mainTabForFeatureKey(featureKey: string): MainTab | null {
 
 function isFeatureAccessLevel(value: unknown): value is FeatureAccessLevel {
   return value === "read" || value === "write" || value === "none";
+}
+
+function permissionsUseGranularFeatureAccess(map: Partial<FeatureAccessMap> | undefined): boolean {
+  if (!map) return false;
+  return Object.keys(map).some(
+    (key) => key.includes(".") || key === "product_availability",
+  );
 }
 
 export function resolveFeatureAccess(
@@ -118,12 +124,11 @@ export function resolveFeatureAccess(
     return map[featureKey];
   }
 
-  const parentKey = featureKey.includes(".") ? featureKey.split(".")[0] : null;
-  if (parentKey && map && isFeatureAccessLevel(map[parentKey])) {
-    return map[parentKey];
+  if (!permissionsUseGranularFeatureAccess(map)) {
+    return effective.canWrite ? "write" : "read";
   }
 
-  return effective.canWrite ? "write" : "read";
+  return "none";
 }
 
 export function canSeeFeatureInNav(
@@ -486,37 +491,13 @@ export const PA_ROLE_OPTIONS: { value: ProductAvailabilityRole | ""; label: stri
   { value: "manager", label: "Manager" },
 ];
 
-export const PORTAL_ROLE_OPTIONS: { value: PortalRole; label: string; hint: string }[] = [
-  {
-    value: "growth_agent",
-    label: "Growth Agent",
-    hint: "Read-only by default on allowed tabs; use sub-menu overrides for write",
-  },
-  {
-    value: "listing_agent",
-    label: "Listing Agent",
-    hint: "Read-only by default on Product Listing and other allowed tabs",
-  },
-  {
-    value: "ops_agent",
-    label: "Ops Agent",
-    hint: "Read-only by default on Operations and other allowed tabs",
-  },
-  {
-    value: "purchaser",
-    label: "Purchaser",
-    hint: "Product Availability purchaser workflow; can submit responses",
-  },
-  {
-    value: "manager",
-    label: "Manager",
-    hint: "Read and write on allowed tabs unless restricted per sub-menu",
-  },
-  {
-    value: "admin",
-    label: "Admin",
-    hint: "Full access including Admin Users",
-  },
+export const PORTAL_ROLE_OPTIONS: { value: PortalRole; label: string }[] = [
+  { value: "growth_agent", label: "Growth Agent" },
+  { value: "listing_agent", label: "Listing Agent" },
+  { value: "ops_agent", label: "Ops Agent" },
+  { value: "purchaser", label: "Purchaser" },
+  { value: "manager", label: "Manager" },
+  { value: "admin", label: "Admin" },
 ];
 
 export const PORTAL_DEPARTMENT_OPTIONS: { value: PortalDepartment; label: string }[] = [

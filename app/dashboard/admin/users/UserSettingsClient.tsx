@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  FEATURE_ACCESS_OVERRIDE_OPTIONS,
+  FEATURE_ACCESS_LEVEL_OPTIONS,
   MAIN_TAB_OPTIONS,
   OPERATIONS_SUBTAB_OPTIONS,
   PA_ROLE_OPTIONS,
@@ -16,7 +16,7 @@ import {
   formatPortalRole,
   normalizePortalRole,
   parsePermissions,
-  type FeatureAccessOverride,
+  type FeatureAccessLevel,
   type PortalDepartment,
   type PortalRole,
   type ProductAvailabilityRole,
@@ -43,9 +43,55 @@ type EditState = {
     product_listing: boolean;
   };
   pa_workflow_role: ProductAvailabilityRole;
-  /** Empty string = inherit portal role default */
-  featureAccess: Record<string, FeatureAccessOverride>;
+  featureAccess: Record<string, FeatureAccessLevel>;
 };
+
+const PA_FEATURE_KEY = "product_availability";
+
+function keysForMainTab(tab: keyof EditState["tabs"]): string[] {
+  if (tab === "operations") return OPERATIONS_SUBTAB_OPTIONS.map((s) => s.key);
+  if (tab === "product_listing") return PRODUCT_LISTING_SUBTAB_OPTIONS.map((s) => s.key);
+  if (tab === "product_availability") return [PA_FEATURE_KEY];
+  return [];
+}
+
+function seedFeatureAccessForTab(
+  access: Record<string, FeatureAccessLevel>,
+  tab: keyof EditState["tabs"],
+  enabled: boolean,
+): Record<string, FeatureAccessLevel> {
+  const next = { ...access };
+  const keys = keysForMainTab(tab);
+  if (enabled) {
+    for (const key of keys) {
+      if (!next[key]) next[key] = "read";
+    }
+  } else {
+    for (const key of keys) {
+      delete next[key];
+    }
+    delete next[tab];
+  }
+  return next;
+}
+
+function buildFeatureAccessFromState(state: EditState): Record<string, FeatureAccessLevel> {
+  const fa: Record<string, FeatureAccessLevel> = {};
+  if (state.tabs.operations) {
+    for (const sub of OPERATIONS_SUBTAB_OPTIONS) {
+      fa[sub.key] = state.featureAccess[sub.key] ?? "read";
+    }
+  }
+  if (state.tabs.product_listing) {
+    for (const sub of PRODUCT_LISTING_SUBTAB_OPTIONS) {
+      fa[sub.key] = state.featureAccess[sub.key] ?? "read";
+    }
+  }
+  if (state.tabs.product_availability) {
+    fa[PA_FEATURE_KEY] = state.featureAccess[PA_FEATURE_KEY] ?? "read";
+  }
+  return fa;
+}
 
 function profileRoleFromEditState(state: EditState): UserRole {
   if (state.isPortalAdmin) return "admin";
@@ -62,14 +108,27 @@ function paRoleFromEditState(state: EditState): ProductAvailabilityRole | null {
   return state.pa_workflow_role;
 }
 
-function featureAccessFromPermissions(parsed: UserPermissions | undefined): Record<string, FeatureAccessOverride> {
-  const out: Record<string, FeatureAccessOverride> = {};
+function featureAccessFromPermissions(
+  parsed: UserPermissions | undefined,
+  tabs: EditState["tabs"],
+): Record<string, FeatureAccessLevel> {
+  const out: Record<string, FeatureAccessLevel> = {};
   const map = parsed?.featureAccess;
-  if (!map) return out;
-  for (const [key, val] of Object.entries(map)) {
-    if (val === "read" || val === "write" || val === "none") {
-      out[key] = val;
+  if (tabs.operations) {
+    for (const sub of OPERATIONS_SUBTAB_OPTIONS) {
+      const val = map?.[sub.key];
+      if (val === "read" || val === "write" || val === "none") out[sub.key] = val;
     }
+  }
+  if (tabs.product_listing) {
+    for (const sub of PRODUCT_LISTING_SUBTAB_OPTIONS) {
+      const val = map?.[sub.key];
+      if (val === "read" || val === "write" || val === "none") out[sub.key] = val;
+    }
+  }
+  if (tabs.product_availability) {
+    const val = map?.[PA_FEATURE_KEY];
+    if (val === "read" || val === "write" || val === "none") out[PA_FEATURE_KEY] = val;
   }
   return out;
 }
@@ -84,17 +143,30 @@ function userToEditState(user: ProfileRow): EditState {
     team: user.team,
   });
 
+  const tabFlags = {
+      operations: effective.tabs.operations,
+      product_availability: effective.tabs.product_availability,
+      product_listing: effective.tabs.product_listing,
+    };
+
+  let featureAccess = featureAccessFromPermissions(parsed, tabFlags);
+  if (tabFlags.operations) {
+    featureAccess = seedFeatureAccessForTab(featureAccess, "operations", true);
+  }
+  if (tabFlags.product_listing) {
+    featureAccess = seedFeatureAccessForTab(featureAccess, "product_listing", true);
+  }
+  if (tabFlags.product_availability) {
+    featureAccess = seedFeatureAccessForTab(featureAccess, "product_availability", true);
+  }
+
   return {
     isPortalAdmin,
     portal_role: isPortalAdmin ? "admin" : normalizePortalRole(parsed?.portal_role ?? effective.portalRole),
     department: (effective.department ?? "") as PortalDepartment | "",
-    tabs: {
-      operations: effective.tabs.operations,
-      product_availability: effective.tabs.product_availability,
-      product_listing: effective.tabs.product_listing,
-    },
+    tabs: tabFlags,
     pa_workflow_role: effective.paRole ?? "agent",
-    featureAccess: featureAccessFromPermissions(parsed),
+    featureAccess,
   };
 }
 
@@ -125,12 +197,7 @@ function editStateToPermissions(state: EditState): UserPermissions {
     admin_users: false,
   };
 
-  const featureAccess: Partial<Record<string, "read" | "write" | "none">> = {};
-  for (const [key, val] of Object.entries(state.featureAccess)) {
-    if (val === "read" || val === "write" || val === "none") {
-      featureAccess[key] = val;
-    }
-  }
+  const featureAccess = buildFeatureAccessFromState(state);
 
   return {
     portal_role: state.portal_role,
@@ -197,27 +264,23 @@ export default function UserSettingsClient() {
       return {
         ...prev,
         tabs: { ...prev.tabs, [key]: next },
-        pa_workflow_role:
-          key === "product_availability" && !next ? prev.pa_workflow_role : prev.pa_workflow_role,
+        featureAccess: seedFeatureAccessForTab(prev.featureAccess, key, next),
       };
     });
   };
 
-  const setFeatureOverride = (featureKey: string, value: FeatureAccessOverride) => {
+  const setFeatureOverride = (featureKey: string, value: FeatureAccessLevel) => {
     setEditState((prev) => {
       if (!prev) return prev;
-      const next = { ...prev.featureAccess };
-      if (!value) {
-        delete next[featureKey];
-      } else {
-        next[featureKey] = value;
-      }
-      return { ...prev, featureAccess: next };
+      return {
+        ...prev,
+        featureAccess: { ...prev.featureAccess, [featureKey]: value },
+      };
     });
   };
 
-  const getFeatureOverride = (featureKey: string): FeatureAccessOverride =>
-    editState?.featureAccess[featureKey] ?? "";
+  const getFeatureOverride = (featureKey: string): FeatureAccessLevel =>
+    editState?.featureAccess[featureKey] ?? "read";
 
   const renderFeatureOverrideSelect = (featureKey: string, label: string, indent = false) => (
     <div
@@ -229,11 +292,11 @@ export default function UserSettingsClient() {
       <span className={`text-gray-700 ${indent ? "text-xs" : "text-sm"}`}>{label}</span>
       <select
         value={getFeatureOverride(featureKey)}
-        onChange={(e) => setFeatureOverride(featureKey, e.target.value as FeatureAccessOverride)}
+        onChange={(e) => setFeatureOverride(featureKey, e.target.value as FeatureAccessLevel)}
         className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-900 sm:max-w-[11rem]"
       >
-        {FEATURE_ACCESS_OVERRIDE_OPTIONS.map((opt) => (
-          <option key={opt.value || "inherit"} value={opt.value}>
+        {FEATURE_ACCESS_LEVEL_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
@@ -446,7 +509,7 @@ export default function UserSettingsClient() {
                     >
                       {PORTAL_ROLE_OPTIONS.filter((opt) => opt.value !== "admin").map((opt) => (
                         <option key={opt.value} value={opt.value}>
-                          {opt.label} — {opt.hint}
+                          {opt.label}
                         </option>
                       ))}
                     </select>
@@ -483,8 +546,8 @@ export default function UserSettingsClient() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Main tab access</p>
                     <p className="mt-1 text-xs text-gray-500">
-                      Home is always available. Use defaults and sub-menu overrides for read vs write
-                      per area. Unset sub-menus inherit the main tab default, then the portal role.
+                      Home is always available. Portal role is for identity only — set read, write, or
+                      no access on each sub-menu below. No access hides that item from the user menu.
                     </p>
                     <div className="mt-3 space-y-3">
                       {MAIN_TAB_OPTIONS.map((tab) => (
@@ -502,28 +565,24 @@ export default function UserSettingsClient() {
                             {tab.label}
                           </label>
                           {editState.tabs[tab.key] ? (
-                            <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
-                              {renderFeatureOverrideSelect(tab.key, "Default for this tab")}
-                              {tab.key === "operations" ? (
-                                <div className="space-y-1.5 border-t border-gray-100 pt-2">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                                    Operations sub-menus
-                                  </p>
-                                  {OPERATIONS_SUBTAB_OPTIONS.map((sub) =>
+                            <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+                              {tab.key === "operations"
+                                ? OPERATIONS_SUBTAB_OPTIONS.map((sub) =>
                                     renderFeatureOverrideSelect(sub.key, sub.label, true),
-                                  )}
-                                </div>
-                              ) : null}
-                              {tab.key === "product_listing" ? (
-                                <div className="space-y-1.5 border-t border-gray-100 pt-2">
-                                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                                    Product Listing sub-menus
-                                  </p>
-                                  {PRODUCT_LISTING_SUBTAB_OPTIONS.map((sub) =>
+                                  )
+                                : null}
+                              {tab.key === "product_listing"
+                                ? PRODUCT_LISTING_SUBTAB_OPTIONS.map((sub) =>
                                     renderFeatureOverrideSelect(sub.key, sub.label, true),
-                                  )}
-                                </div>
-                              ) : null}
+                                  )
+                                : null}
+                              {tab.key === "product_availability"
+                                ? renderFeatureOverrideSelect(
+                                    PA_FEATURE_KEY,
+                                    "Product Availability",
+                                    true,
+                                  )
+                                : null}
                             </div>
                           ) : null}
                         </div>
