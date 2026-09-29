@@ -7,6 +7,16 @@ import {
   updateProductStatus,
   generateProductId,
 } from "@/lib/productListing/productHelpers";
+import { fetchAllSuppliers } from "@/lib/productListing/supplierHelpers";
+import {
+  filterProductsForCountryScope,
+  filterSuppliersForCountryScope,
+  supplierCountryForCode,
+  assertListingCountryAllowed,
+  productAllowedForCountryScope,
+} from "@/lib/productListing/listingCountryScope";
+import { countryValueInAllowedScope } from "@/lib/portalCountryScope";
+import { getFreshCountryScope } from "@/lib/portalCountryScopeServer";
 
 export async function GET(request: Request) {
   const session = getPortalSession();
@@ -19,10 +29,16 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") ?? undefined;
     const search = searchParams.get("search") ?? undefined;
     const db = createSupabaseServiceClient();
-    const products = await fetchProductsWithVariants(
-      { status: status as never, search: search ?? undefined },
-      db,
-    );
+    const scope = await getFreshCountryScope();
+    const [productsRaw, suppliersRaw] = await Promise.all([
+      fetchProductsWithVariants(
+        { status: status as never, search: search ?? undefined },
+        db,
+      ),
+      fetchAllSuppliers(),
+    ]);
+    const suppliers = filterSuppliersForCountryScope(suppliersRaw, scope);
+    const products = filterProductsForCountryScope(productsRaw, suppliersRaw, scope);
     return NextResponse.json({ products });
   } catch (error) {
     console.error("product-listing products GET:", error);
@@ -44,6 +60,10 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "productId and status required" }, { status: 400 });
     }
     const db = createSupabaseServiceClient();
+    const scope = await getFreshCountryScope();
+    if (!(await productAllowedForCountryScope(productId, scope))) {
+      return NextResponse.json({ error: "Product not in your allowed countries" }, { status: 403 });
+    }
     const ok = await updateProductStatus(productId, status as never, db);
     return NextResponse.json({ ok });
   } catch (error) {
@@ -65,6 +85,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "productId required" }, { status: 400 });
     }
     const db = createSupabaseServiceClient();
+    const scope = await getFreshCountryScope();
+    if (!(await productAllowedForCountryScope(productId, scope))) {
+      return NextResponse.json({ error: "Product not in your allowed countries" }, { status: 403 });
+    }
     const ok = await deleteProduct(productId, db);
     return NextResponse.json({ ok });
   } catch (error) {
@@ -82,6 +106,17 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const db = createSupabaseServiceClient();
+    const scope = await getFreshCountryScope();
+    const supplierId = String(body.supplierId ?? "").trim();
+    if (supplierId) {
+      const country = await supplierCountryForCode(supplierId);
+      if (!countryValueInAllowedScope(country, scope)) {
+        return NextResponse.json(
+          { error: "Supplier is not in your allowed countries" },
+          { status: 403 },
+        );
+      }
+    }
     const productId = await generateProductId();
 
     const { error: prodErr } = await db.from("pl_products").insert([

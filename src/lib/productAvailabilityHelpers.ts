@@ -6,6 +6,10 @@ import {
   normalizeProductAvailabilityUserId,
   resolveProductAvailabilityOwnerIds,
 } from "./permissions";
+import {
+  filterRowsByMarketScope,
+  type AllowedCountriesConfig,
+} from "./portalCountryScope";
 
 function getDb(client?: SupabaseClient) {
   return client ?? createSupabaseServiceClient();
@@ -374,6 +378,7 @@ export async function fetchAllProductAvailabilityData(params: {
   userRole: string;
   userFriendlyId: string;
   supabaseClient?: SupabaseClient;
+  allowedMarkets?: AllowedCountriesConfig;
 }): Promise<ProductAvailabilityRequestWithDetails[]> {
   const db = params.supabaseClient ?? getDb();
   const role = (params.userRole || "").toLowerCase();
@@ -432,6 +437,16 @@ export async function fetchAllProductAvailabilityData(params: {
     if (error) throw new Error(error.message || "Failed to fetch availability requests");
     requestRows = (data || []) as ProductAvailabilityRequest[];
   }
+
+  const marketScope = params.allowedMarkets ?? "all";
+  requestRows = filterRowsByMarketScope(
+    requestRows.map((r) => ({
+      ...r,
+      market: r.market ?? r.markets?.[0] ?? null,
+      markets: r.markets?.length ? r.markets : r.market ? [r.market] : [],
+    })),
+    marketScope,
+  ) as ProductAvailabilityRequest[];
 
   if (requestRows.length === 0) return [];
 

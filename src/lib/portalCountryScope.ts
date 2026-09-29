@@ -23,9 +23,8 @@ export {
   PORTAL_COUNTRY_CODES,
 
   PORTAL_COUNTRY_LABELS,
-
+  PORTAL_CODE_TO_LISTING_COUNTRY,
   type PortalCountryCode,
-
 } from "@/lib/portalCountryCodes";
 
 

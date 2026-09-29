@@ -29,3 +29,16 @@ export const PORTAL_COUNTRY_LABELS: Record<PortalCountryCode, string> = {
   USA: "USA",
   PAK: "PAK",
 };
+
+/** Full country names used on product listing supplier forms. */
+export const PORTAL_CODE_TO_LISTING_COUNTRY: Record<PortalCountryCode, string> = {
+  UAE: "United Arab Emirates",
+  KSA: "Saudi Arabia",
+  QTR: "Qatar",
+  KWT: "Kuwait",
+  OMN: "Oman",
+  BHR: "Bahrain",
+  IRQ: "Iraq",
+  USA: "United States",
+  PAK: "Pakistan",
+};

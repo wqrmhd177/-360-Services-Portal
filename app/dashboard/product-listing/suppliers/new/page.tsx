@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { useAllowedCountries } from "@/hooks/useAllowedCountries";
+import { PORTAL_CODE_TO_LISTING_COUNTRY } from "@/lib/portalCountryCodes";
+import { filterPortalCountryCodes } from "@/lib/portalCountryScope";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SUPPLIER_TYPES = ["Trader", "Wholesaler", "Retailer", "Selling from Home"] as const;
@@ -201,6 +204,11 @@ const INIT: FormData = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function NewSupplierPage() {
   const router = useRouter();
+  const { allowed: countryScope } = useAllowedCountries();
+  const countryOptions = useMemo(() => {
+    if (countryScope === "all") return [...COUNTRIES];
+    return filterPortalCountryCodes(countryScope).map((code) => PORTAL_CODE_TO_LISTING_COUNTRY[code]);
+  }, [countryScope]);
   const [form, setForm] = useState<FormData>(INIT);
   const [sameAsPhone, setSameAsPhone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -406,7 +414,7 @@ export default function NewSupplierPage() {
               onChange={(e) => handleCountryChange(e.target.value)}
             >
               <option value="">Select country</option>
-              {COUNTRIES.map((c) => (
+              {countryOptions.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

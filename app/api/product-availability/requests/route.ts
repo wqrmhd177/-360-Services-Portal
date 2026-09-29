@@ -7,9 +7,8 @@ import {
 } from "@/lib/permissions";
 import {
   countryValueInAllowedScope,
-  filterRowsByMarketScope,
-  getCountryScopeFromSession,
 } from "@/lib/portalCountryScope";
+import { getFreshCountryScope } from "@/lib/portalCountryScopeServer";
 import {
   cancelProductAvailabilityRequest,
   createBulkDraftRequests,
@@ -38,15 +37,13 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const scope = getCountryScopeFromSession(ctx.session);
-    const requests = filterRowsByMarketScope(
-      await fetchAllProductAvailabilityData({
-        userRole: ctx.userRole,
-        userFriendlyId: ctx.session.email,
-        supabaseClient: ctx.db,
-      }),
-      scope,
-    );
+    const scope = await getFreshCountryScope();
+    const requests = await fetchAllProductAvailabilityData({
+      userRole: ctx.userRole,
+      userFriendlyId: ctx.session.email,
+      supabaseClient: ctx.db,
+      allowedMarkets: scope,
+    });
     return NextResponse.json({ requests });
   } catch (error) {
     console.error("Failed to fetch product availability requests:", error);
@@ -67,7 +64,7 @@ export async function POST(request: Request) {
 
     switch (action) {
       case "create": {
-        const scope = getCountryScopeFromSession(ctx.session);
+        const scope = await getFreshCountryScope();
         const market = String((body.input as { market?: string } | undefined)?.market ?? "");
         if (!countryValueInAllowedScope(market, scope)) {
           return NextResponse.json(
@@ -93,6 +90,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true });
       }
       case "bulk_drafts": {
+        const scope = await getFreshCountryScope();
+        const rows = (body.rows ?? []) as Array<{ market?: string }>;
+        for (const row of rows) {
+          if (!countryValueInAllowedScope(String(row.market ?? ""), scope)) {
+            return NextResponse.json(
+              { error: "One or more bulk rows use a market outside your allowed countries." },
+              { status: 403 },
+            );
+          }
+        }
         const result = await createBulkDraftRequests(
           body.rows,
           ctx.session.email,

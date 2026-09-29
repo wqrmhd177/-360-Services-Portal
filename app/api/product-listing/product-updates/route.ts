@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/session";
+import { getFreshCountryScope } from "@/lib/portalCountryScopeServer";
+import { filterMergedProductUpdatesForCountryScope } from "@/lib/productListing/listingCountryScope";
 import {
   fetchMergedProductUpdates,
   processProductUpdateAction,
@@ -18,7 +20,11 @@ export async function GET(request: Request) {
       | "approved"
       | "rejected"
       | "all";
-    const requests = await fetchMergedProductUpdates(tab);
+    const scope = await getFreshCountryScope();
+    const requests = await filterMergedProductUpdatesForCountryScope(
+      await fetchMergedProductUpdates(tab),
+      scope,
+    );
     return NextResponse.json({ requests });
   } catch (error) {
     console.error("product-updates GET:", error);

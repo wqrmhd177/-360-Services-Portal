@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/session";
 import { createSupplier, fetchAllSuppliers, generateSupplierCode } from "@/lib/productListing/supplierHelpers";
+import {
+  assertListingCountryAllowed,
+  filterSuppliersForCountryScope,
+} from "@/lib/productListing/listingCountryScope";
+import { getFreshCountryScope } from "@/lib/portalCountryScopeServer";
 import { createPriceHistoryEntry } from "@/lib/productListing/priceHistoryHelpers";
 import { createVariantStatusChangeRequest } from "@/lib/productListing/variantStatusChangeHelpers";
 
@@ -11,7 +16,8 @@ export async function GET() {
   }
 
   try {
-    const suppliers = await fetchAllSuppliers();
+    const scope = await getFreshCountryScope();
+    const suppliers = filterSuppliersForCountryScope(await fetchAllSuppliers(), scope);
     return NextResponse.json({ suppliers });
   } catch (error) {
     console.error("product-listing suppliers:", error);
@@ -38,6 +44,18 @@ export async function POST(request: Request) {
       const payload = body.supplier;
       if (!payload || typeof payload !== "object") {
         return NextResponse.json({ error: "supplier payload required" }, { status: 400 });
+      }
+      const scope = await getFreshCountryScope();
+      try {
+        assertListingCountryAllowed(
+          String((payload as { country?: string }).country ?? ""),
+          scope,
+        );
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Country not allowed" },
+          { status: 403 },
+        );
       }
       const created = await createSupplier(payload as never);
       if (!created) {
