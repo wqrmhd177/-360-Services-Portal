@@ -327,7 +327,7 @@ export async function fetchMasterProductsSheetCsv(): Promise<string> {
 export function pickingDocumentLabel(name: string, sku: string): string {
   const clean = name.trim();
   if (!clean || clean === "Not Available") {
-    return `Not Available: ${sku}`;
+    return sku;
   }
   const colonSku = `: ${sku}`;
   if (clean.toLowerCase().endsWith(colonSku.toLowerCase())) return clean;

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       if (!product) {
         lines.push({
           sku: line.sku,
-          product_name: "Not Available",
+          product_name: line.sku,
           image_url: null,
           quantity: line.quantity,
           good_qty: line.good_qty,
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       const pictured = withPickingPictureUrl(product, origin);
       lines.push({
         sku: pictured.sku,
-        product_name: pictured.product_name?.trim() || "Not Available",
+        product_name: pictured.product_name?.trim() || line.sku,
         image_url: pictured.image_url,
         quantity: line.quantity,
         good_qty: line.good_qty,

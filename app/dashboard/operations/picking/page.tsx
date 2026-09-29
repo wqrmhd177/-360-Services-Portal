@@ -8,12 +8,10 @@ import {
   Loader2,
   Plus,
   RefreshCw,
-  Upload,
 } from "lucide-react";
 import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import {
   PickingAddProductDialog,
-  PickingBulkUploadDialog,
   PickingDocumentDialog,
   PickingPictureLightbox,
 } from "@/components/operations/PickingProductDialogs";
@@ -99,9 +97,9 @@ export default function ProductPicturesPage() {
   });
 
   const [addOpen, setAddOpen] = useState(false);
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [grnDocOpen, setGrnDocOpen] = useState(false);
   const [pickingDocOpen, setPickingDocOpen] = useState(false);
+  const [docSeedSkus, setDocSeedSkus] = useState<PickingProduct[] | null>(null);
   const [editing, setEditing] = useState<PickingProduct | null>(null);
   const [preview, setPreview] = useState<PickingProduct | null>(null);
   const [selected, setSelected] = useState<Record<string, PickingProduct>>({});
@@ -213,22 +211,16 @@ export default function ProductPicturesPage() {
     openDocumentHtml(json.html as string);
   };
 
-  const downloadSelection = async (type: DocKind) => {
-    setDocBusy(true);
-    setDocError(null);
-    try {
-      await generateDocumentFromLines(
-        type,
-        selectedList.map((item) => ({
-          sku: item.sku,
-          quantity: 1,
-        })),
-      );
-    } catch (err) {
-      setDocError(err instanceof Error ? err.message : "Could not generate document");
-    } finally {
-      setDocBusy(false);
-    }
+  const openDocumentDialog = (type: DocKind, seed: PickingProduct[] | null = null) => {
+    setDocSeedSkus(seed);
+    if (type === "grn") setGrnDocOpen(true);
+    else setPickingDocOpen(true);
+  };
+
+  const closeDocumentDialog = (type: DocKind) => {
+    setDocSeedSkus(null);
+    if (type === "grn") setGrnDocOpen(false);
+    else setPickingDocOpen(false);
   };
 
   const downloadDocument = async (
@@ -261,42 +253,34 @@ export default function ProductPicturesPage() {
         title="Product Pictures"
         subtitle="Search SKUs, build GRN documents or picking lists, and download from selected rows."
       />
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-stretch gap-2 sm:items-center">
         <input
           type="text"
           placeholder="SKUs or name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-9 w-52 max-w-full rounded-xl border border-portal-200 bg-white px-3 text-sm text-portal-900 outline-none focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20"
+          className="h-10 min-w-0 flex-1 basis-full rounded-xl border border-portal-200 bg-white px-3 text-base text-portal-900 outline-none focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20 sm:h-9 sm:max-w-xs sm:flex-none sm:text-sm"
         />
         <button
           type="button"
           onClick={() => setAddOpen(true)}
-          className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs"
+          className="btn-secondary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-1 px-2.5 text-xs sm:h-9 sm:min-h-0 sm:flex-none"
         >
           <Plus className="h-4 w-4" />
           Add product
         </button>
         <button
           type="button"
-          onClick={() => setBulkOpen(true)}
-          className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs"
-        >
-          <Upload className="h-4 w-4" />
-          Bulk pictures
-        </button>
-        <button
-          type="button"
-          onClick={() => setGrnDocOpen(true)}
-          className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs"
+          onClick={() => openDocumentDialog("grn")}
+          className="btn-secondary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-1 px-2.5 text-xs sm:h-9 sm:min-h-0 sm:flex-none"
         >
           <FileText className="h-4 w-4" />
           GRN Document
         </button>
         <button
           type="button"
-          onClick={() => setPickingDocOpen(true)}
-          className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs"
+          onClick={() => openDocumentDialog("awb")}
+          className="btn-secondary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-1 px-2.5 text-xs sm:h-9 sm:min-h-0 sm:flex-none"
         >
           <ListChecks className="h-4 w-4" />
           Picking List
@@ -305,7 +289,7 @@ export default function ProductPicturesPage() {
           type="button"
           onClick={() => void syncProducts()}
           disabled={busy}
-          className="btn-primary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs disabled:opacity-60"
+          className="btn-primary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-1 px-2.5 text-xs disabled:opacity-60 sm:h-9 sm:min-h-0 sm:flex-none"
         >
           {masterSyncing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -318,7 +302,7 @@ export default function ProductPicturesPage() {
           type="button"
           onClick={openMissingReport}
           disabled={busy}
-          className="btn-secondary inline-flex h-9 shrink-0 items-center gap-1 px-2.5 text-xs disabled:opacity-60"
+          className="btn-secondary inline-flex h-10 min-h-[44px] flex-1 items-center justify-center gap-1 px-2.5 text-xs disabled:opacity-60 sm:h-9 sm:min-h-0 sm:flex-none"
         >
           <FileWarning className="h-4 w-4" />
           Missing Pictures List
@@ -343,33 +327,33 @@ export default function ProductPicturesPage() {
       ) : null}
 
       {selectedCount > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--card-border)] bg-white px-3 py-2">
+        <div className="flex flex-col gap-2 rounded-xl border border-[var(--card-border)] bg-white px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center">
           <span className="text-xs font-medium text-portal-900">
             {selectedCount} SKU{selectedCount === 1 ? "" : "s"} selected
           </span>
+          <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="btn-primary h-8 px-3 text-[11px] disabled:opacity-60"
-            disabled={docBusy}
-            onClick={() => void downloadSelection("awb")}
+            className="btn-primary h-10 min-h-[44px] flex-1 px-3 text-[11px] sm:h-8 sm:min-h-0 sm:flex-none"
+            onClick={() => openDocumentDialog("awb", selectedList)}
           >
-            Download Picking List
+            Create Picking List
           </button>
           <button
             type="button"
-            className="btn-primary h-8 px-3 text-[11px] disabled:opacity-60"
-            disabled={docBusy}
-            onClick={() => void downloadSelection("grn")}
+            className="btn-primary h-10 min-h-[44px] flex-1 px-3 text-[11px] sm:h-8 sm:min-h-0 sm:flex-none"
+            onClick={() => openDocumentDialog("grn", selectedList)}
           >
-            Download GRN
+            Create GRN
           </button>
           <button
             type="button"
-            className="btn-secondary h-8 px-3 text-[11px]"
+            className="btn-secondary h-10 min-h-[44px] flex-1 px-3 text-[11px] sm:h-8 sm:min-h-0 sm:flex-none"
             onClick={() => setSelected({})}
           >
             Clear
           </button>
+          </div>
         </div>
       ) : null}
 
@@ -389,7 +373,7 @@ export default function ProductPicturesPage() {
           <div className="py-16 text-center text-sm text-[var(--muted)]">
             {search.trim()
               ? "No products match those SKUs or name."
-              : "No catalog yet. Sync Data, add a product, or bulk upload pictures."}
+              : "No catalog yet. Sync Products or add a product."}
           </div>
         ) : (
           <div className="overflow-hidden">
@@ -490,25 +474,19 @@ export default function ProductPicturesPage() {
           void load(currentPage, search);
         }}
       />
-      <PickingBulkUploadDialog
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        onComplete={() => {
-          setCurrentPage(1);
-          void load(1, search);
-        }}
-      />
       <PickingDocumentDialog
         open={grnDocOpen}
-        onClose={() => setGrnDocOpen(false)}
+        onClose={() => closeDocumentDialog("grn")}
         docType="grn"
+        initialSkus={grnDocOpen ? docSeedSkus : null}
         lookupProducts={lookupProducts}
         onDownload={(payload) => downloadDocument("grn", payload)}
       />
       <PickingDocumentDialog
         open={pickingDocOpen}
-        onClose={() => setPickingDocOpen(false)}
+        onClose={() => closeDocumentDialog("awb")}
         docType="awb"
+        initialSkus={pickingDocOpen ? docSeedSkus : null}
         lookupProducts={lookupProducts}
         onDownload={(payload) => downloadDocument("awb", payload)}
       />

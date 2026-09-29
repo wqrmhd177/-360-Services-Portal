@@ -1,27 +1,18 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Pencil, Upload, X } from "lucide-react";
 import type { PickingProduct } from "@/lib/operations/picking";
 import {
-  pickingSkuFromFileName,
   parseSkuDocumentText,
 } from "@/lib/operations/pickingParse";
 import { pickingDocumentLabel } from "@/lib/operations/pickingSheet";
 
 const dialogShell =
-  "fixed inset-0 z-[100] m-0 flex h-full max-h-none w-full max-w-none items-center justify-center border-0 bg-transparent p-0 shadow-none sm:p-6 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm";
+  "fixed inset-0 z-[100] m-0 flex h-full max-h-none w-full max-w-none items-end justify-center border-0 bg-transparent p-0 shadow-none sm:items-center sm:p-4 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm";
 
 const fieldClass =
   "mt-1 h-10 w-full rounded-xl border border-portal-200 bg-white px-3 text-sm text-portal-900 outline-none focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20";
-
-type BulkPictureRow = {
-  id: string;
-  file: File;
-  preview: string;
-  sku: string;
-  name: string;
-};
 
 export function PickingAddProductDialog({
   open,
@@ -107,7 +98,7 @@ export function PickingAddProductDialog({
 
   return (
     <dialog ref={dialogRef} onClose={requestClose} className={dialogShell}>
-      <div className="w-full max-w-md rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-5 shadow-2xl">
+      <div className="w-full max-w-md rounded-t-2xl border border-[var(--card-border)] bg-[var(--card)] p-4 shadow-2xl sm:rounded-2xl sm:p-5 max-sm:max-h-[92dvh] max-sm:overflow-y-auto">
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold">
             {editing ? "Edit product" : "Add product"}
@@ -188,7 +179,7 @@ export function PickingAddProductDialog({
               disabled={saving}
               onClick={() => void save()}
             >
-              {saving ? "Saving…" : editing ? "Save changes" : "Save product"}
+              {saving ? "Savingâ€¦" : editing ? "Save changes" : "Save product"}
             </button>
           </div>
         </div>
@@ -197,278 +188,6 @@ export function PickingAddProductDialog({
   );
 }
 
-export function PickingBulkUploadDialog({
-  open,
-  onClose,
-  onComplete,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onComplete: () => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const [rows, setRows] = useState<BulkPictureRow[]>([]);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open) {
-      if (!dialog.open) dialog.showModal();
-      return;
-    }
-    if (dialog.open) dialog.close();
-  }, [open]);
-
-  const clearPreviews = (items: BulkPictureRow[]) => {
-    for (const row of items) URL.revokeObjectURL(row.preview);
-  };
-
-  const requestClose = () => {
-    clearPreviews(rows);
-    setRows([]);
-    setCsvFile(null);
-    setError(null);
-    setResult(null);
-    dialogRef.current?.close();
-    onClose();
-  };
-
-  const addFiles = (files: FileList | File[]) => {
-    const next: BulkPictureRow[] = [];
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) continue;
-      next.push({
-        id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
-        file,
-        preview: URL.createObjectURL(file),
-        sku: pickingSkuFromFileName(file.name),
-        name: "",
-      });
-    }
-    if (next.length === 0) {
-      setError("Choose JPG, PNG, GIF, or WebP pictures. File name becomes the SKU.");
-      return;
-    }
-    setError(null);
-    setResult(null);
-    setRows((prev) => [...prev, ...next]);
-  };
-
-  const handleUpload = async () => {
-    if (rows.length === 0 && !csvFile) {
-      setError("Drop pictures or upload a CSV/Excel file with SKUs first.");
-      return;
-    }
-    if (rows.length > 0 && rows.some((row) => !row.sku.trim())) {
-      setError("Every picture needs a SKU.");
-      return;
-    }
-    setUploading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const form = new FormData();
-      if (csvFile) {
-        form.append("file", csvFile);
-      }
-      for (const row of rows) {
-        form.append("images", row.file);
-        form.append("skus", row.sku.trim());
-        form.append("names", row.name.trim() || row.sku.trim());
-      }
-      const res = await fetch("/api/operations/picking/bulk", {
-        method: "POST",
-        body: form,
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
-      const added = Number(json.added ?? json.rowCount ?? 0);
-      const existing = Number(json.existing ?? 0);
-      const withImages = Number(json.withImages ?? 0);
-      const parts: string[] = [];
-      if (added > 0) parts.push(`${added} new SKU${added === 1 ? "" : "s"} registered`);
-      if (existing > 0) parts.push(`${existing} already existed`);
-      if (withImages > 0) parts.push(`${withImages} with pictures`);
-      setResult(parts.join(" · ") || "Done.");
-      clearPreviews(rows);
-      setRows([]);
-      setCsvFile(null);
-      onComplete();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  if (!open) return null;
-
-  return (
-    <dialog ref={dialogRef} onClose={requestClose} className={dialogShell}>
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-5 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 className="text-base font-semibold">Bulk upload pictures</h2>
-          <button type="button" onClick={requestClose} aria-label="Close">
-            <X className="h-4 w-4 text-[var(--muted)]" />
-          </button>
-        </div>
-        <p className="text-sm text-[var(--muted)]">
-          Upload a CSV/Excel with SKU and Product Name to register products without images, or drop
-          pictures (file name = SKU) to attach photos.
-        </p>
-
-        {/* CSV / Excel upload */}
-        <div className="mt-4">
-          <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Register SKUs via CSV (no images needed)</p>
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-portal-300 bg-portal-50/60 px-4 py-3 text-sm hover:border-portal-500">
-            <Upload className="h-4 w-4 shrink-0 text-portal-700" />
-            <span className="min-w-0 flex-1 truncate text-portal-900">
-              {csvFile ? csvFile.name : "Upload CSV or Excel (SKU, Product Name columns)"}
-            </span>
-            {csvFile ? (
-              <button
-                type="button"
-                className="text-[var(--muted)] hover:text-red-500"
-                onClick={(e) => { e.preventDefault(); setCsvFile(null); }}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (f) { setCsvFile(f); setError(null); setResult(null); }
-              }}
-            />
-          </label>
-          <p className="mt-1 text-[10px] text-[var(--muted)]">
-            Required column: <code>SKU</code>. Optional: <code>Product Name</code>.
-            Warehouse team adds photos later via &ldquo;Bulk pictures&rdquo;.
-          </p>
-        </div>
-
-        <div className="my-4 flex items-center gap-2 text-xs text-[var(--muted)]">
-          <div className="h-px flex-1 bg-[var(--card-border)]" />
-          or attach pictures
-          <div className="h-px flex-1 bg-[var(--card-border)]" />
-        </div>
-
-        <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-portal-200 bg-portal-50/60 px-4 py-8 text-center hover:border-portal-400">
-          <Upload className="mb-2 h-6 w-6 text-portal-700" />
-          <span className="text-sm font-medium text-portal-900">
-            Drop pictures here or click to choose
-          </span>
-          <span className="mt-1 text-xs text-[var(--muted)]">
-            JPG, PNG, GIF, or WebP — file name = SKU (e.g. <code>KPA-N-TY-ZAM.jpg</code>)
-          </span>
-          <input
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files) addFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {rows.length > 0 ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-[var(--card-border)]">
-            <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-3 py-2 text-left">Picture</th>
-                  <th className="px-3 py-2 text-left">SKU</th>
-                  <th className="px-3 py-2 text-left">Product name</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-gray-100">
-                    <td className="px-3 py-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={row.preview}
-                        alt=""
-                        className="h-12 w-12 rounded-md object-contain"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={row.sku}
-                        onChange={(e) =>
-                          setRows((prev) =>
-                            prev.map((item) =>
-                              item.id === row.id ? { ...item, sku: e.target.value } : item,
-                            ),
-                          )
-                        }
-                        className="input h-8 w-40"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        placeholder="Optional"
-                        value={row.name}
-                        onChange={(e) =>
-                          setRows((prev) =>
-                            prev.map((item) =>
-                              item.id === row.id ? { ...item, name: e.target.value } : item,
-                            ),
-                          )
-                        }
-                        className="input h-8 w-full"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        aria-label="Remove"
-                        onClick={() => {
-                          URL.revokeObjectURL(row.preview);
-                          setRows((prev) => prev.filter((item) => item.id !== row.id));
-                        }}
-                      >
-                        <X className="h-4 w-4 text-[var(--muted)]" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-        {result ? <p className="mt-3 text-sm text-teal-700">{result}</p> : null}
-        <div className="mt-4 flex justify-end gap-2">
-          <button type="button" className="btn-secondary h-9 px-3 text-xs" onClick={requestClose}>
-            Close
-          </button>
-          <button
-            type="button"
-            className="btn-primary inline-flex h-9 items-center gap-2 px-3 text-xs disabled:opacity-60"
-            disabled={uploading}
-            onClick={() => void handleUpload()}
-          >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {uploading ? "Uploading…" : csvFile && rows.length === 0 ? "Register SKUs" : "Upload"}
-          </button>
-        </div>
-      </div>
-    </dialog>
-  );
-}
 
 type DocumentDraftLine = {
   id: string;
@@ -536,11 +255,13 @@ export function PickingDocumentDialog({
   docType,
   lookupProducts,
   onDownload,
+  initialSkus,
 }: {
   open: boolean;
   onClose: () => void;
   docType: "grn" | "awb";
   lookupProducts: (skus: string[]) => Promise<PickingProduct[]>;
+  initialSkus?: PickingProduct[] | null;
   onDownload: (payload: {
     lines: Array<{
       sku: string;
@@ -558,7 +279,7 @@ export function PickingDocumentDialog({
   const [previewLines, setPreviewLines] = useState<DocumentPreviewLine[]>([]);
   const [fileText, setFileText] = useState("");
   const [manualSku, setManualSku] = useState("");
-  const [manualQty, setManualQty] = useState("1");
+  const [manualQty, setManualQty] = useState("");
   const [manualGoodQty, setManualGoodQty] = useState("");
   const [manualBadQty, setManualBadQty] = useState("");
   const [showComments, setShowComments] = useState(false);
@@ -569,23 +290,13 @@ export function PickingDocumentDialog({
   const title = docType === "grn" ? "GRN Document" : "Picking List";
   const downloadLabel = docType === "grn" ? "Download GRN" : "Download Picking List";
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open) {
-      if (!dialog.open) dialog.showModal();
-      return;
-    }
-    if (dialog.open) dialog.close();
-  }, [open]);
-
   const resetState = () => {
     setStep("build");
     setDraftLines([]);
     setPreviewLines([]);
     setFileText("");
     setManualSku("");
-    setManualQty("1");
+    setManualQty("");
     setManualGoodQty("");
     setManualBadQty("");
     setComments("");
@@ -594,30 +305,32 @@ export function PickingDocumentDialog({
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open) {
+      resetState();
+      if (initialSkus && initialSkus.length > 0) {
+        setDraftLines(
+          initialSkus.map((product) => ({
+            id: `${product.sku}-${Math.random()}`,
+            sku: product.sku,
+            quantity: 0,
+            good_qty: null,
+            bad_qty: null,
+          })),
+        );
+      }
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (dialog.open) dialog.close();
+  }, [open, initialSkus]);
+
   const requestClose = () => {
     resetState();
     dialogRef.current?.close();
     onClose();
-  };
-
-  const importText = (text: string) => {
-    const parsed = parseSkuDocumentText(text);
-    if (parsed.length === 0) {
-      setError("Add SKUs manually or upload a file with a SKU column.");
-      return;
-    }
-    setDraftLines((prev) =>
-      mergeDraftLines(
-        prev,
-        parsed.map((row) => ({
-          sku: row.sku,
-          quantity: row.quantity,
-          good_qty: row.good_qty,
-          bad_qty: row.bad_qty,
-        })),
-      ),
-    );
-    setError(null);
   };
 
   const addManualLine = () => {
@@ -647,7 +360,7 @@ export function PickingDocumentDialog({
       ]),
     );
     setManualSku("");
-    setManualQty("1");
+    setManualQty("");
     setManualGoodQty("");
     setManualBadQty("");
     setError(null);
@@ -675,6 +388,10 @@ export function PickingDocumentDialog({
       setError("Add at least one SKU before previewing the document.");
       return;
     }
+    if (lines.some((line) => !line.quantity || line.quantity <= 0)) {
+      setError("Enter a quantity greater than 0 for every SKU in the list.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -685,7 +402,7 @@ export function PickingDocumentDialog({
           const product = bySku.get(line.sku.toLowerCase());
           return {
             sku: line.sku,
-            product_name: product?.product_name?.trim() || "Not Available",
+            product_name: product?.product_name?.trim() || line.sku,
             image_url: product?.image_url ?? null,
             quantity: line.quantity,
             good_qty: line.good_qty,
@@ -727,7 +444,7 @@ export function PickingDocumentDialog({
 
   return (
     <dialog ref={dialogRef} onClose={requestClose} className={dialogShell}>
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-5 shadow-2xl">
+      <div className="max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-[var(--card-border)] bg-[var(--card)] p-4 shadow-2xl sm:rounded-2xl sm:p-5">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">{title}</h2>
@@ -744,6 +461,11 @@ export function PickingDocumentDialog({
 
         {step === "build" ? (
           <>
+            {initialSkus && initialSkus.length > 0 && draftLines.length > 0 ? (
+              <p className="mb-3 rounded-lg bg-portal-50 px-3 py-2 text-xs text-portal-800">
+                Enter a quantity for each selected SKU below, then preview the document.
+              </p>
+            ) : null}
             <div className={`grid gap-3 ${docType === "grn" ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
               <label className="block text-xs font-medium text-[var(--muted)]">
                 SKU
@@ -763,6 +485,7 @@ export function PickingDocumentDialog({
                   value={manualQty}
                   onChange={(e) => setManualQty(e.target.value)}
                   className={fieldClass}
+                  placeholder={docType === "grn" ? "Total qty" : "Qty"}
                 />
               </label>
               {docType === "grn" ? (
@@ -826,7 +549,6 @@ export function PickingDocumentDialog({
                     if (!file) return;
                     const text = await file.text();
                     setFileText(text);
-                    importText(text);
                   }}
                 />
               </label>
@@ -873,21 +595,25 @@ export function PickingDocumentDialog({
                         <td className="px-3 py-2 font-mono">{line.sku}</td>
                         <td className="px-3 py-2 text-right">
                           <input
-                            className="input h-8 w-16 text-right"
+                            className="input h-8 w-20 text-right"
                             type="number"
                             min={1}
-                            value={line.quantity}
+                            placeholder="Qty"
+                            value={line.quantity > 0 ? line.quantity : ""}
                             onChange={(e) => {
-                              const quantity = Number(e.target.value);
+                              const raw = e.target.value;
+                              const quantity = raw === "" ? 0 : Number(raw);
                               setDraftLines((prev) =>
                                 prev.map((row) =>
                                   row.id === line.id
                                     ? {
                                         ...row,
                                         quantity:
-                                          Number.isFinite(quantity) && quantity > 0
-                                            ? quantity
-                                            : row.quantity,
+                                          raw === ""
+                                            ? 0
+                                            : Number.isFinite(quantity) && quantity > 0
+                                              ? quantity
+                                              : row.quantity,
                                       }
                                     : row,
                                 ),
@@ -1044,7 +770,7 @@ export function PickingDocumentDialog({
               disabled={busy}
               onClick={() => void buildPreview()}
             >
-              {busy ? "Loading preview…" : "Preview document"}
+              {busy ? "Loading previewâ€¦" : "Preview document"}
             </button>
           ) : (
             <button
@@ -1053,7 +779,7 @@ export function PickingDocumentDialog({
               disabled={busy}
               onClick={() => void downloadDocument()}
             >
-              {busy ? "Creating…" : downloadLabel}
+              {busy ? "Creatingâ€¦" : downloadLabel}
             </button>
           )}
         </div>

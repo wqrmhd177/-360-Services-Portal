@@ -148,14 +148,27 @@ export function buildPickingDocumentHtml(options: PickingDocOptions): string {
       border: 1px solid #64748b;
       padding: 4px;
     }
-    .awb-total {
-      background: #64748b;
-      color: #fff;
+    .awb-total-header {
+      background: #93c5fd;
       text-align: center;
-      font-size: 28px;
+      vertical-align: middle;
+      font-size: 15px;
       font-weight: 800;
+      line-height: 1.35;
       border: 1px solid #64748b;
-      padding: 8px;
+      padding: 10px 8px;
+      white-space: nowrap;
+    }
+    .awb-total-value {
+      display: inline-block;
+      min-width: 2.5em;
+      margin-top: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #475569;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 800;
     }
     .awb-sub td {
       background: #93c5fd;
@@ -169,7 +182,18 @@ export function buildPickingDocumentHtml(options: PickingDocOptions): string {
       vertical-align: middle;
     }
     .awb-name { font-weight: 700; font-size: 16px; text-align: center; }
-    .awb-qty { text-align: center; font-size: 32px; font-weight: 800; width: 90px; }
+    .awb-qty {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 800;
+      width: 72px;
+      padding: 8px 6px;
+    }
+    .awb-footer td {
+      background: #e2e8f0;
+      border: 1px solid #64748b;
+      font-weight: 800;
+    }
     .comments-box {
       margin: 12px 0 16px;
       border: 1px solid #64748b;
@@ -254,7 +278,7 @@ function awbBody(options: PickingDocOptions, totalQty: number): string {
   return `<table>
     <tr>
       <td colspan="2" class="awb-title">Picking</td>
-      <td class="awb-total-label">Total Quantity<br /><span class="awb-total">${escapeHtml(String(totalQty))}</span></td>
+      <td class="awb-total-header">Total Quantity<br /><span class="awb-total-value">${escapeHtml(String(totalQty))}</span></td>
     </tr>
     <tr class="awb-sub">
       <td>Image</td>
@@ -262,8 +286,8 @@ function awbBody(options: PickingDocOptions, totalQty: number): string {
       <td style="text-align:center">Qty</td>
     </tr>
     ${rows}
-    <tr class="awb-row">
-      <td colspan="2" style="text-align:right;font-weight:800;padding:12px">Total</td>
+    <tr class="awb-footer">
+      <td colspan="2" style="text-align:right;padding:10px 12px">Total</td>
       <td class="awb-qty">${escapeHtml(String(totalQty))}</td>
     </tr>
   </table>`;
