@@ -33,10 +33,9 @@ function getStorageClient(): SupabaseClient {
   return storageClient;
 }
 
-export function isPortalPickingImageUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  return url.includes("/storage/v1/object/public/product_images/");
-}
+import { isPortalPickingImageUrl } from "@/lib/operations/pickingImageUrl";
+
+export { isPortalPickingImageUrl } from "@/lib/operations/pickingImageUrl";
 
 export function pickingSafeSku(sku: string): string {
   return sku.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -46,19 +45,7 @@ export function pickingPictureApiPath(sku: string): string {
   return `/api/operations/picking/picture?sku=${encodeURIComponent(sku)}`;
 }
 
-export function pickingDocumentImageSrc(
-  imageUrl: string | null | undefined,
-): string | null {
-  const url = String(imageUrl ?? "").trim();
-  if (!url) return null;
-  if (isPortalPickingImageUrl(url)) {
-    return url.split("?")[0];
-  }
-  if (/^https?:\/\//i.test(url)) {
-    return url;
-  }
-  return null;
-}
+export { pickingDocumentImageSrc } from "@/lib/operations/pickingImageUrl";
 
 export function withPickingPictureUrl<
   T extends { sku: string; image_url: string | null },

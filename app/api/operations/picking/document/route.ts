@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { lookupPickingProducts } from "@/lib/operations/picking";
-import { pickingDocumentImageSrc } from "@/lib/operations/pickingUploads";
+import { pickingDocumentImageSrc } from "@/lib/operations/pickingImageUrl";
 import {
   buildPickingDocumentHtml,
   type PickingDocLine,

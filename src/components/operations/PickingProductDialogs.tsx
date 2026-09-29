@@ -7,7 +7,7 @@ import {
   parseSkuDocumentText,
 } from "@/lib/operations/pickingParse";
 import { pickingDocumentLabel } from "@/lib/operations/pickingSheet";
-import { pickingDocumentImageSrc } from "@/lib/operations/pickingUploads";
+import { pickingDocumentImageSrc } from "@/lib/operations/pickingImageUrl";
 
 const dialogShell =
   "fixed inset-0 z-[100] m-0 flex h-full max-h-none w-full max-w-none items-end justify-center border-0 bg-transparent p-0 shadow-none sm:items-center sm:p-4 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm";
