@@ -2,16 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  FEATURE_ACCESS_OVERRIDE_OPTIONS,
   MAIN_TAB_OPTIONS,
+  OPERATIONS_SUBTAB_OPTIONS,
   PA_ROLE_OPTIONS,
   PORTAL_DEPARTMENT_OPTIONS,
   PORTAL_ROLE_OPTIONS,
+  PRODUCT_LISTING_SUBTAB_OPTIONS,
   deriveEffectivePermissions,
   formatMainTabs,
   formatPaRole,
   formatPortalDepartment,
   formatPortalRole,
   parsePermissions,
+  type FeatureAccessOverride,
   type PortalDepartment,
   type PortalRole,
   type ProductAvailabilityRole,
@@ -37,7 +41,21 @@ type EditState = {
     product_listing: boolean;
   };
   pa_workflow_role: ProductAvailabilityRole;
+  /** Empty string = inherit portal role default */
+  featureAccess: Record<string, FeatureAccessOverride>;
 };
+
+function featureAccessFromPermissions(parsed: UserPermissions | undefined): Record<string, FeatureAccessOverride> {
+  const out: Record<string, FeatureAccessOverride> = {};
+  const map = parsed?.featureAccess;
+  if (!map) return out;
+  for (const [key, val] of Object.entries(map)) {
+    if (val === "read" || val === "write" || val === "none") {
+      out[key] = val;
+    }
+  }
+  return out;
+}
 
 function userToEditState(user: ProfileRow): EditState {
   const parsed = parsePermissions(user.permissions);
@@ -59,6 +77,7 @@ function userToEditState(user: ProfileRow): EditState {
       product_listing: effective.tabs.product_listing,
     },
     pa_workflow_role: effective.paRole ?? "agent",
+    featureAccess: featureAccessFromPermissions(parsed),
   };
 }
 
@@ -89,6 +108,13 @@ function editStateToPermissions(state: EditState): UserPermissions {
     admin_users: false,
   };
 
+  const featureAccess: Partial<Record<string, "read" | "write" | "none">> = {};
+  for (const [key, val] of Object.entries(state.featureAccess)) {
+    if (val === "read" || val === "write" || val === "none") {
+      featureAccess[key] = val;
+    }
+  }
+
   return {
     portal_role: state.portal_role,
     department: state.department || null,
@@ -97,6 +123,7 @@ function editStateToPermissions(state: EditState): UserPermissions {
     product_listing: state.tabs.product_listing,
     operations: state.tabs.operations,
     zambeel360: [],
+    ...(Object.keys(featureAccess).length > 0 ? { featureAccess } : {}),
   };
 }
 
@@ -158,6 +185,44 @@ export default function UserSettingsClient() {
       };
     });
   };
+
+  const setFeatureOverride = (featureKey: string, value: FeatureAccessOverride) => {
+    setEditState((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev.featureAccess };
+      if (!value) {
+        delete next[featureKey];
+      } else {
+        next[featureKey] = value;
+      }
+      return { ...prev, featureAccess: next };
+    });
+  };
+
+  const getFeatureOverride = (featureKey: string): FeatureAccessOverride =>
+    editState?.featureAccess[featureKey] ?? "";
+
+  const renderFeatureOverrideSelect = (featureKey: string, label: string, indent = false) => (
+    <div
+      key={featureKey}
+      className={`flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between ${
+        indent ? "pl-3" : ""
+      }`}
+    >
+      <span className={`text-gray-700 ${indent ? "text-xs" : "text-sm"}`}>{label}</span>
+      <select
+        value={getFeatureOverride(featureKey)}
+        onChange={(e) => setFeatureOverride(featureKey, e.target.value as FeatureAccessOverride)}
+        className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-900 sm:max-w-[11rem]"
+      >
+        {FEATURE_ACCESS_OVERRIDE_OPTIONS.map((opt) => (
+          <option key={opt.value || "inherit"} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   const handleSave = async () => {
     if (!editingUser || !editState) return;
@@ -299,7 +364,7 @@ export default function UserSettingsClient() {
           onClick={closeEdit}
         >
           <div
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="edit-user-title" className="text-lg font-semibold text-gray-900">
@@ -388,22 +453,50 @@ export default function UserSettingsClient() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Main tab access</p>
                     <p className="mt-1 text-xs text-gray-500">
-                      Home is always available. Sub-tabs inherit the same access as their main tab.
+                      Home is always available. Use defaults and sub-menu overrides for read vs write
+                      per area. Unset sub-menus inherit the main tab default, then the portal role.
                     </p>
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-3">
                       {MAIN_TAB_OPTIONS.map((tab) => (
-                        <label
+                        <div
                           key={tab.key}
-                          className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                          className="rounded-lg border border-gray-200 px-3 py-2"
                         >
-                          <input
-                            type="checkbox"
-                            checked={editState.tabs[tab.key]}
-                            onChange={() => toggleTab(tab.key)}
-                            className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
-                          />
-                          {tab.label}
-                        </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={editState.tabs[tab.key]}
+                              onChange={() => toggleTab(tab.key)}
+                              className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
+                            />
+                            {tab.label}
+                          </label>
+                          {editState.tabs[tab.key] ? (
+                            <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
+                              {renderFeatureOverrideSelect(tab.key, "Default for this tab")}
+                              {tab.key === "operations" ? (
+                                <div className="space-y-1.5 border-t border-gray-100 pt-2">
+                                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                    Operations sub-menus
+                                  </p>
+                                  {OPERATIONS_SUBTAB_OPTIONS.map((sub) =>
+                                    renderFeatureOverrideSelect(sub.key, sub.label, true),
+                                  )}
+                                </div>
+                              ) : null}
+                              {tab.key === "product_listing" ? (
+                                <div className="space-y-1.5 border-t border-gray-100 pt-2">
+                                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                    Product Listing sub-menus
+                                  </p>
+                                  {PRODUCT_LISTING_SUBTAB_OPTIONS.map((sub) =>
+                                    renderFeatureOverrideSelect(sub.key, sub.label, true),
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   </div>

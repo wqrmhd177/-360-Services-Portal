@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { useProductAvailabilityAuth } from "@/hooks/useProductAvailabilityAuth";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import {
   BulkUploadRowValidated,
   deriveCountsFromRows,
@@ -98,6 +99,8 @@ export default function ProductAvailabilityPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading, paRole, userRole, userFriendlyId, isAdmin: portalIsAdmin } =
     useProductAvailabilityAuth();
+  const { canWrite: paCanWrite, loading: paAccessLoading } = useFeatureAccess("product_availability");
+  const canMutatePa = !paAccessLoading && paCanWrite;
 
   const effectivePaRole = portalIsAdmin ? "admin" : (paRole ?? "agent");
 
@@ -144,7 +147,7 @@ export default function ProductAvailabilityPage() {
   const isAgent = dataScope === "own_requests" || portalIsAdmin;
   const isAdmin = effectivePaRole === "admin" || portalIsAdmin;
   const isManager = dataScope === "market" || portalIsAdmin;
-  const canCreate = isAgent || isAdmin;
+  const canCreate = (isAgent || isAdmin) && canMutatePa;
   const isPurchaser = dataScope === "assigned" || portalIsAdmin;
   const canAccess = isAuthenticated;
 
@@ -1147,7 +1150,7 @@ export default function ProductAvailabilityPage() {
       )}
 
       {/* ── Respond modal (purchaser) ── */}
-      {isPurchaser && showResponseForm && selectedAssignment && (
+      {isPurchaser && canMutatePa && showResponseForm && selectedAssignment && (
         <div
           className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center sm:p-4"
           onClick={closeResponseModal}
@@ -1399,7 +1402,7 @@ export default function ProductAvailabilityPage() {
               {/* Mobile cards */}
               <div className="md:hidden space-y-3">
                 {paginatedDisplayed.map((request) => {
-                  const canRespond = isPurchaser && request.assignment_status === "pending";
+                  const canRespond = isPurchaser && canMutatePa && request.assignment_status === "pending";
                   const noMapping = !request.assigned_purchaser_user_id;
                   const thumb = getRequestThumbnail(request);
                   return (
@@ -1600,7 +1603,7 @@ export default function ProductAvailabilityPage() {
                     <tbody>
                       {paginatedDisplayed.map((request) => {
                         const created = new Date(request.created_at).toLocaleString();
-                        const canRespond = isPurchaser && request.assignment_status === "pending";
+                        const canRespond = isPurchaser && canMutatePa && request.assignment_status === "pending";
                         const noMapping = !request.assigned_purchaser_user_id;
                         return (
                           <tr

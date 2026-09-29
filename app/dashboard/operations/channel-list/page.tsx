@@ -5,6 +5,7 @@ import { formatStoreDisplayName } from "@/lib/operations/storeDisplayName";
 import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import type { ChannelListRow } from "@/lib/operations/channelList";
 
 function isHttpUrl(value: string): boolean {
@@ -12,6 +13,8 @@ function isHttpUrl(value: string): boolean {
 }
 
 export default function ChannelListPage() {
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("operations.channel_list");
+  const showMutate = !accessLoading && canMutate;
   const {
     items: channels,
     loading,
@@ -48,6 +51,7 @@ export default function ChannelListPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="input h-9 w-full sm:w-72"
         />
+        {showMutate ? (
         <button
           type="button"
           onClick={runSync}
@@ -61,6 +65,7 @@ export default function ChannelListPage() {
           )}
           Sync
         </button>
+        ) : null}
       </OperationsPageHeader>
 
       <SyncStatusBar

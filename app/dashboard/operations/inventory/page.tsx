@@ -7,9 +7,12 @@ import { InventoryFulfilmentRouteCell } from "@/components/operations/InventoryF
 import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
 import { ListPagination, SyncStatusBar } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import type { InventoryRow } from "@/lib/operations/inventory";
 
 export default function OperationsInventoryPage() {
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("operations.inventory");
+  const showMutate = !accessLoading && canMutate;
   const {
     items,
     loading,
@@ -84,7 +87,7 @@ export default function OperationsInventoryPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="input h-9 w-full sm:w-72"
         />
-        {isAdmin ? (
+        {isAdmin && showMutate ? (
           <button
             type="button"
             onClick={() => setBulkOpen(true)}
@@ -94,6 +97,7 @@ export default function OperationsInventoryPage() {
             Bulk Routes
           </button>
         ) : null}
+        {showMutate ? (
         <button
           type="button"
           onClick={runSync}
@@ -107,6 +111,7 @@ export default function OperationsInventoryPage() {
           )}
           Sync
         </button>
+        ) : null}
       </OperationsPageHeader>
 
       <SyncStatusBar
@@ -170,7 +175,7 @@ export default function OperationsInventoryPage() {
                           sku={row.sku}
                           route={routeMap[row.sku] ?? row.fulfilment_route ?? null}
                           routeOptions={routeOptions}
-                          isAdmin={isAdmin}
+                          isAdmin={isAdmin && showMutate}
                           onSaved={(nextRoute) => {
                             setRouteMap((prev) => ({ ...prev, [row.sku]: nextRoute }));
                             if (!routeOptions.includes(nextRoute)) {

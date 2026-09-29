@@ -21,6 +21,7 @@ import { ListPagination } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
 import type { PickingProduct } from "@/lib/operations/picking";
 import { formatPortalTimestamp } from "@/lib/portalTimezone";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 
 type DocKind = "grn" | "awb";
 
@@ -76,6 +77,7 @@ function ProductThumb({
 }
 
 export default function ProductPicturesPage() {
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("operations.picking");
   const {
     items,
     loading,
@@ -112,6 +114,7 @@ export default function ProductPicturesPage() {
   const [docBusy, setDocBusy] = useState(false);
 
   const busy = loading || syncing || bootstrapping || masterSyncing;
+  const showMutate = !accessLoading && canMutate;
   const selectedList = useMemo(() => Object.values(selected), [selected]);
   const selectedCount = selectedList.length;
   const allOnPageSelected =
@@ -264,6 +267,7 @@ export default function ProductPicturesPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="h-10 min-w-0 flex-1 basis-full rounded-xl border border-portal-200 bg-white px-3 text-base text-portal-900 outline-none focus:border-portal-400 focus:ring-2 focus:ring-portal-400/20 sm:h-9 sm:max-w-xs sm:flex-none sm:text-sm"
         />
+        {showMutate ? (
         <button
           type="button"
           onClick={() => setAddOpen(true)}
@@ -272,6 +276,7 @@ export default function ProductPicturesPage() {
           <Plus className="h-4 w-4" />
           Add product
         </button>
+        ) : null}
         <button
           type="button"
           onClick={() => openDocumentDialog("grn")}
@@ -288,6 +293,7 @@ export default function ProductPicturesPage() {
           <ListChecks className="h-4 w-4" />
           Picking List
         </button>
+        {showMutate ? (
         <button
           type="button"
           onClick={() => void syncProducts()}
@@ -301,6 +307,7 @@ export default function ProductPicturesPage() {
           )}
           Sync Products
         </button>
+        ) : null}
         <button
           type="button"
           onClick={openMissingReport}
@@ -430,6 +437,7 @@ export default function ProductPicturesPage() {
                       )}
                     </td>
                     <td className="px-2 py-2 align-middle text-sm font-medium text-gray-900">
+                      {showMutate ? (
                       <button
                         type="button"
                         className="line-clamp-2 break-words text-left hover:text-portal-700 hover:underline"
@@ -438,6 +446,9 @@ export default function ProductPicturesPage() {
                       >
                         {row.product_name}
                       </button>
+                      ) : (
+                      <span className="line-clamp-2 break-words">{row.product_name}</span>
+                      )}
                     </td>
                     <td className="px-2 py-2 align-middle text-right font-mono text-[11px] text-gray-700">
                       <span className="block truncate" title={row.sku}>
@@ -471,11 +482,14 @@ export default function ProductPicturesPage() {
         onPageChange={setCurrentPage}
       />
 
+      {showMutate ? (
       <PickingAddProductDialog
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSaved={() => void load(currentPage, search)}
       />
+      ) : null}
+      {showMutate ? (
       <PickingAddProductDialog
         open={Boolean(editing)}
         product={editing}
@@ -485,6 +499,7 @@ export default function ProductPicturesPage() {
           void load(currentPage, search);
         }}
       />
+      ) : null}
       <PickingDocumentDialog
         open={grnDocOpen}
         onClose={() => closeDocumentDialog("grn")}

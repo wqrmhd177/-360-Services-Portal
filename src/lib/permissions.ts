@@ -28,6 +28,9 @@ export type MainTab = (typeof MAIN_TABS)[number];
 
 export type MainTabAccess = Record<MainTab, boolean>;
 
+export type FeatureAccessLevel = "read" | "write" | "none";
+export type FeatureAccessMap = Record<string, FeatureAccessLevel>;
+
 export interface UserPermissions {
   zambeel360?: ZambeelDepartment[];
   product_availability?: ProductAvailabilityRole | null;
@@ -36,6 +39,96 @@ export interface UserPermissions {
   portal_role?: PortalRole;
   department?: PortalDepartment | null;
   tabs?: Partial<MainTabAccess>;
+  /** Per main-tab or sub-tab read/write/none overrides. Omit keys to inherit portal role default. */
+  featureAccess?: Partial<FeatureAccessMap>;
+}
+
+export const OPERATIONS_SUBTAB_OPTIONS: { key: string; label: string }[] = [
+  { key: "operations.orders", label: "Dashboard" },
+  { key: "operations.overall_performance", label: "Overall Performance" },
+  { key: "operations.op_performance", label: "OP Performance" },
+  { key: "operations.ticketing", label: "Ticketing" },
+  { key: "operations.picking", label: "Product Pictures" },
+  { key: "operations.store_visibility", label: "Store Visibility" },
+  { key: "operations.sku_performance", label: "SKU Performance" },
+  { key: "operations.inventory", label: "Inventory" },
+  { key: "operations.nd_report", label: "ND Report" },
+  { key: "operations.channel_list", label: "Channel List" },
+];
+
+export const PRODUCT_LISTING_SUBTAB_OPTIONS: { key: string; label: string }[] = [
+  { key: "product_listing.suppliers", label: "Suppliers" },
+  { key: "product_listing.products", label: "Products" },
+  { key: "product_listing.product_updates", label: "Product Updates" },
+];
+
+export type FeatureAccessOverride = "" | FeatureAccessLevel;
+
+export const FEATURE_ACCESS_OVERRIDE_OPTIONS: {
+  value: FeatureAccessOverride;
+  label: string;
+}[] = [
+  { value: "", label: "Inherit default" },
+  { value: "read", label: "Read only" },
+  { value: "write", label: "Read & write" },
+  { value: "none", label: "No access" },
+];
+
+function mainTabForFeatureKey(featureKey: string): MainTab | null {
+  if (featureKey === "operations" || featureKey.startsWith("operations.")) {
+    return "operations";
+  }
+  if (featureKey === "product_availability" || featureKey.startsWith("product_availability.")) {
+    return "product_availability";
+  }
+  if (featureKey === "product_listing" || featureKey.startsWith("product_listing.")) {
+    return "product_listing";
+  }
+  return null;
+}
+
+function isFeatureAccessLevel(value: unknown): value is FeatureAccessLevel {
+  return value === "read" || value === "write" || value === "none";
+}
+
+export function resolveFeatureAccess(
+  featureKey: string,
+  input: {
+    role?: UserRole | string | null;
+    isAdmin?: boolean;
+    permissions?: UserPermissions;
+    team?: SignupTeam | string | null;
+  },
+): FeatureAccessLevel {
+  if (input.isAdmin) return "write";
+
+  const effective = deriveEffectivePermissions(input);
+  const mainTab = mainTabForFeatureKey(featureKey);
+  if (mainTab && !effective.tabs[mainTab]) return "none";
+
+  const map = input.permissions?.featureAccess;
+  if (map && isFeatureAccessLevel(map[featureKey])) {
+    return map[featureKey];
+  }
+
+  const parentKey = featureKey.includes(".") ? featureKey.split(".")[0] : null;
+  if (parentKey && map && isFeatureAccessLevel(map[parentKey])) {
+    return map[parentKey];
+  }
+
+  return effective.canWrite ? "write" : "read";
+}
+
+export function canSeeFeatureInNav(
+  featureKey: string,
+  input: {
+    role?: UserRole | string | null;
+    isAdmin?: boolean;
+    permissions?: UserPermissions;
+    team?: SignupTeam | string | null;
+  },
+): boolean {
+  return resolveFeatureAccess(featureKey, input) !== "none";
 }
 
 export function isZambeelDepartment(value: string): value is ZambeelDepartment {
@@ -143,6 +236,20 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     }
   }
 
+  let featureAccess: Partial<FeatureAccessMap> | undefined;
+  if (obj.featureAccess && typeof obj.featureAccess === "object") {
+    const faObj = obj.featureAccess as Record<string, unknown>;
+    featureAccess = {};
+    for (const [key, val] of Object.entries(faObj)) {
+      if (isFeatureAccessLevel(val)) {
+        featureAccess[key] = val;
+      }
+    }
+    if (Object.keys(featureAccess).length === 0) {
+      featureAccess = undefined;
+    }
+  }
+
   if (
     zambeel360 === undefined &&
     product_availability === undefined &&
@@ -150,7 +257,8 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     operations === undefined &&
     portal_role === undefined &&
     department === undefined &&
-    tabs === undefined
+    tabs === undefined &&
+    featureAccess === undefined
   ) {
     return undefined;
   }
@@ -163,6 +271,7 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     portal_role,
     department,
     tabs,
+    featureAccess,
   };
 }
 

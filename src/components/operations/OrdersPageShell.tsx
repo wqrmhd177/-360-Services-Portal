@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import OrdersFilterBar from "@/components/operations/OrdersFilterBar";
 import { OperationsPageHeader } from "@/components/operations/OperationsPageHeader";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { formatPortalTimestamp } from "@/lib/portalTimezone";
 
 type SyncJobStatus = "pending" | "running" | "success" | "failed";
@@ -25,6 +26,8 @@ export function OrdersPageShell({
   lastSyncedAt: string | null;
 }) {
   const router = useRouter();
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("operations.orders");
+  const showMutate = !accessLoading && canMutate;
   const country = typeof searchParams.country === "string" ? searchParams.country : "";
   const bifurcation =
     typeof searchParams.bifurcation === "string" ? searchParams.bifurcation : "";
@@ -187,6 +190,7 @@ export function OrdersPageShell({
           </>
         }
       >
+        {showMutate ? (
         <button
           type="button"
           onClick={() => void runSync()}
@@ -195,6 +199,7 @@ export function OrdersPageShell({
         >
           {syncing ? "Syncing…" : "Sync Data"}
         </button>
+        ) : null}
       </OperationsPageHeader>
 
       <OrdersFilterBar

@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import {
   formatVariantLabel,
   sortVariantOptionNames,
@@ -117,6 +118,10 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ProductUpdatesPage() {
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess(
+    "product_listing.product_updates",
+  );
+  const showMutate = !accessLoading && canMutate;
   const [requests, setRequests] = useState<MergedRequest[]>([]);
   const [tab, setTab] = useState<StatusTab>("pending");
   const [loading, setLoading] = useState(true);
@@ -287,7 +292,7 @@ export default function ProductUpdatesPage() {
                     <th className="px-4 py-3 text-center">Requested By</th>
                     <th className="px-4 py-3 text-center">Date</th>
                     <th className="px-4 py-3 text-center">Status</th>
-                    {tab === "pending" && <th className="px-4 py-3 text-center">Actions</th>}
+                    {tab === "pending" && showMutate && <th className="px-4 py-3 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -334,7 +339,7 @@ export default function ProductUpdatesPage() {
                         <td className="px-4 py-3 text-center">
                           <StatusBadge status={req.status} />
                         </td>
-                        {tab === "pending" && (
+                        {tab === "pending" && showMutate && (
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -393,7 +398,7 @@ export default function ProductUpdatesPage() {
                     <span className="text-xs text-gray-500">{formatDate(req.created_at)}</span>
                   </div>
                   <ChangeCell req={req} />
-                  {tab === "pending" && (
+                        {tab === "pending" && showMutate && (
                     <div className="flex gap-2 pt-1">
                       <button
                         type="button"

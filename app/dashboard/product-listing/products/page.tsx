@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import {
   extractImages,
   getProductThumbnail,
@@ -47,6 +48,8 @@ function StatusBadge({ status }: { status: string }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
   const router = useRouter();
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("product_listing.products");
+  const showMutate = !accessLoading && canMutate;
   const searchParams = useSearchParams();
   const initSupplier = searchParams.get("supplier") ?? "all";
 
@@ -234,6 +237,7 @@ export default function ProductsPage() {
         title="Products"
         subtitle="Browse and manage product listings"
         actions={
+          showMutate ? (
           <button
             type="button"
             onClick={() => router.push("/dashboard/product-listing/products/new")}
@@ -242,6 +246,7 @@ export default function ProductsPage() {
             <Plus className="h-4 w-4" />
             Add Product
           </button>
+          ) : null
         }
       />
 
@@ -301,6 +306,7 @@ export default function ProductsPage() {
         <div className="card flex flex-col items-center py-16 text-center">
           <Package className="mb-4 h-14 w-14 text-gray-300" />
           <p className="text-base font-medium text-gray-600">No products found</p>
+          {showMutate ? (
           <button
             type="button"
             onClick={() => router.push("/dashboard/product-listing/products/new")}
@@ -309,6 +315,7 @@ export default function ProductsPage() {
             <Plus className="h-4 w-4" />
             Add Product
           </button>
+          ) : null}
         </div>
       ) : (
         <>
@@ -383,6 +390,7 @@ export default function ProductsPage() {
                               <Eye className="h-3.5 w-3.5" />
                               View
                             </button>
+                            {showMutate ? (
                             <button
                               type="button"
                               onClick={() => setDeleteId(product.product_id)}
@@ -390,6 +398,7 @@ export default function ProductsPage() {
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

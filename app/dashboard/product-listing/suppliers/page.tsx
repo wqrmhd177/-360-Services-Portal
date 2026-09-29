@@ -4,12 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Package, Phone, Loader2 } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import type { PlSupplier, PlSupplierWithCount } from "@/lib/productListing/types";
 
 const ITEMS_PER_PAGE = 25;
 
 export default function SuppliersPage() {
   const router = useRouter();
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess(
+    "product_listing.suppliers",
+  );
+  const showMutate = !accessLoading && canMutate;
   const [suppliers, setSuppliers] = useState<PlSupplierWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -83,6 +88,7 @@ export default function SuppliersPage() {
         title="Suppliers"
         subtitle="Approved supplier records for Product Listing"
         actions={
+          showMutate ? (
           <button
             type="button"
             onClick={() => router.push("/dashboard/product-listing/suppliers/new")}
@@ -91,6 +97,7 @@ export default function SuppliersPage() {
             <Plus className="h-4 w-4" />
             Add Supplier
           </button>
+          ) : null
         }
       />
 

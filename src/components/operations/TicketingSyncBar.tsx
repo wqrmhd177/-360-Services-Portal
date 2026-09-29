@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { formatPortalTimestamp } from "@/lib/portalTimezone";
 
 export function TicketingSyncBar({
@@ -10,6 +11,8 @@ export function TicketingSyncBar({
   lastSyncedAt: string | null;
 }) {
   const router = useRouter();
+  const { canWrite: canMutate, loading: accessLoading } = useFeatureAccess("operations.ticketing");
+  const showMutate = !accessLoading && canMutate;
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -50,6 +53,7 @@ export function TicketingSyncBar({
           <p className={failed ? "text-red-600" : "text-teal-600"}>{message}</p>
         ) : null}
       </div>
+      {showMutate ? (
       <button
         type="button"
         onClick={() => void runSync()}
@@ -58,6 +62,7 @@ export function TicketingSyncBar({
       >
         {syncing ? "Syncing…" : "Sync Data"}
       </button>
+      ) : null}
     </div>
   );
 }

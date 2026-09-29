@@ -30,7 +30,7 @@ import {
   Eye,
   Activity,
 } from "lucide-react";
-import { deriveEffectivePermissions } from "@/lib/permissions";
+import { deriveEffectivePermissions, parsePermissions, canSeeFeatureInNav } from "@/lib/permissions";
 import type { UserPermissions } from "@/lib/permissions";
 
 interface SidebarProps {
@@ -377,6 +377,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     isAdmin,
     permissions: session.permissions,
   });
+
+  const navPermInput = {
+    role,
+    isAdmin,
+    permissions: parsePermissions(session.permissions),
+  };
+  const canNav = (featureKey: string) => canSeeFeatureInNav(featureKey, navPermInput);
 
   const zambeel360Enabled = false;
   const showZambeel = zambeel360Enabled && (isAdmin || zambeelPerms.length > 0);
@@ -870,16 +877,36 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               />
               {opsOpen && !collapsed && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
+                  {canNav("operations.orders") ? (
                   <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
+                  ) : null}
+                  {canNav("operations.overall_performance") ? (
                   <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
+                  ) : null}
+                  {canNav("operations.op_performance") ? (
                   <NavLink href="/dashboard/operations/op-performance" pathname={pathname} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
+                  ) : null}
+                  {canNav("operations.ticketing") ? (
                   <NavLink href="/dashboard/operations/ticketing" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
+                  ) : null}
+                  {canNav("operations.picking") ? (
                   <NavLink href="/dashboard/operations/picking" pathname={pathname} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
+                  ) : null}
+                  {canNav("operations.store_visibility") ? (
                   <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
+                  ) : null}
+                  {canNav("operations.sku_performance") ? (
                   <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
+                  ) : null}
+                  {canNav("operations.inventory") ? (
                   <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
+                  ) : null}
+                  {canNav("operations.nd_report") ? (
                   <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
+                  ) : null}
+                  {canNav("operations.channel_list") ? (
                   <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
+                  ) : null}
                 </div>
               )}
             </div>
@@ -899,7 +926,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 icon={<ClipboardList className={iconClassLg} />}
                 active={pathname.startsWith("/dashboard/product-availability")}
               />
-              {paOpen && !collapsed && (
+              {paOpen && !collapsed && canNav("product_availability") && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
                   <NavLink
                     href="/dashboard/product-availability"
@@ -930,9 +957,15 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               />
               {plOpen && !collapsed && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
+                  {canNav("product_listing.suppliers") ? (
                   <NavLink href="/dashboard/product-listing/suppliers" pathname={pathname} collapsed={collapsed} icon={<Truck className={iconClass} />} label="Suppliers" indent matchPrefix="/product-listing/suppliers" />
+                  ) : null}
+                  {canNav("product_listing.products") ? (
                   <NavLink href="/dashboard/product-listing/products" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Products" indent matchPrefix="/product-listing/products" />
+                  ) : null}
+                  {canNav("product_listing.product_updates") ? (
                   <NavLink href="/dashboard/product-listing/product-updates" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Product Updates" indent matchPrefix="/product-listing/product-updates" badge={plPendingCount} />
+                  ) : null}
                 </div>
               )}
             </div>
