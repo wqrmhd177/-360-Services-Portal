@@ -14,6 +14,7 @@ import {
   formatPaRole,
   formatPortalDepartment,
   formatPortalRole,
+  normalizePortalRole,
   parsePermissions,
   type FeatureAccessOverride,
   type PortalDepartment,
@@ -21,6 +22,7 @@ import {
   type ProductAvailabilityRole,
   type UserPermissions,
 } from "@/lib/permissions";
+import type { UserRole } from "@/lib/simpleAuth";
 
 type ProfileRow = {
   id: string;
@@ -44,6 +46,21 @@ type EditState = {
   /** Empty string = inherit portal role default */
   featureAccess: Record<string, FeatureAccessOverride>;
 };
+
+function profileRoleFromEditState(state: EditState): UserRole {
+  if (state.isPortalAdmin) return "admin";
+  if (state.portal_role === "manager") return "manager";
+  if (state.portal_role === "purchaser") return "purchaser";
+  if (state.tabs.product_availability) return state.pa_workflow_role;
+  return "agent";
+}
+
+function paRoleFromEditState(state: EditState): ProductAvailabilityRole | null {
+  if (!state.tabs.product_availability) return null;
+  if (state.portal_role === "purchaser") return "purchaser";
+  if (state.portal_role === "manager") return "manager";
+  return state.pa_workflow_role;
+}
 
 function featureAccessFromPermissions(parsed: UserPermissions | undefined): Record<string, FeatureAccessOverride> {
   const out: Record<string, FeatureAccessOverride> = {};
@@ -69,7 +86,7 @@ function userToEditState(user: ProfileRow): EditState {
 
   return {
     isPortalAdmin,
-    portal_role: isPortalAdmin ? "admin" : effective.portalRole,
+    portal_role: isPortalAdmin ? "admin" : normalizePortalRole(parsed?.portal_role ?? effective.portalRole),
     department: (effective.department ?? "") as PortalDepartment | "",
     tabs: {
       operations: effective.tabs.operations,
@@ -119,7 +136,7 @@ function editStateToPermissions(state: EditState): UserPermissions {
     portal_role: state.portal_role,
     department: state.department || null,
     tabs,
-    product_availability: state.tabs.product_availability ? state.pa_workflow_role : null,
+    product_availability: paRoleFromEditState(state),
     product_listing: state.tabs.product_listing,
     operations: state.tabs.operations,
     zambeel360: [],
@@ -234,11 +251,7 @@ export default function UserSettingsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           permissions: editStateToPermissions(editState),
-          role: editState.isPortalAdmin
-            ? "admin"
-            : editState.tabs.product_availability
-              ? editState.pa_workflow_role
-              : "agent",
+          role: profileRoleFromEditState(editState),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -405,13 +418,30 @@ export default function UserSettingsClient() {
                     <select
                       id="portal-role"
                       value={editState.portal_role}
-                      onChange={(e) =>
-                        setEditState((prev) =>
-                          prev
-                            ? { ...prev, portal_role: e.target.value as PortalRole }
-                            : prev,
-                        )
-                      }
+                      onChange={(e) => {
+                        const next = e.target.value as PortalRole;
+                        setEditState((prev) => {
+                          if (!prev) return prev;
+                          const updated: EditState = { ...prev, portal_role: next };
+                          if (next === "purchaser") {
+                            updated.pa_workflow_role = "purchaser";
+                          } else if (next === "manager") {
+                            updated.pa_workflow_role = "manager";
+                          } else if (
+                            next === "growth_agent" ||
+                            next === "listing_agent" ||
+                            next === "ops_agent"
+                          ) {
+                            if (
+                              prev.pa_workflow_role === "purchaser" ||
+                              prev.pa_workflow_role === "manager"
+                            ) {
+                              updated.pa_workflow_role = "agent";
+                            }
+                          }
+                          return updated;
+                        });
+                      }}
                       className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-portal-500 focus:outline-none focus:ring-1 focus:ring-portal-500"
                     >
                       {PORTAL_ROLE_OPTIONS.filter((opt) => opt.value !== "admin").map((opt) => (
@@ -501,13 +531,17 @@ export default function UserSettingsClient() {
                     </div>
                   </div>
 
-                  {editState.tabs.product_availability && (
+                  {editState.tabs.product_availability &&
+                    editState.portal_role !== "purchaser" &&
+                    editState.portal_role !== "manager" && (
                     <div>
                       <label htmlFor="pa-role" className="text-sm font-medium text-gray-900">
                         Product Availability workflow role
                       </label>
                       <p className="mt-1 text-xs text-gray-500">
-                        Controls which requests this user sees inside Product Availability.
+                        For Growth, Listing, and Ops agents — controls which requests this user
+                        sees inside Product Availability. Purchaser and Manager portal roles use
+                        their fixed PA workflow.
                       </p>
                       <select
                         id="pa-role"

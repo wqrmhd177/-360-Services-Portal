@@ -3,11 +3,11 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import { getPortalSession } from "@/lib/session";
 import {
   isPortalDepartment,
-  isPortalRole,
   isProductAvailabilityRole,
+  normalizePortalRole,
+  parsePermissions,
   type MainTabAccess,
   type PortalDepartment,
-  type PortalRole,
   type ProductAvailabilityRole,
   type UserPermissions,
 } from "@/lib/permissions";
@@ -16,18 +16,18 @@ import { isAssignableRole, type UserRole } from "@/lib/simpleAuth";
 function validatePermissions(body: unknown): UserPermissions | null {
   if (!body || typeof body !== "object") return null;
   const raw = body as Record<string, unknown>;
+  const parsed = parsePermissions(body) ?? {};
 
-  const portal_role =
-    typeof raw.portal_role === "string" && isPortalRole(raw.portal_role)
-      ? (raw.portal_role as PortalRole)
-      : "manager";
+  const portal_role = normalizePortalRole(
+    typeof raw.portal_role === "string" ? raw.portal_role : parsed.portal_role,
+  );
 
   const department =
     raw.department === null
       ? null
       : typeof raw.department === "string" && isPortalDepartment(raw.department)
         ? (raw.department as PortalDepartment)
-        : null;
+        : parsed.department ?? null;
 
   const product_availability =
     raw.product_availability === null
@@ -35,10 +35,11 @@ function validatePermissions(body: unknown): UserPermissions | null {
       : typeof raw.product_availability === "string" &&
           isProductAvailabilityRole(raw.product_availability)
         ? (raw.product_availability as ProductAvailabilityRole)
-        : null;
+        : parsed.product_availability ?? null;
 
-  const product_listing = raw.product_listing === true;
-  const operations = raw.operations === true;
+  const product_listing =
+    raw.product_listing === true || parsed.product_listing === true;
+  const operations = raw.operations === true || parsed.operations === true;
 
   let tabs: Partial<MainTabAccess> | undefined;
   if (raw.tabs && typeof raw.tabs === "object") {
@@ -50,6 +51,8 @@ function validatePermissions(body: unknown): UserPermissions | null {
       product_listing: tabRaw.product_listing === true,
       admin_users: tabRaw.admin_users === true,
     };
+  } else if (parsed.tabs) {
+    tabs = parsed.tabs;
   }
 
   return {
@@ -59,7 +62,8 @@ function validatePermissions(body: unknown): UserPermissions | null {
     product_availability,
     product_listing,
     operations,
-    zambeel360: [],
+    zambeel360: parsed.zambeel360 ?? [],
+    featureAccess: parsed.featureAccess,
   };
 }
 

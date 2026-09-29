@@ -4,7 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const ZAMBEEL_ROLES = ["growth", "approver", "procurement", "finance"] as const;
 const PA_ROLES = ["agent", "purchaser", "manager"] as const;
-const PORTAL_ROLES = ["agent", "manager", "admin"] as const;
+const PORTAL_ROLES = [
+  "growth_agent",
+  "listing_agent",
+  "purchaser",
+  "manager",
+  "ops_agent",
+  "admin",
+] as const;
 const PORTAL_DEPARTMENTS = [
   "growth",
   "finance",
@@ -143,6 +150,18 @@ export function isPortalRole(value: string): value is PortalRole {
   return (PORTAL_ROLES as readonly string[]).includes(value);
 }
 
+/** Maps stored portal roles (including legacy `agent`) to the current role set. */
+export function normalizePortalRole(value: string | null | undefined): PortalRole {
+  if (!value) return "manager";
+  if (value === "agent") return "ops_agent";
+  if (isPortalRole(value)) return value;
+  return "manager";
+}
+
+export function portalRoleCanWrite(role: PortalRole): boolean {
+  return role === "admin" || role === "manager" || role === "purchaser";
+}
+
 export function isPortalDepartment(value: string): value is PortalDepartment {
   return (PORTAL_DEPARTMENTS as readonly string[]).includes(value);
 }
@@ -214,8 +233,8 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
   const operations = typeof obj.operations === "boolean" ? obj.operations : undefined;
 
   const portal_role =
-    typeof obj.portal_role === "string" && isPortalRole(obj.portal_role)
-      ? obj.portal_role
+    typeof obj.portal_role === "string"
+      ? normalizePortalRole(obj.portal_role)
       : undefined;
 
   const department =
@@ -302,10 +321,7 @@ export function deriveEffectivePermissions(input: {
     };
   }
 
-  const portalRole: PortalRole =
-    permissions?.portal_role && isPortalRole(permissions.portal_role)
-      ? permissions.portal_role
-      : "manager";
+  const portalRole = normalizePortalRole(permissions?.portal_role);
 
   const department =
     permissions?.department ?? teamToDepartment(team) ?? null;
@@ -317,7 +333,7 @@ export function deriveEffectivePermissions(input: {
     portalRole,
     department,
     tabs,
-    canWrite: portalRole === "manager" || portalRole === "admin",
+    canWrite: portalRoleCanWrite(portalRole),
     zambeelPerms: (permissions?.zambeel360 ??
       (role && isZambeelDepartment(role) ? [role] : [])) as ZambeelDepartment[],
     paRole,
@@ -361,7 +377,16 @@ export function formatPaRole(role: string | null | undefined): string {
 
 export function formatPortalRole(role: PortalRole | string | null | undefined): string {
   if (!role) return "None";
-  return role.charAt(0).toUpperCase() + role.slice(1);
+  const normalized = normalizePortalRole(role);
+  const labels: Record<PortalRole, string> = {
+    growth_agent: "Growth Agent",
+    listing_agent: "Listing Agent",
+    purchaser: "Purchaser",
+    manager: "Manager",
+    ops_agent: "Ops Agent",
+    admin: "Admin",
+  };
+  return labels[normalized] ?? normalized;
 }
 
 export function formatPortalDepartment(
@@ -462,9 +487,36 @@ export const PA_ROLE_OPTIONS: { value: ProductAvailabilityRole | ""; label: stri
 ];
 
 export const PORTAL_ROLE_OPTIONS: { value: PortalRole; label: string; hint: string }[] = [
-  { value: "agent", label: "Agent", hint: "Read-only on allowed tabs" },
-  { value: "manager", label: "Manager", hint: "Read and write on allowed tabs" },
-  { value: "admin", label: "Admin", hint: "Full access including Admin Users" },
+  {
+    value: "growth_agent",
+    label: "Growth Agent",
+    hint: "Read-only by default on allowed tabs; use sub-menu overrides for write",
+  },
+  {
+    value: "listing_agent",
+    label: "Listing Agent",
+    hint: "Read-only by default on Product Listing and other allowed tabs",
+  },
+  {
+    value: "ops_agent",
+    label: "Ops Agent",
+    hint: "Read-only by default on Operations and other allowed tabs",
+  },
+  {
+    value: "purchaser",
+    label: "Purchaser",
+    hint: "Product Availability purchaser workflow; can submit responses",
+  },
+  {
+    value: "manager",
+    label: "Manager",
+    hint: "Read and write on allowed tabs unless restricted per sub-menu",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    hint: "Full access including Admin Users",
+  },
 ];
 
 export const PORTAL_DEPARTMENT_OPTIONS: { value: PortalDepartment; label: string }[] = [
