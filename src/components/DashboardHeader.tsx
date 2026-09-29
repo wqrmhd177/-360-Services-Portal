@@ -66,7 +66,7 @@ export default function DashboardHeader({ collapsed, onToggleSidebar }: Dashboar
   }
 
   return (
-    <div className="border-b border-portal-200 bg-white px-4 sm:px-8 py-4">
+    <div className="border-b border-portal-200 bg-white px-4 py-3 sm:px-5">
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           {announcementLoaded && announcement && (

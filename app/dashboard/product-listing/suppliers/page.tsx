@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Users,
-  Plus,
-  Package,
-  Phone,
-  Loader2,
-} from "lucide-react";
+import { Plus, Package, Phone, Loader2 } from "lucide-react";
 import { ListPageHeader } from "@/components/lists/ListPageHeader";
 import type { PlSupplier, PlSupplierWithCount } from "@/lib/productListing/types";
 
@@ -84,7 +78,7 @@ export default function SuppliersPage() {
   );
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-4">
       <ListPageHeader
         title="Suppliers"
         subtitle="Approved supplier records for Product Listing"
@@ -100,15 +94,15 @@ export default function SuppliersPage() {
         }
       />
 
-      <div className="relative max-w-md">
+      <div className="max-w-md">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search suppliers…"
-          className="input w-full pl-9"
+          className="input w-full"
+          aria-label="Search suppliers"
         />
-        <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
       </div>
 
       {error && (

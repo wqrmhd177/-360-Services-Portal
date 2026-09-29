@@ -229,7 +229,7 @@ export default function ProductsPage() {
   ];
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-4">
       <ListPageHeader
         title="Products"
         subtitle="Browse and manage product listings"

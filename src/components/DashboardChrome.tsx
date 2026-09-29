@@ -41,7 +41,7 @@ function DashboardMain({
       {!isOperations ? (
         <DashboardHeader collapsed={collapsed} onToggleSidebar={onToggleSidebar} />
       ) : null}
-      <div className={cn("min-w-0 p-8", isOperations && "px-5 py-3")}>{children}</div>
+      <div className={cn("min-w-0 p-4 sm:p-5", isOperations && "px-4 py-3")}>{children}</div>
     </main>
   );
 }
@@ -55,7 +55,7 @@ export default function DashboardChrome({ children }: DashboardChromeProps) {
       <Suspense fallback={<SidebarFallback collapsed={isCollapsed} />}>
         <Sidebar collapsed={isCollapsed} onToggle={toggle} />
       </Suspense>
-      <Suspense fallback={<div className="flex-1 overflow-y-auto p-8">{children}</div>}>
+      <Suspense fallback={<div className="flex-1 overflow-y-auto p-4 sm:p-5">{children}</div>}>
         <DashboardMain collapsed={isCollapsed} onToggleSidebar={toggle}>
           {children}
         </DashboardMain>

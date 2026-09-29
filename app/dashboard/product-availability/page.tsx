@@ -603,7 +603,7 @@ export default function ProductAvailabilityPage() {
           : "bg-yellow-100 text-yellow-700";
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-7xl space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Product Availability Requests</h1>
         <p className="text-sm text-gray-600 mt-1">
@@ -627,7 +627,7 @@ export default function ProductAvailabilityPage() {
         {canCreate && (
           <button
             onClick={() => setFilter("new")}
-            className={`rounded-xl p-2.5 text-left border ${
+            className={`rounded-lg px-2 py-1.5 text-left border ${
               filter === "new"
                 ? "border-violet-500 bg-violet-50"
                 : "border-gray-200 bg-white"
@@ -640,7 +640,7 @@ export default function ProductAvailabilityPage() {
         {canCreate && (
           <button
             onClick={() => setFilter("drafts")}
-            className={`rounded-xl p-2.5 text-left border ${
+            className={`rounded-lg px-2 py-1.5 text-left border ${
               filter === "drafts"
                 ? "border-amber-500 bg-amber-50"
                 : "border-gray-200 bg-white"
@@ -652,7 +652,7 @@ export default function ProductAvailabilityPage() {
         )}
         <button
           onClick={() => setFilter("urgent")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "urgent"
               ? "border-orange-500 bg-orange-50"
               : "border-gray-200 bg-white"
@@ -663,7 +663,7 @@ export default function ProductAvailabilityPage() {
         </button>
         <button
           onClick={() => setFilter("normal_requests")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "normal_requests"
               ? "border-blue-500 bg-blue-50"
               : "border-gray-200 bg-white"
@@ -674,7 +674,7 @@ export default function ProductAvailabilityPage() {
         </button>
         <button
           onClick={() => setFilter("delayed")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "delayed"
               ? "border-red-500 bg-red-50"
               : "border-gray-200 bg-white"
@@ -685,7 +685,7 @@ export default function ProductAvailabilityPage() {
         </button>
         <button
           onClick={() => setFilter("completed")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "completed"
               ? "border-green-500 bg-green-50"
               : "border-gray-200 bg-white"
@@ -696,7 +696,7 @@ export default function ProductAvailabilityPage() {
         </button>
         <button
           onClick={() => setFilter("cancelled")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "cancelled"
               ? "border-gray-500 bg-gray-100"
               : "border-gray-200 bg-white"
@@ -707,7 +707,7 @@ export default function ProductAvailabilityPage() {
         </button>
         <button
           onClick={() => setFilter("all")}
-          className={`rounded-xl p-2.5 text-left border ${
+          className={`rounded-lg px-2 py-1.5 text-left border ${
             filter === "all"
               ? "border-purple-500 bg-purple-50"
               : "border-gray-200 bg-white"
@@ -1312,14 +1312,14 @@ export default function ProductAvailabilityPage() {
 
       {/* ── Search bar ── */}
       {filter !== "new" && filter !== "drafts" && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <div>
           <input
-            type="text"
+            type="search"
             placeholder="Search by request ID, seller name, product, SKU, or market…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="input w-full"
+            aria-label="Search availability requests"
           />
         </div>
       )}
