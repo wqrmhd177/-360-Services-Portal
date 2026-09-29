@@ -1,13 +1,14 @@
 ﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Pencil, Upload, X } from "lucide-react";
+import { Download, History, Loader2, Pencil, Upload, X } from "lucide-react";
 import type { PickingProduct } from "@/lib/operations/picking";
 import {
   parseSkuDocumentText,
 } from "@/lib/operations/pickingParse";
 import { pickingDocumentLabel } from "@/lib/operations/pickingSheet";
 import { pickingDocumentImageSrc } from "@/lib/operations/pickingImageUrl";
+import { formatPortalTimestamp } from "@/lib/portalTimezone";
 
 const dialogShell =
   "fixed inset-0 z-[100] m-0 flex h-full max-h-none w-full max-w-none items-end justify-center border-0 bg-transparent p-0 shadow-none sm:items-center sm:p-4 backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm";
@@ -843,5 +844,110 @@ export function PickingEditButton({ onClick }: { onClick: () => void }) {
     >
       <Pencil className="h-3.5 w-3.5" />
     </button>
+  );
+}
+
+type PickingHistoryLog = {
+  id: string;
+  action: string;
+  summary: string;
+  changed_by: string | null;
+  changed_at: string;
+};
+
+export function PickingProductHistoryDialog({
+  open,
+  sku,
+  productName,
+  onClose,
+}: {
+  open: boolean;
+  sku: string | null;
+  productName?: string;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [logs, setLogs] = useState<PickingHistoryLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open) {
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !sku) {
+      setLogs([]);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/operations/picking/logs?sku=${encodeURIComponent(sku)}`)
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Could not load history");
+        if (!cancelled) setLogs((json.logs as PickingHistoryLog[]) ?? []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not load history");
+          setLogs([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sku]);
+
+  if (!open || !sku) return null;
+
+  return (
+    <dialog ref={dialogRef} onClose={onClose} className={dialogShell}>
+      <div className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-[var(--card-border)] bg-[var(--card)] p-4 shadow-2xl sm:rounded-2xl sm:p-5">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">Change history</h2>
+            <p className="mt-0.5 truncate text-sm text-[var(--muted)]">{productName ?? sku}</p>
+            <p className="font-mono text-xs text-[var(--muted)]">{sku}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4 text-[var(--muted)]" />
+          </button>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--muted)]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading…
+          </div>
+        ) : error ? (
+          <p className="py-4 text-sm text-red-600">{error}</p>
+        ) : logs.length === 0 ? (
+          <p className="py-4 text-sm text-[var(--muted)]">No changes recorded for this SKU yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100 rounded-lg border border-[var(--card-border)]">
+            {logs.map((entry) => (
+              <li key={entry.id} className="px-3 py-2.5 text-xs">
+                <p className="font-medium text-portal-900">{entry.summary}</p>
+                <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+                  {formatPortalTimestamp(entry.changed_at)}
+                  {entry.changed_by ? ` · ${entry.changed_by}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </dialog>
   );
 }

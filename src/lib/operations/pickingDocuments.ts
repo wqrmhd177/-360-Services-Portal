@@ -240,8 +240,8 @@ function grnBody(options: PickingDocOptions): string {
     .map((line) => {
       const name = pickingDocumentLabel(line.product_name, line.sku);
       return `<tr class="grn-row">
-        <td class="grn-name">${escapeHtml(name)}</td>
         <td class="img-cell">${imageCell(line.image_url, line.sku)}</td>
+        <td class="grn-name">${escapeHtml(name)}</td>
         <td class="grn-qty">${escapeHtml(String(line.quantity))}</td>
         <td class="grn-qty"></td>
         <td class="grn-qty"></td>
@@ -255,8 +255,8 @@ function grnBody(options: PickingDocOptions): string {
       <td colspan="4" style="text-align:center;font-size:22px">Goods Received Note</td>
     </tr>
     <tr class="grn-sub">
-      <td>Product Name with SKU</td>
       <td>Image For Refrence</td>
+      <td>Product Name with SKU</td>
       <td>Total Qty</td>
       <td>Good Qty</td>
       <td>Bad Qty</td>

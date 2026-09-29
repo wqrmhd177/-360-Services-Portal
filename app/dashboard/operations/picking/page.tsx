@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   FileText,
   FileWarning,
+  History,
   ListChecks,
   Loader2,
   Plus,
@@ -14,6 +15,7 @@ import {
   PickingAddProductDialog,
   PickingDocumentDialog,
   PickingPictureLightbox,
+  PickingProductHistoryDialog,
 } from "@/components/operations/PickingProductDialogs";
 import { ListPagination } from "@/components/lists/ListPagination";
 import { useOperationsListPage } from "@/hooks/useOperationsListPage";
@@ -101,6 +103,7 @@ export default function ProductPicturesPage() {
   const [pickingDocOpen, setPickingDocOpen] = useState(false);
   const [docSeedSkus, setDocSeedSkus] = useState<PickingProduct[] | null>(null);
   const [editing, setEditing] = useState<PickingProduct | null>(null);
+  const [historySku, setHistorySku] = useState<PickingProduct | null>(null);
   const [preview, setPreview] = useState<PickingProduct | null>(null);
   const [selected, setSelected] = useState<Record<string, PickingProduct>>({});
   const [masterSyncing, setMasterSyncing] = useState(false);
@@ -383,7 +386,7 @@ export default function ProductPicturesPage() {
                 <col className="w-[4.5rem]" />
                 <col />
                 <col className="w-[24%]" />
-                <col className="w-[7.5rem]" />
+                <col className="w-9" />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-[11px] font-medium uppercase tracking-wider text-gray-500">
@@ -397,8 +400,8 @@ export default function ProductPicturesPage() {
                   </th>
                   <th className="px-1 py-3 text-center">Picture</th>
                   <th className="px-2 py-3 text-left">Product name</th>
-                  <th className="px-2 py-3 text-left">SKU</th>
-                  <th className="px-2 py-3 text-right">Updated</th>
+                  <th className="px-2 py-3 text-right">SKU</th>
+                  <th className="px-1 py-3 text-center" aria-label="History" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -436,13 +439,21 @@ export default function ProductPicturesPage() {
                         {row.product_name}
                       </button>
                     </td>
-                    <td className="px-2 py-2 align-middle font-mono text-[11px] text-gray-700">
+                    <td className="px-2 py-2 align-middle text-right font-mono text-[11px] text-gray-700">
                       <span className="block truncate" title={row.sku}>
                         {row.sku}
                       </span>
                     </td>
-                    <td className="px-2 py-2 text-right align-middle text-[10px] leading-tight text-gray-500">
-                      {row.updated_at ? formatPortalTimestamp(row.updated_at) : "—"}
+                    <td className="px-1 py-2 text-center align-middle">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-gray-100 hover:text-portal-700"
+                        aria-label={`History for ${row.sku}`}
+                        title="View change history"
+                        onClick={() => setHistorySku(row)}
+                      >
+                        <History className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -491,6 +502,12 @@ export default function ProductPicturesPage() {
         onDownload={(payload) => downloadDocument("awb", payload)}
       />
       <PickingPictureLightbox product={preview} onClose={() => setPreview(null)} />
+      <PickingProductHistoryDialog
+        open={Boolean(historySku)}
+        sku={historySku?.sku ?? null}
+        productName={historySku?.product_name}
+        onClose={() => setHistorySku(null)}
+      />
     </div>
   );
 }
