@@ -6,6 +6,11 @@ import {
   parsePermissions,
 } from "@/lib/permissions";
 import {
+  countryValueInAllowedScope,
+  filterRowsByMarketScope,
+  getCountryScopeFromSession,
+} from "@/lib/portalCountryScope";
+import {
   cancelProductAvailabilityRequest,
   createBulkDraftRequests,
   createProductAvailabilityRequest,
@@ -33,11 +38,15 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const requests = await fetchAllProductAvailabilityData({
-      userRole: ctx.userRole,
-      userFriendlyId: ctx.session.email,
-      supabaseClient: ctx.db,
-    });
+    const scope = getCountryScopeFromSession(ctx.session);
+    const requests = filterRowsByMarketScope(
+      await fetchAllProductAvailabilityData({
+        userRole: ctx.userRole,
+        userFriendlyId: ctx.session.email,
+        supabaseClient: ctx.db,
+      }),
+      scope,
+    );
     return NextResponse.json({ requests });
   } catch (error) {
     console.error("Failed to fetch product availability requests:", error);
@@ -58,6 +67,14 @@ export async function POST(request: Request) {
 
     switch (action) {
       case "create": {
+        const scope = getCountryScopeFromSession(ctx.session);
+        const market = String((body.input as { market?: string } | undefined)?.market ?? "");
+        if (!countryValueInAllowedScope(market, scope)) {
+          return NextResponse.json(
+            { error: "You are not allowed to create requests for this market." },
+            { status: 403 },
+          );
+        }
         const created = await createProductAvailabilityRequest(
           body.input as CreateProductAvailabilityInput,
         );

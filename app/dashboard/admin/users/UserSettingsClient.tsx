@@ -22,6 +22,10 @@ import {
   type ProductAvailabilityRole,
   type UserPermissions,
 } from "@/lib/permissions";
+import {
+  PORTAL_COUNTRY_CODES,
+  type PortalCountryCode,
+} from "@/lib/portalCountryCodes";
 import type { UserRole } from "@/lib/simpleAuth";
 
 type ProfileRow = {
@@ -44,6 +48,8 @@ type EditState = {
   };
   pa_workflow_role: ProductAvailabilityRole;
   featureAccess: Record<string, FeatureAccessLevel>;
+  countriesAll: boolean;
+  selectedCountries: PortalCountryCode[];
 };
 
 const PA_FEATURE_KEY = "product_availability";
@@ -160,6 +166,14 @@ function userToEditState(user: ProfileRow): EditState {
     featureAccess = seedFeatureAccessForTab(featureAccess, "product_availability", true);
   }
 
+  const ac = parsed?.allowedCountries;
+  const countriesAll = !ac || ac === "all";
+  const selectedCountries = countriesAll
+    ? [...PORTAL_COUNTRY_CODES]
+    : Array.isArray(ac)
+      ? [...ac]
+      : [...PORTAL_COUNTRY_CODES];
+
   return {
     isPortalAdmin,
     portal_role: isPortalAdmin ? "admin" : normalizePortalRole(parsed?.portal_role ?? effective.portalRole),
@@ -167,6 +181,8 @@ function userToEditState(user: ProfileRow): EditState {
     tabs: tabFlags,
     pa_workflow_role: effective.paRole ?? "agent",
     featureAccess,
+    countriesAll,
+    selectedCountries,
   };
 }
 
@@ -207,6 +223,7 @@ function editStateToPermissions(state: EditState): UserPermissions {
     product_listing: state.tabs.product_listing,
     operations: state.tabs.operations,
     zambeel360: [],
+    allowedCountries: state.countriesAll ? "all" : state.selectedCountries,
     ...(Object.keys(featureAccess).length > 0 ? { featureAccess } : {}),
   };
 }
@@ -306,6 +323,10 @@ export default function UserSettingsClient() {
 
   const handleSave = async () => {
     if (!editingUser || !editState) return;
+    if (!editState.isPortalAdmin && !editState.countriesAll && editState.selectedCountries.length === 0) {
+      setSaveError("Select at least one country, or choose All countries.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -541,6 +562,66 @@ export default function UserSettingsClient() {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Country access</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Limits which markets this user sees in Operations, Product Availability, and
+                      related filters. Admins always see all countries.
+                    </p>
+                    <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={editState.countriesAll}
+                        onChange={(e) =>
+                          setEditState((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  countriesAll: e.target.checked,
+                                  selectedCountries: e.target.checked
+                                    ? [...PORTAL_COUNTRY_CODES]
+                                    : prev.selectedCountries.length > 0
+                                      ? prev.selectedCountries
+                                      : [...PORTAL_COUNTRY_CODES],
+                                }
+                              : prev,
+                          )
+                        }
+                        className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
+                      />
+                      All countries
+                    </label>
+                    {!editState.countriesAll ? (
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {PORTAL_COUNTRY_CODES.map((code) => {
+                          const checked = editState.selectedCountries.includes(code);
+                          return (
+                            <label
+                              key={code}
+                              className="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-700"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setEditState((prev) => {
+                                    if (!prev) return prev;
+                                    const next = checked
+                                      ? prev.selectedCountries.filter((c) => c !== code)
+                                      : [...prev.selectedCountries, code];
+                                    return { ...prev, selectedCountries: next };
+                                  })
+                                }
+                                className="rounded border-gray-300 text-portal-700 focus:ring-portal-500"
+                              />
+                              {code}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div>

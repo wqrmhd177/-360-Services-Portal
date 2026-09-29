@@ -1,3 +1,5 @@
+import type { PortalCountryCode } from "./portalCountryCodes";
+import { isPortalCountryCode } from "./portalCountryCodes";
 import type { SignupTeam, UserRole } from "./simpleAuth";
 import { formatSignupTeamLabel, isSignupTeam } from "./simpleAuth";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -48,7 +50,35 @@ export interface UserPermissions {
   tabs?: Partial<MainTabAccess>;
   /** Per sub-menu read/write/none. Access is configured only here (not from portal role). */
   featureAccess?: Partial<FeatureAccessMap>;
+  /** `"all"` or list of market/country codes the user may view. Omitted = all countries. */
+  allowedCountries?: "all" | PortalCountryCode[];
 }
+
+function parseAllowedCountries(raw: unknown): "all" | PortalCountryCode[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (raw === "all") return "all";
+  if (!Array.isArray(raw)) return undefined;
+  const codes = raw
+    .filter((item): item is string => typeof item === "string")
+    .map((s) => s.trim().toUpperCase())
+    .filter(isPortalCountryCode);
+  const unique = [...new Set(codes)];
+  if (unique.length === 0) return undefined;
+  if (unique.length === PORTAL_COUNTRY_CODES_LIST.length) return "all";
+  return unique as PortalCountryCode[];
+}
+
+const PORTAL_COUNTRY_CODES_LIST = [
+  "UAE",
+  "KSA",
+  "QTR",
+  "KWT",
+  "OMN",
+  "BHR",
+  "IRQ",
+  "USA",
+  "PAK",
+] as const satisfies readonly PortalCountryCode[];
 
 export const OPERATIONS_SUBTAB_OPTIONS: { key: string; label: string }[] = [
   { key: "operations.orders", label: "Dashboard" },
@@ -274,6 +304,8 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     }
   }
 
+  let allowedCountries = parseAllowedCountries(obj.allowedCountries);
+
   if (
     zambeel360 === undefined &&
     product_availability === undefined &&
@@ -282,7 +314,8 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     portal_role === undefined &&
     department === undefined &&
     tabs === undefined &&
-    featureAccess === undefined
+    featureAccess === undefined &&
+    allowedCountries === undefined
   ) {
     return undefined;
   }
@@ -296,6 +329,7 @@ export function parsePermissions(raw: unknown): UserPermissions | undefined {
     department,
     tabs,
     featureAccess,
+    ...(allowedCountries !== undefined ? { allowedCountries } : {}),
   };
 }
 

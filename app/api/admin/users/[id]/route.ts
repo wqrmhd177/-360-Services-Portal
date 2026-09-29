@@ -64,6 +64,9 @@ function validatePermissions(body: unknown): UserPermissions | null {
     operations,
     zambeel360: parsed.zambeel360 ?? [],
     featureAccess: parsed.featureAccess,
+    ...(parsed.allowedCountries !== undefined
+      ? { allowedCountries: parsed.allowedCountries }
+      : {}),
   };
 }
 

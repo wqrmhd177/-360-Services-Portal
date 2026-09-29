@@ -4,15 +4,17 @@ import { Suspense, useCallback, useEffect, useMemo, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DateRangePicker } from "@/components/layout/date-range-picker";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
-import {
-  StoreIdSearchSelect,
-  type StoreOption,
-} from "@/components/operations/StoreIdSearchSelect";
+import { useAllowedCountries } from "@/hooks/useAllowedCountries";
 import {
   dedupeCountryFilterOptions,
   normalizeCountryFilterParam,
 } from "@/lib/country-normalization";
+import { clampCountrySearchParam, filterCountryOptions } from "@/lib/portalCountryScope";
 import { defaultDateRange, toInputValue } from "@/lib/date-range-presets";
+import {
+  StoreIdSearchSelect,
+  type StoreOption,
+} from "@/components/operations/StoreIdSearchSelect";
 import { cn } from "@/lib/utils";
 
 interface FilterOptions {
@@ -77,13 +79,26 @@ function OrdersFilterBarInner({
   const searchParams = useSearchParams();
   const { push: navigate } = usePortalNavigation();
   const [isPending, startTransition] = useTransition();
+  const { allowed: countryScope } = useAllowedCountries();
 
-  const countries = useMemo(
-    () => dedupeCountryFilterOptions(options.countries),
-    [options.countries],
-  );
+  const countries = useMemo(() => {
+    const base = dedupeCountryFilterOptions(options.countries);
+    return filterCountryOptions(base, countryScope);
+  }, [options.countries, countryScope]);
 
   const countryValue = normalizeCountryFilterParam(country) ?? country;
+
+  useEffect(() => {
+    const clamped = clampCountrySearchParam(country, countryScope);
+    if (country && clamped !== country) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (clamped) params.set("country", clamped);
+      else params.delete("country");
+      startTransition(() => {
+        navigate(`${pathname}?${params.toString()}`);
+      });
+    }
+  }, [country, countryScope, navigate, pathname, searchParams]);
 
   // Rewrite legacy alias values in the URL (e.g. ?country=UAE → United Arab Emirates).
   useEffect(() => {
@@ -138,7 +153,9 @@ function OrdersFilterBarInner({
             updateParam("country", normalizeCountryFilterParam(value) ?? value)
           }
         >
-          <option value="">All countries</option>
+          <option value="">
+            {countryScope === "all" ? "All countries" : "All assigned countries"}
+          </option>
           {countries.map((c) => (
             <option key={c} value={c}>
               {c}

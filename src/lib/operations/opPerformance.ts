@@ -5,7 +5,15 @@ import {
   parseOptionalDateParam,
   parseSheetCountryParam,
   sheetCountryCanonical,
+  type SheetAnalyticsCountryCode,
 } from "@/lib/operations/sheetCountries";
+import {
+  countryValueInAllowedScope,
+  filterPortalCountryCodes,
+  getCountryScopeFromSession,
+  type PortalCountryCode,
+} from "@/lib/portalCountryScope";
+import { getPortalSession } from "@/lib/session";
 
 export type OpTeamRow = {
   team: string;
@@ -136,6 +144,86 @@ const EMPTY: OpPerformanceData = {
   trend: [],
   windows: EMPTY_WINDOWS,
 };
+
+const PORTAL_TO_SHEET: Record<PortalCountryCode, SheetAnalyticsCountryCode> = {
+  UAE: "UAE",
+  KSA: "KSA",
+  QTR: "Qatar",
+  KWT: "Kuwait",
+  OMN: "Oman",
+  BHR: "Bahrain",
+  IRQ: "Iraq",
+  USA: "USA",
+  PAK: "PAK",
+};
+
+function mergeOpPerformance(parts: OpPerformanceData[]): OpPerformanceData {
+  const live = parts.filter((p) => p.available);
+  if (live.length === 0) return EMPTY;
+  if (live.length === 1) return live[0];
+
+  const sum = (pick: (p: OpPerformanceData) => number) =>
+    live.reduce((acc, p) => acc + pick(p), 0);
+
+  const totalOrders = sum((p) => p.totalOrders);
+  const cancelled = sum((p) => p.cancelled);
+  const pendingConfirmation = sum((p) => p.pendingConfirmation);
+  const confirmation = sum((p) => p.confirmation);
+  const upsellPitched = sum((p) => p.upsellPitched);
+  const upsellAgreed = sum((p) => p.upsellAgreed);
+  const upsellDelivered = sum((p) => p.upsellDelivered);
+  const luckyDrawPitched = sum((p) => p.luckyDrawPitched);
+  const luckyDrawDelivered = sum((p) => p.luckyDrawDelivered);
+
+  const teamMap = new Map<string, OpTeamRow>();
+  for (const part of live) {
+    for (const row of part.teams) {
+      const key = row.team;
+      const existing = teamMap.get(key);
+      if (!existing) {
+        teamMap.set(key, { ...row });
+        continue;
+      }
+      existing.total += row.total;
+      existing.cancelled += row.cancelled;
+      existing.delivered += row.delivered;
+      existing.inProcess += row.inProcess;
+      existing.cancelRate = rate(existing.cancelled, existing.total);
+      existing.deliveredRate = rate(existing.delivered, existing.total);
+      existing.inProcessRate = rate(existing.inProcess, existing.total);
+    }
+  }
+
+  const teams = [...teamMap.values()].map((row) => ({
+    ...row,
+    share: totalOrders ? (row.total / totalOrders) * 100 : 0,
+  }));
+
+  return {
+    available: true,
+    sourceRowCount: sum((p) => p.sourceRowCount),
+    totalOrders,
+    pendingConfirmation,
+    pendingConfirmationRate: rate(pendingConfirmation, totalOrders),
+    confirmation,
+    confirmationRate: rate(confirmation, totalOrders),
+    cancelled,
+    cancelRate: rate(cancelled, totalOrders),
+    upsellPitched,
+    upsellAgreed,
+    upsellDelivered,
+    upsellPitchRate: rate(upsellPitched, totalOrders),
+    upsellAgreeRate: rate(upsellAgreed, upsellPitched),
+    upsellDeliverRate: rate(upsellDelivered, upsellAgreed),
+    luckyDrawPitched,
+    luckyDrawDelivered,
+    luckyDrawPitchRate: rate(luckyDrawPitched, totalOrders),
+    luckyDrawDeliverRate: rate(luckyDrawDelivered, luckyDrawPitched),
+    teams,
+    trend: live[0]?.trend ?? [],
+    windows: live[0]?.windows ?? EMPTY_WINDOWS,
+  };
+}
 
 export function rate(num: number, den: number): number {
   if (!den) return 0;
@@ -374,8 +462,30 @@ type RpcPayload = {
 
 export async function getOpPerformanceAnalytics(
   searchParams: Record<string, string | string[] | undefined>,
+  options?: { fixedCountryCode?: SheetAnalyticsCountryCode },
 ): Promise<OpPerformanceData> {
-  const countryCode = parseSheetCountryParam(searchParams.country);
+  const scope = getCountryScopeFromSession(getPortalSession());
+  let countryCode =
+    options?.fixedCountryCode ?? parseSheetCountryParam(searchParams.country);
+
+  if (scope !== "all" && !options?.fixedCountryCode) {
+    if (countryCode && !countryValueInAllowedScope(countryCode, scope)) {
+      return EMPTY;
+    }
+    if (!countryCode) {
+      const allowed = filterPortalCountryCodes(scope);
+      if (allowed.length === 0) return EMPTY;
+      const parts = await Promise.all(
+        allowed.map((pc) =>
+          getOpPerformanceAnalytics(searchParams, {
+            fixedCountryCode: PORTAL_TO_SHEET[pc],
+          }),
+        ),
+      );
+      return mergeOpPerformance(parts);
+    }
+  }
+
   const canonical = sheetCountryCanonical(countryCode);
   const from = parseOptionalDateParam(searchParams.from);
   const to = parseOptionalDateParam(searchParams.to);

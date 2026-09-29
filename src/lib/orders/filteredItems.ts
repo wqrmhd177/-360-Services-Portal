@@ -7,6 +7,14 @@ import {
 } from "@/lib/country-normalization";
 import { getOpsDb } from "@/lib/operations/opsDb";
 import { getAllOrderLineItems } from "@/lib/orders/lineItems";
+import {
+  clampCountrySearchParam,
+  countryValueInAllowedScope,
+  filterCountryOptions,
+  getCountryScopeFromSession,
+  type AllowedCountriesConfig,
+} from "@/lib/portalCountryScope";
+import { getPortalSession } from "@/lib/session";
 import type { OrderLineItem } from "@/lib/types/order";
 import { unstable_cache } from "next/cache";
 
@@ -16,6 +24,8 @@ export type OrdersFilterParams = {
   storeId?: number | null;
   fromDate?: string | null;
   toDate?: string | null;
+  /** When not `all`, results are limited to these markets even if country filter is empty. */
+  marketScope?: AllowedCountriesConfig;
 };
 
 /** Treat blank strings as "no filter" so RPCs do not match empty facet values only. */
@@ -39,10 +49,15 @@ function applyFacetFilters(
   items: OrderLineItem[],
   filters: OrdersFilterParams,
 ): OrderLineItem[] {
-  return applyOrderLevelFacetFilters(items, {
+  let filtered = applyOrderLevelFacetFilters(items, {
     country: normalizeOptionalFilter(filters.country),
     bifurcation: normalizeOptionalFilter(filters.bifurcation),
   });
+  const scope = filters.marketScope;
+  if (scope && scope !== "all") {
+    filtered = filtered.filter((item) => countryValueInAllowedScope(item.country, scope));
+  }
+  return filtered;
 }
 
 type DbOrderRow = {
@@ -267,6 +282,11 @@ function buildStoreOptionsFromItems(items: OrderLineItem[]): StoreFilterOption[]
 export async function fetchOrderCounts(filters: OrdersFilterParams): Promise<{
   filteredCount: number;
 }> {
+  if (filters.marketScope && filters.marketScope !== "all") {
+    const items = await fetchFilteredOrderLineItems(filters);
+    return { filteredCount: groupByOrder(items).size };
+  }
+
   const supabase = getOpsDb();
   const { data, error } = await supabase.rpc(
     "get_ops_orders_counts",
@@ -506,8 +526,12 @@ export function searchParamsToFilterParams(
   searchParams: Record<string, string | string[] | undefined>,
   range: { fromDate: string; toDate: string },
 ): OrdersFilterParams {
-  const country =
+  const marketScope = getCountryScopeFromSession(getPortalSession());
+  const countryRaw =
     typeof searchParams.country === "string" ? searchParams.country : null;
+  const clamped = clampCountrySearchParam(countryRaw, marketScope);
+  const country = normalizeCountryFilterParam(normalizeOptionalFilter(clamped));
+
   const bifurcation =
     typeof searchParams.bifurcation === "string" ? searchParams.bifurcation : null;
   const storeRaw =
@@ -515,10 +539,26 @@ export function searchParamsToFilterParams(
   const storeId = storeRaw ? Number(storeRaw) : null;
 
   return {
-    country: normalizeCountryFilterParam(normalizeOptionalFilter(country)),
+    country:
+      country && marketScope !== "all" && !countryValueInAllowedScope(country, marketScope)
+        ? null
+        : country,
     bifurcation: normalizeOptionalFilter(bifurcation),
     storeId: storeId && Number.isFinite(storeId) ? storeId : null,
     fromDate: range.fromDate,
     toDate: range.toDate,
+    marketScope,
+  };
+}
+
+/** Filter dropdown options for the current session (call outside unstable_cache). */
+export function scopeFilterOptionsForSession<T extends { countries: string[] }>(
+  options: T,
+): T {
+  const scope = getCountryScopeFromSession(getPortalSession());
+  if (scope === "all") return options;
+  return {
+    ...options,
+    countries: filterCountryOptions(options.countries, scope),
   };
 }

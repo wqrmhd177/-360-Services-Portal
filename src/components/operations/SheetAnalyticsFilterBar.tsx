@@ -1,10 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useTransition } from "react";
+import { Suspense, useCallback, useEffect, useTransition } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Calendar } from "lucide-react";
 import { usePortalNavigation } from "@/components/layout/navigation-loading";
+import { useAllowedCountries } from "@/hooks/useAllowedCountries";
 import { SHEET_ANALYTICS_COUNTRIES } from "@/lib/operations/sheetCountries";
+import { clampCountrySearchParam, sheetCountryInAllowedScope } from "@/lib/portalCountryScope";
 import { cn } from "@/lib/utils";
 
 function SheetAnalyticsFilterBarInner({
@@ -26,6 +28,11 @@ function SheetAnalyticsFilterBarInner({
   const searchParams = useSearchParams();
   const { push: navigate } = usePortalNavigation();
   const [isPending, startTransition] = useTransition();
+  const { allowed: countryScope } = useAllowedCountries();
+
+  const sheetCountries = SHEET_ANALYTICS_COUNTRIES.filter((c) =>
+    sheetCountryInAllowedScope(c.code, countryScope),
+  );
 
   const updateParams = useCallback(
     (patch: Record<string, string>) => {
@@ -41,6 +48,14 @@ function SheetAnalyticsFilterBarInner({
     },
     [navigate, pathname, searchParams],
   );
+
+  useEffect(() => {
+    if (hideCountry || countryScope === "all" || !country) return;
+    const clamped = clampCountrySearchParam(country, countryScope);
+    if (clamped !== country) {
+      updateParams({ country: clamped });
+    }
+  }, [country, countryScope, hideCountry, updateParams]);
 
   const hasFilters = Boolean(country || from || to || direction);
 
@@ -63,8 +78,10 @@ function SheetAnalyticsFilterBarInner({
               onChange={(e) => updateParams({ country: e.target.value })}
               className="h-10 w-full min-w-0 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--foreground)] shadow-sm focus:border-[var(--foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--card-border)]"
             >
-              <option value="">All</option>
-              {SHEET_ANALYTICS_COUNTRIES.map((c) => (
+              <option value="">
+                {countryScope === "all" ? "All" : "All assigned"}
+              </option>
+              {sheetCountries.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.label}
                 </option>

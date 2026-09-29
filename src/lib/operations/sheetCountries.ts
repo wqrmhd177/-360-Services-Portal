@@ -34,6 +34,7 @@ export function parseSheetCountryParam(
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value || value.toLowerCase() === "all") return "";
   const upper = value.toUpperCase();
+  if (upper === "QTR") return "Qatar";
   const match = SHEET_ANALYTICS_COUNTRIES.find(
     (c) => c.code.toUpperCase() === upper || c.label.toUpperCase() === upper,
   );

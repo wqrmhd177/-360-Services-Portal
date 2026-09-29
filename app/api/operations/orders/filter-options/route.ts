@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
-import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
+import {
+  fetchCachedFilterOptionsFromDb,
+  scopeFilterOptionsForSession,
+} from "@/lib/orders/filteredItems";
 
 export async function GET(request: NextRequest) {
   if (!isPortalAuthenticated(request)) {
@@ -8,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const opts = await fetchCachedFilterOptionsFromDb();
+    const opts = scopeFilterOptionsForSession(await fetchCachedFilterOptionsFromDb());
     return NextResponse.json(opts);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to load filter options";

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getCountryScopeFromSession } from "@/lib/portalCountryScope";
 import type { PortalSession } from "@/lib/session";
 
 export async function GET() {
@@ -12,6 +13,7 @@ export async function GET() {
     const session = JSON.parse(raw) as PortalSession;
     return NextResponse.json({
       session,
+      countryScope: getCountryScopeFromSession(session),
       buildId: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     });
   } catch {

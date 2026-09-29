@@ -33,8 +33,8 @@ import {
   InventoryLookupResult,
 } from "@/lib/productAvailabilityInventoryLookup";
 import { getProductAvailabilityDataScope } from "@/lib/permissions";
-
-const MARKET_OPTIONS = ["UAE", "KSA", "PAK", "QTR", "KWT", "OMN", "BHR", "IRQ", "USA"];
+import { useAllowedCountries } from "@/hooks/useAllowedCountries";
+import { filterPortalCountryCodes } from "@/lib/portalCountryScope";
 
 type FilterTab =
   | "new"
@@ -101,6 +101,11 @@ export default function ProductAvailabilityPage() {
     useProductAvailabilityAuth();
   const { canWrite: paCanWrite, loading: paAccessLoading } = useFeatureAccess("product_availability");
   const canMutatePa = !paAccessLoading && paCanWrite;
+  const { allowed: countryScope } = useAllowedCountries();
+  const marketOptions = useMemo(
+    () => filterPortalCountryCodes(countryScope),
+    [countryScope],
+  );
 
   const effectivePaRole = portalIsAdmin ? "admin" : (paRole ?? "agent");
 
@@ -919,7 +924,7 @@ export default function ProductAvailabilityPage() {
                   required
                 >
                   <option value="">Select a market…</option>
-                  {MARKET_OPTIONS.map((m) => (
+                  {marketOptions.map((m) => (
                     <option key={m} value={m}>
                       {m}
                     </option>

@@ -8,8 +8,9 @@ import {
 } from "@/components/operations/OrdersKpiChartsSections";
 import { OrdersPageShell } from "@/components/operations/OrdersPageShell";
 import { PortalPageLoading } from "@/components/layout/portal-loading";
-import { fetchCachedFilterOptionsFromDb } from "@/lib/orders/filteredItems";
+import { fetchCachedFilterOptionsFromDb, scopeFilterOptionsForSession } from "@/lib/orders/filteredItems";
 import { getLastSync } from "@/lib/operations/opsDb";
+import { enforceSearchParamsCountry, getCountryScopeFromSession } from "@/lib/portalCountryScope";
 import { getPortalSession } from "@/lib/session";
 
 function mergeSearchParams(
@@ -34,12 +35,16 @@ export default async function OrdersPage({
     redirect("/auth/login");
   }
 
-  const sp = mergeSearchParams(await searchParams);
+  const sp = enforceSearchParamsCountry(
+    mergeSearchParams(await searchParams),
+    getCountryScopeFromSession(session),
+  );
 
-  const [filterOptions, lastSync] = await Promise.all([
+  const [filterOptionsRaw, lastSync] = await Promise.all([
     fetchCachedFilterOptionsFromDb(),
     getLastSync("orders"),
   ]);
+  const filterOptions = scopeFilterOptionsForSession(filterOptionsRaw);
 
   return (
     <OrdersPageShell
