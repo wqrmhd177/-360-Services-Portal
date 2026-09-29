@@ -51,7 +51,10 @@ export function pickingDocumentFilename(
 }
 
 export function buildPickingDocumentHtml(options: PickingDocOptions): string {
-  const totalQty = options.lines.reduce((sum, line) => sum + line.quantity, 0);
+  const totalQty = options.lines.reduce(
+    (sum, line) => sum + (Number(line.quantity) || 0),
+    0,
+  );
   const body =
     options.type === "grn" ? grnBody(options) : awbBody(options, totalQty);
   const title =
@@ -251,14 +254,18 @@ function awbBody(options: PickingDocOptions, totalQty: number): string {
   return `<table>
     <tr>
       <td colspan="2" class="awb-title">Picking</td>
-      <td class="awb-total-label">Total Quantity</td>
+      <td class="awb-total-label">Total Quantity<br /><span class="awb-total">${escapeHtml(String(totalQty))}</span></td>
     </tr>
     <tr class="awb-sub">
       <td>Image</td>
       <td style="text-align:center">Product Name with SKU</td>
-      <td class="awb-total">${escapeHtml(String(totalQty))}</td>
+      <td style="text-align:center">Qty</td>
     </tr>
     ${rows}
+    <tr class="awb-row">
+      <td colspan="2" style="text-align:right;font-weight:800;padding:12px">Total</td>
+      <td class="awb-qty">${escapeHtml(String(totalQty))}</td>
+    </tr>
   </table>`;
 }
 

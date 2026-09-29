@@ -358,19 +358,36 @@ async function smartMergeRows(
 
   for (const row of sheetRows) {
     const existing = existingMap.get(row.sku.toLowerCase());
+    const sheetUrl = row.sheet_image_url || row.image_url;
+    const hasPortalImage = Boolean(
+      existing?.image_url?.includes("/storage/v1/object/public/product_images/"),
+    );
+
     if (!existing) {
       toInsert.push(row);
       continue;
     }
-    // Only update when a new Drive URL arrives — never clobber a Supabase URL.
-    const hasNewImage =
-      row.sheet_image_url &&
-      existing.image_url !== row.sheet_image_url &&
-      !existing.image_url?.includes("/storage/v1/object/public/product_images/");
-    if (hasNewImage) {
-      toUpdate.push({ ...row, product_name: row.product_name });
+
+    if (hasPortalImage) {
+      skipped++;
       continue;
     }
+
+    // Pending or missing picture: sync Drive URL from sheet (no duplicate SKU rows).
+    const needsImageSync =
+      Boolean(sheetUrl) &&
+      (!existing.image_url || existing.image_url !== sheetUrl);
+
+    if (needsImageSync) {
+      toUpdate.push({
+        ...row,
+        image_url: sheetUrl,
+        sheet_image_url: sheetUrl,
+        product_name: row.product_name?.trim() || existing.product_name,
+      });
+      continue;
+    }
+
     skipped++;
   }
 
@@ -382,14 +399,9 @@ async function smartMergeRows(
 }
 
 /**
- * Unified "Sync Products" flow:
- *
- * 1. ALWAYS syncs from the original Product Images sheet (PICKING_SHEET_ID).
- *    This catches any SKUs not yet in the DB and any new Drive image URLs.
- * 2. If MASTER_PICKING_SHEET_ID is also set, smart-merges from that sheet too.
- * 3. Copies any pending Drive → Supabase images.
- *
- * Returns combined add / update / skip counts + images copied.
+ * Sync Products — Master Products Google Sheet only (smart merge, no duplicates).
+ * 1. Fetch Master sheet CSV → insert new SKUs, update pending/changed images only.
+ * 2. Copy pending Drive URLs → Supabase storage.
  */
 export async function syncMasterPickingSheet(
   createdBy?: string | null,
@@ -399,37 +411,26 @@ export async function syncMasterPickingSheet(
   let totalSkipped = 0;
 
   try {
-    // ── Step 1: sync from old Product Images sheet (always) ──────────────────
-    try {
-      const oldCsv = await fetchPickingSheetCsv();
-      const oldRows = factsFromPickingCsv(oldCsv);
-      const oldMerge = await smartMergeRows(oldRows, createdBy ?? null);
-      totalAdded   += oldMerge.added;
-      totalUpdated += oldMerge.updated;
-      totalSkipped += oldMerge.skipped;
-      await logSync("picking", oldRows.length, "success");
-    } catch (oldErr) {
-      const msg = oldErr instanceof Error ? oldErr.message : "Old sheet sync failed";
-      try { await logSync("picking", 0, "failed", msg); } catch { /* ignore */ }
-      // Don't abort — continue to image-copy step even if sheet is unreachable.
+    const masterCsv = await fetchMasterProductsSheetCsv();
+    const masterRows = factsFromMasterProductsCsv(masterCsv);
+    if (masterRows.length === 0) {
+      return {
+        ok: true,
+        added: 0,
+        updated: 0,
+        skipped: 0,
+        imagesCopied: 0,
+        imagesFailed: 0,
+      };
     }
 
-    // ── Step 2: sync from Master Products sheet (only if env var is set) ─────
-    const masterId = process.env.MASTER_PICKING_SHEET_ID ?? "";
-    if (masterId) {
-      try {
-        const masterCsv = await fetchMasterProductsSheetCsv();
-        const masterRows = factsFromMasterProductsCsv(masterCsv);
-        const masterMerge = await smartMergeRows(masterRows, createdBy ?? null);
-        totalAdded   += masterMerge.added;
-        totalUpdated += masterMerge.updated;
-        totalSkipped += masterMerge.skipped;
-      } catch {
-        // Master sheet is optional — skip silently.
-      }
-    }
+    const masterMerge = await smartMergeRows(masterRows, createdBy ?? null);
+    totalAdded = masterMerge.added;
+    totalUpdated = masterMerge.updated;
+    totalSkipped = masterMerge.skipped;
+    await logSync("picking", masterMerge.added + masterMerge.updated, "success");
 
-    // ── Step 3: copy pending Drive URLs → Supabase ───────────────────────────
+    // Copy pending Drive URLs → Supabase
     let imagesCopied = 0;
     let imagesFailed = 0;
     try {

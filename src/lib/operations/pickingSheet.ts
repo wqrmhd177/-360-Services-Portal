@@ -6,11 +6,13 @@ export const PICKING_IMAGES_GID = "198505646";
 export const PICKING_IMAGES_SHEET = "Product Images";
 
 /**
- * Master Products workbook — a simpler 4-column sheet (A=Product Name, B=SKU,
- * C=In-cell Image, D=Image URL auto-filled by the Apps Script).
- * Set MASTER_PICKING_SHEET_ID in env. The sheet must be shared "Anyone with the link (Viewer)".
+ * Master Products workbook (Sync Products reads this sheet only).
+ * A=Product Name, B=SKU, C=In-cell Image, D=Image URL (Apps Script).
+ * Override with MASTER_PICKING_SHEET_ID in env; share sheet as Anyone with the link (Viewer).
  */
-export const MASTER_PICKING_SHEET_ID = process.env.MASTER_PICKING_SHEET_ID ?? "";
+export const MASTER_PICKING_SHEET_ID =
+  process.env.MASTER_PICKING_SHEET_ID ??
+  "1iDFLFHbX7qcg2v0kLNmJGgNbqTpbWoodZ3gDkZChdr0";
 export const MASTER_PRODUCTS_SHEET = "Master Products";
 
 export type PickingProductRow = {

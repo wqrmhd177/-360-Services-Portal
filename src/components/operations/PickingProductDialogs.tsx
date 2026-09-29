@@ -118,17 +118,6 @@ export function PickingAddProductDialog({
         </div>
         <div className="space-y-3">
           <label className="block text-xs font-medium text-[var(--muted)]">
-            SKU
-            <input
-              type="text"
-              autoComplete="off"
-              placeholder="Enter SKU"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              className={fieldClass}
-            />
-          </label>
-          <label className="block text-xs font-medium text-[var(--muted)]">
             Product name
             <input
               type="text"
@@ -136,6 +125,17 @@ export function PickingAddProductDialog({
               placeholder="Enter product name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          <label className="block text-xs font-medium text-[var(--muted)]">
+            SKU
+            <input
+              type="text"
+              autoComplete="off"
+              placeholder="Enter SKU"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
               className={fieldClass}
             />
           </label>
@@ -155,12 +155,27 @@ export function PickingAddProductDialog({
             />
           </label>
           {preview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt=""
-              className="h-28 w-28 rounded-md border border-gray-200 object-contain bg-white"
-            />
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt=""
+                className="h-28 w-28 rounded-md border border-gray-200 object-contain bg-white"
+              />
+              <button
+                type="button"
+                aria-label="Remove picture"
+                className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow hover:bg-red-50 hover:text-red-600"
+                onClick={() => {
+                  if (preview.startsWith("blob:")) URL.revokeObjectURL(preview);
+                  setFile(null);
+                  setPreview(editing ? product?.image_url ?? null : null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           ) : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
@@ -653,6 +668,7 @@ export function PickingDocumentDialog({
           })),
         );
         setDraftLines(lines);
+        setFileText("");
       }
     }
     if (lines.length === 0) {
