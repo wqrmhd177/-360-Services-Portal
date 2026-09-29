@@ -325,15 +325,28 @@ export async function fetchMasterProductsSheetCsv(): Promise<string> {
 }
 
 export function pickingDocumentLabel(name: string, sku: string): string {
-  const clean = name.trim();
+  const s = sku.trim();
+  let clean = name.trim();
   if (!clean || clean === "Not Available") {
-    return sku;
+    return s;
   }
-  const colonSku = `: ${sku}`;
-  if (clean.toLowerCase().endsWith(colonSku.toLowerCase())) return clean;
-  const withSku = ` with ${sku}`;
+
+  const labeledSuffix = `: ${s}`;
+  const repeatMarker = `${labeledSuffix}:`;
+  const repeatIdx = clean.toLowerCase().indexOf(repeatMarker.toLowerCase());
+  if (repeatIdx > 0) {
+    clean = clean.slice(0, repeatIdx + labeledSuffix.length).trim();
+  }
+
+  if (clean.toLowerCase().endsWith(labeledSuffix.toLowerCase())) {
+    return clean;
+  }
+
+  const withSku = ` with ${s}`;
   if (clean.toLowerCase().endsWith(withSku.toLowerCase())) {
-    return `${clean.slice(0, clean.length - withSku.length).trim()}: ${sku}`;
+    const base = clean.slice(0, clean.length - withSku.length).trim();
+    return base ? `${base}: ${s}` : s;
   }
-  return `${clean}: ${sku}`;
+
+  return `${clean}: ${s}`;
 }

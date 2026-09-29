@@ -46,6 +46,20 @@ export function pickingPictureApiPath(sku: string): string {
   return `/api/operations/picking/picture?sku=${encodeURIComponent(sku)}`;
 }
 
+export function pickingDocumentImageSrc(
+  imageUrl: string | null | undefined,
+): string | null {
+  const url = String(imageUrl ?? "").trim();
+  if (!url) return null;
+  if (isPortalPickingImageUrl(url)) {
+    return url.split("?")[0];
+  }
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  return null;
+}
+
 export function withPickingPictureUrl<
   T extends { sku: string; image_url: string | null },
 >(row: T, origin?: string): T {

@@ -37,7 +37,9 @@ function imageCell(url: string | null, alt: string): string {
   if (!url) {
     return `<div class="img-empty">Not Available</div>`;
   }
-  return `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" />`;
+  const safeUrl = escapeHtml(url);
+  const safeAlt = escapeHtml(alt);
+  return `<img src="${safeUrl}" alt="${safeAlt}" />`;
 }
 
 export function pickingDocumentFilename(
@@ -239,10 +241,10 @@ function grnBody(options: PickingDocOptions): string {
       const name = pickingDocumentLabel(line.product_name, line.sku);
       return `<tr class="grn-row">
         <td class="grn-name">${escapeHtml(name)}</td>
-        <td class="img-cell">${imageCell(line.image_url, name)}</td>
+        <td class="img-cell">${imageCell(line.image_url, line.sku)}</td>
         <td class="grn-qty">${escapeHtml(String(line.quantity))}</td>
-        <td class="grn-qty">${qtyCell(line.good_qty)}</td>
-        <td class="grn-qty">${qtyCell(line.bad_qty)}</td>
+        <td class="grn-qty"></td>
+        <td class="grn-qty"></td>
       </tr>`;
     })
     .join("");
@@ -268,7 +270,7 @@ function awbBody(options: PickingDocOptions, totalQty: number): string {
     .map((line) => {
       const name = pickingDocumentLabel(line.product_name, line.sku);
       return `<tr class="awb-row">
-        <td class="img-cell" style="width:180px">${imageCell(line.image_url, name)}</td>
+        <td class="img-cell" style="width:180px">${imageCell(line.image_url, line.sku)}</td>
         <td class="awb-name">${escapeHtml(name)}</td>
         <td class="awb-qty">${escapeHtml(String(line.quantity))}</td>
       </tr>`;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { lookupPickingProducts } from "@/lib/operations/picking";
-import { withPickingPictureUrl } from "@/lib/operations/pickingUploads";
+import { pickingDocumentImageSrc } from "@/lib/operations/pickingUploads";
 import {
   buildPickingDocumentHtml,
   type PickingDocLine,
@@ -59,31 +59,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const origin = request.nextUrl.origin;
     const products = await lookupPickingProducts(wanted.map((line) => line.sku));
     const bySku = new Map(products.map((row) => [row.sku.toLowerCase(), row]));
     const lines: PickingDocLine[] = [];
     for (const line of wanted) {
-      const product = bySku.get(line.sku.toLowerCase());
+      const key = line.sku.toLowerCase();
+      let product = bySku.get(key);
+      if (!product) {
+        const [one] = await lookupPickingProducts([line.sku]);
+        product = one;
+        if (one) bySku.set(key, one);
+      }
       if (!product) {
         lines.push({
           sku: line.sku,
           product_name: line.sku,
           image_url: null,
           quantity: line.quantity,
-          good_qty: line.good_qty,
-          bad_qty: line.bad_qty,
+          good_qty: null,
+          bad_qty: null,
         });
         continue;
       }
-      const pictured = withPickingPictureUrl(product, origin);
       lines.push({
-        sku: pictured.sku,
-        product_name: pictured.product_name?.trim() || line.sku,
-        image_url: pictured.image_url,
+        sku: product.sku,
+        product_name: product.product_name?.trim() || line.sku,
+        image_url: pickingDocumentImageSrc(product.image_url),
         quantity: line.quantity,
-        good_qty: line.good_qty,
-        bad_qty: line.bad_qty,
+        good_qty: null,
+        bad_qty: null,
       });
     }
 
