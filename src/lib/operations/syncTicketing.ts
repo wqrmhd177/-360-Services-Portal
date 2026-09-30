@@ -2,6 +2,7 @@ import { getOpsServiceDb, logSync } from "@/lib/operations/opsDb";
 import {
   fetchSheetCsvFromPublicUrls,
   fetchSheetRangeViaServiceAccount,
+  getServiceAccountConfigStatus,
   sheetAccessHelpMessage,
   valuesToCsv,
 } from "@/lib/operations/googleSheetFetch";
@@ -23,22 +24,34 @@ export type TicketSyncResult = {
 };
 
 async function fetchRawCsv(): Promise<string> {
+  const saStatus = getServiceAccountConfigStatus();
+  let serviceAccountFailure: string | undefined;
+
+  if (saStatus.ok) {
+    const api = await fetchSheetRangeViaServiceAccount(
+      TICKETING_SHEET_ID,
+      ticketingSheetsApiRange(),
+    );
+    if (api.ok) {
+      return valuesToCsv(api.values);
+    }
+    serviceAccountFailure = api.reason;
+  } else if (
+    process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON ||
+    process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_BASE64
+  ) {
+    serviceAccountFailure = saStatus.reason;
+  }
+
   const publicCsv = await fetchSheetCsvFromPublicUrls(ticketingCsvPublicUrls());
   if (publicCsv) return publicCsv;
-
-  const values = await fetchSheetRangeViaServiceAccount(
-    TICKETING_SHEET_ID,
-    ticketingSheetsApiRange(),
-  );
-  if (values?.length) {
-    return valuesToCsv(values);
-  }
 
   throw new Error(
     sheetAccessHelpMessage({
       sheetLabel: "Ticketing Raw Data",
       spreadsheetId: TICKETING_SHEET_ID,
       tabName: TICKETING_RAW_TAB,
+      serviceAccountFailure,
     }),
   );
 }
