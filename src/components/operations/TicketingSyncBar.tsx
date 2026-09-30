@@ -27,7 +27,10 @@ export function TicketingSyncBar({
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error ?? "Sync failed");
+        const hint = typeof json.hint === "string" ? json.hint : "";
+        throw new Error(
+          hint ? `${json.error ?? "Sync failed"}\n\n${hint}` : (json.error ?? "Sync failed"),
+        );
       }
       setMessage(
         `Sync complete — ${Number(json.rowCount ?? 0).toLocaleString()} tickets`,
@@ -50,7 +53,11 @@ export function TicketingSyncBar({
           <p>Not synced yet</p>
         )}
         {message ? (
-          <p className={failed ? "text-red-600" : "text-teal-600"}>{message}</p>
+          <p
+            className={`max-w-md whitespace-pre-wrap ${failed ? "text-red-600" : "text-teal-600"}`}
+          >
+            {message}
+          </p>
         ) : null}
       </div>
       {showMutate ? (

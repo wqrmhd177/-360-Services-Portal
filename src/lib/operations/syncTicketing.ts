@@ -1,7 +1,16 @@
 import { getOpsServiceDb, logSync } from "@/lib/operations/opsDb";
 import {
+  fetchSheetCsvFromPublicUrls,
+  fetchSheetRangeViaServiceAccount,
+  sheetAccessHelpMessage,
+  valuesToCsv,
+} from "@/lib/operations/googleSheetFetch";
+import {
   factsFromTicketingCsv,
-  ticketingCsvUrl,
+  ticketingCsvPublicUrls,
+  ticketingSheetsApiRange,
+  TICKETING_RAW_TAB,
+  TICKETING_SHEET_ID,
   type TicketFactRow,
 } from "@/lib/operations/ticketSheet";
 
@@ -14,17 +23,24 @@ export type TicketSyncResult = {
 };
 
 async function fetchRawCsv(): Promise<string> {
-  const res = await fetch(ticketingCsvUrl(), {
-    cache: "no-store",
-    headers: { "User-Agent": "360-portal-ticketing-sync/1.0" },
-  });
-  const text = await res.text();
-  if (!res.ok || text.trimStart().startsWith("<!")) {
-    throw new Error(
-      "Ticketing Raw Data is not readable from the backend. Share the sheet with the sync service account.",
-    );
+  const publicCsv = await fetchSheetCsvFromPublicUrls(ticketingCsvPublicUrls());
+  if (publicCsv) return publicCsv;
+
+  const values = await fetchSheetRangeViaServiceAccount(
+    TICKETING_SHEET_ID,
+    ticketingSheetsApiRange(),
+  );
+  if (values?.length) {
+    return valuesToCsv(values);
   }
-  return text;
+
+  throw new Error(
+    sheetAccessHelpMessage({
+      sheetLabel: "Ticketing Raw Data",
+      spreadsheetId: TICKETING_SHEET_ID,
+      tabName: TICKETING_RAW_TAB,
+    }),
+  );
 }
 
 function toInsertRow(row: TicketFactRow, syncedAt: string) {

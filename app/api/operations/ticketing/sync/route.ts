@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: result.error ?? "Ticketing sync failed",
-          hint: "Run setup_ops_ticketing.sql, then Sync Data again.",
+          hint:
+            "Share the Ticketing Google Sheet (Raw Data tab) as Anyone with the link — Viewer, or share with your GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON client email. Then click Sync Data again.",
         },
         { status: 502 },
       );

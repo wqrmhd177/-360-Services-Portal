@@ -1,7 +1,14 @@
 import { parseCsv, parseSheetDate } from "@/lib/operations/opSheet";
 
 /** Ticketing Dashboard workbook. Backend sync only — never fetch from the browser. */
-export const TICKETING_SHEET_ID = "1u9gqhrSUveX7Z3-3O8Dw9KlAbiIV9b_9ZImw0j2TDHk";
+export const TICKETING_SHEET_ID =
+  process.env.TICKETING_SHEET_ID?.trim() ||
+  "1u9gqhrSUveX7Z3-3O8Dw9KlAbiIV9b_9ZImw0j2TDHk";
+
+export const TICKETING_RAW_TAB = "Raw Data";
+
+/** Optional: numeric gid of the Raw Data tab if gviz sheet= name fails. */
+export const TICKETING_RAW_GID = process.env.TICKETING_RAW_GID?.trim() || "";
 
 /** D, E, I, J, K, Q, Y, AB. Letters match the Raw Data tab. */
 export const TICKETING_SELECT = "select D,E,I,J,K,Q,Y,AB";
@@ -104,6 +111,28 @@ export function ticketingCsvUrl(): string {
   const tq = encodeURIComponent(TICKETING_SELECT);
   return (
     `https://docs.google.com/spreadsheets/d/${TICKETING_SHEET_ID}/gviz/tq` +
-    `?tqx=out:csv&sheet=${encodeURIComponent("Raw Data")}&tq=${tq}`
+    `?tqx=out:csv&sheet=${encodeURIComponent(TICKETING_RAW_TAB)}&tq=${tq}`
   );
+}
+
+export function ticketingCsvPublicUrls(): string[] {
+  const urls: string[] = [ticketingCsvUrl()];
+  urls.push(
+    `https://docs.google.com/spreadsheets/d/${TICKETING_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(TICKETING_RAW_TAB)}`,
+  );
+  if (TICKETING_RAW_GID) {
+    urls.push(
+      `https://docs.google.com/spreadsheets/d/${TICKETING_SHEET_ID}/export?format=csv&gid=${TICKETING_RAW_GID}`,
+    );
+    urls.push(
+      `https://docs.google.com/spreadsheets/d/${TICKETING_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${TICKETING_RAW_GID}`,
+    );
+  }
+  urls.push(`https://docs.google.com/spreadsheets/d/${TICKETING_SHEET_ID}/export?format=csv`);
+  return urls;
+}
+
+/** A1 range for Sheets API (columns D–AB on Raw Data). */
+export function ticketingSheetsApiRange(): string {
+  return `'${TICKETING_RAW_TAB.replace(/'/g, "''")}'!D:AB`;
 }
