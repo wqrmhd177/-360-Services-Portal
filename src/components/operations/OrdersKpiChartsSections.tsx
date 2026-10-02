@@ -7,6 +7,7 @@ import {
   getOperationsSlaCached,
   getOperationsStatusKpisCached,
 } from "@/lib/operations/cache";
+import { marketScopeForCurrentRequest } from "@/lib/orders/marketScopeServer";
 import { parseDateRange, serializeDateRange } from "@/lib/orders/params";
 
 export async function OrdersStatusSection({
@@ -17,7 +18,8 @@ export async function OrdersStatusSection({
   const range = parseDateRange(searchParams);
   if (!range.fromDate || !range.toDate) return null;
 
-  const data = await getOperationsStatusKpisCached(searchParams);
+  const marketScope = marketScopeForCurrentRequest();
+  const data = await getOperationsStatusKpisCached(searchParams, marketScope);
   if (data.filteredCount === 0) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
@@ -45,7 +47,8 @@ export async function OrdersSlaSection({
   const range = parseDateRange(searchParams);
   if (!range.fromDate || !range.toDate) return null;
 
-  const data = await getOperationsSlaCached(searchParams);
+  const marketScope = marketScopeForCurrentRequest();
+  const data = await getOperationsSlaCached(searchParams, marketScope);
   if (data.filteredCount === 0) return null;
 
   const { from, to } = serializeDateRange(data.range);
@@ -65,7 +68,8 @@ export async function OrdersChartsSection({
   const range = parseDateRange(searchParams);
   if (!range.fromDate || !range.toDate) return null;
 
-  const data = await getOperationsChartsCached(searchParams);
+  const marketScope = marketScopeForCurrentRequest();
+  const data = await getOperationsChartsCached(searchParams, marketScope);
   if (data.filteredCount === 0) return null;
 
   return (

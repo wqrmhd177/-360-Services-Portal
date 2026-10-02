@@ -1,6 +1,7 @@
 import { OperationsStatusKpis } from "@/components/orders/operations-status-kpis";
 import { StoreVisibilityTablesSection } from "@/components/orders/store-visibility-tables-section";
 import { getStoreVisibilityAnalyticsCached } from "@/lib/operations/cache";
+import { marketScopeForCurrentRequest } from "@/lib/orders/marketScopeServer";
 import { parseDateRange } from "@/lib/orders/params";
 
 export async function StoreVisibilitySection({
@@ -13,7 +14,10 @@ export async function StoreVisibilitySection({
     return null;
   }
 
-  const data = await getStoreVisibilityAnalyticsCached(searchParams);
+  const data = await getStoreVisibilityAnalyticsCached(
+    searchParams,
+    marketScopeForCurrentRequest(),
+  );
   const storeId =
     typeof searchParams.store_id === "string" ? searchParams.store_id : "";
 

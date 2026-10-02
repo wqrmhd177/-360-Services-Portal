@@ -11,10 +11,8 @@ import {
   clampCountrySearchParam,
   countryValueInAllowedScope,
   filterCountryOptions,
-  getCountryScopeFromSession,
   type AllowedCountriesConfig,
 } from "@/lib/portalCountryScope";
-import { getPortalSession } from "@/lib/session";
 import type { OrderLineItem } from "@/lib/types/order";
 import { unstable_cache } from "next/cache";
 
@@ -522,11 +520,16 @@ export const fetchCachedFilterOptionsFromDb = unstable_cache(
   { revalidate: 3600, tags: ["ops-orders-filter-options", "ops-data"] },
 );
 
+export function marketScopeCacheKey(scope: AllowedCountriesConfig): string {
+  if (scope === "all") return "all";
+  return [...scope].sort().join(",");
+}
+
 export function searchParamsToFilterParams(
   searchParams: Record<string, string | string[] | undefined>,
   range: { fromDate: string; toDate: string },
+  marketScope: AllowedCountriesConfig = "all",
 ): OrdersFilterParams {
-  const marketScope = getCountryScopeFromSession(getPortalSession());
   const countryRaw =
     typeof searchParams.country === "string" ? searchParams.country : null;
   const clamped = clampCountrySearchParam(countryRaw, marketScope);
@@ -554,11 +557,11 @@ export function searchParamsToFilterParams(
 /** Filter dropdown options for the current session (call outside unstable_cache). */
 export function scopeFilterOptionsForSession<T extends { countries: string[] }>(
   options: T,
+  marketScope: AllowedCountriesConfig,
 ): T {
-  const scope = getCountryScopeFromSession(getPortalSession());
-  if (scope === "all") return options;
+  if (marketScope === "all") return options;
   return {
     ...options,
-    countries: filterCountryOptions(options.countries, scope),
+    countries: filterCountryOptions(options.countries, marketScope),
   };
 }

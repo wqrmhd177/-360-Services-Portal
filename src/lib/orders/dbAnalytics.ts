@@ -15,15 +15,17 @@ import {
 import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
 import { fetchStoreVisibilityTables } from "@/lib/orders/storeVisibilityRollup";
 import { getLastSync } from "@/lib/operations/opsDb";
+import type { AllowedCountriesConfig } from "@/lib/portalCountryScope";
 import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
 /** Fastest: status KPI cards only. */
 export async function getOperationsStatusKpisFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
 
   const [counts, operationsStatusCounts] = await Promise.all([
     fetchOrderCounts(dbFilters),
@@ -44,10 +46,11 @@ export async function getOperationsStatusKpisFromDb(
 /** SLA KPI cards (may be slower without summary RPC). */
 export async function getOperationsSlaFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
   const counts = await fetchOrderCounts(dbFilters);
   const fulfillmentSLA = await fetchFulfillmentSlaFromDb(
     dbFilters,
@@ -65,10 +68,11 @@ export async function getOperationsSlaFromDb(
 /** Fast path: SLA + status KPI cards. */
 export async function getOperationsKpisFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const [status, sla] = await Promise.all([
-    getOperationsStatusKpisFromDb(searchParams),
-    getOperationsSlaFromDb(searchParams),
+    getOperationsStatusKpisFromDb(searchParams, marketScope),
+    getOperationsSlaFromDb(searchParams, marketScope),
   ]);
 
   return {
@@ -80,10 +84,11 @@ export async function getOperationsKpisFromDb(
 /** Slower charts: delivery partner + revenue loss. */
 export async function getOperationsChartsFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
 
   const [counts, revenueLossBreakdown, deliveryPartnerByCountry] = await Promise.all([
     fetchOrderCounts(dbFilters),
@@ -103,10 +108,11 @@ export async function getOperationsChartsFromDb(
 /** Orders page analytics — combined (API route). */
 export async function getOperationsAnalyticsFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const [kpis, charts, filterOptions, lastSync] = await Promise.all([
-    getOperationsKpisFromDb(searchParams),
-    getOperationsChartsFromDb(searchParams),
+    getOperationsKpisFromDb(searchParams, marketScope),
+    getOperationsChartsFromDb(searchParams, marketScope),
     fetchCachedFilterOptionsFromDb(),
     getLastSync("orders"),
   ]);
@@ -124,10 +130,11 @@ export async function getOperationsAnalyticsFromDb(
 
 export async function getStoreVisibilityAnalyticsFromDb(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
   const filters = parseFilters(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
   const [storeTables, counts, operationsStatusCounts, filterOptions, lastSync] =
     await Promise.all([
       fetchStoreVisibilityTables(dbFilters),
@@ -164,9 +171,10 @@ export async function getStoreVisibilityAnalyticsFromDb(
 export async function getOperationsStatusDetailFromDb(
   searchParams: Record<string, string | string[] | undefined>,
   groupId: string,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
   const detail = await fetchOperationsStatusDetail(
     dbFilters,
     groupId as OperationsStatusGroupId,
@@ -178,9 +186,10 @@ export async function getOperationsStatusDetailFromDb(
 export async function getAccountManagerDetailFromDb(
   searchParams: Record<string, string | string[] | undefined>,
   accountManagerName: string,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
   const range = parseDateRange(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
   const items = await fetchFilteredOrderLineItems(dbFilters);
   const titles = computeTitleDeliveryBreakdownForAccountManager(items, accountManagerName);
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { getOperationsAnalyticsCached } from "@/lib/operations/cache";
+import { marketScopeForCurrentRequest } from "@/lib/orders/marketScopeServer";
 import { serializeDateRange } from "@/lib/orders/params";
 
 export const maxDuration = 60;
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const params = searchParamsToObject(request);
-    const data = await getOperationsAnalyticsCached(params);
+    const data = await getOperationsAnalyticsCached(params, marketScopeForCurrentRequest());
     const { from, to } = serializeDateRange(data.range);
 
     return NextResponse.json({

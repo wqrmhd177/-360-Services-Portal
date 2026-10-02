@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOperationsStatusDetailCached } from "@/lib/operations/cache";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { serializeDateRange, parseDateRange } from "@/lib/orders/params";
+import { marketScopeForCurrentRequest } from "@/lib/orders/marketScopeServer";
 import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
 export const maxDuration = 60;
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
     const detail = await getOperationsStatusDetailCached(
       paramsObj,
       groupId as OperationsStatusGroupId,
+      marketScopeForCurrentRequest(),
     );
     const { from, to } = serializeDateRange(range);
 

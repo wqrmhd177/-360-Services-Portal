@@ -44,7 +44,10 @@ export default async function OrdersPage({
     fetchCachedFilterOptionsFromDb(),
     getLastSync("orders"),
   ]);
-  const filterOptions = scopeFilterOptionsForSession(filterOptionsRaw);
+  const filterOptions = scopeFilterOptionsForSession(
+    filterOptionsRaw,
+    getCountryScopeFromSession(session),
+  );
 
   return (
     <OrdersPageShell

@@ -7,6 +7,7 @@ import {
   getOperationsStatusKpisFromDb,
   getStoreVisibilityAnalyticsFromDb,
 } from "@/lib/orders/dbAnalytics";
+import { marketScopeCacheKey } from "@/lib/orders/filteredItems";
 import { getSkuPerformanceSummary } from "@/lib/operations/skuPerformance";
 import type { SkuPerformanceFilters } from "@/lib/operations/skuPerformance";
 import { getNdReportSummary } from "@/lib/operations/ndReport";
@@ -14,6 +15,7 @@ import type { NdReportFilters } from "@/lib/operations/ndReport";
 import { fetchOperationsStatusDetail } from "@/lib/orders/statusDetailRollup";
 import { searchParamsToFilterParams } from "@/lib/orders/filteredItems";
 import { parseDateRange } from "@/lib/orders/params";
+import type { AllowedCountriesConfig } from "@/lib/portalCountryScope";
 import type { OperationsStatusGroupId } from "@/lib/operations/status-kpi-groups";
 
 export const OPS_DATA_TAG = "ops-data";
@@ -26,6 +28,7 @@ export function invalidateOpsDataCache() {
 
 function stableParamsKey(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ): string {
   const pick = (key: string) => {
     const v = searchParams[key];
@@ -37,15 +40,17 @@ function stableParamsKey(
     pick("from"),
     pick("to"),
     pick("store_id"),
+    marketScopeCacheKey(marketScope),
   ].join("|");
 }
 
 export async function getOperationsAnalyticsCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getOperationsAnalyticsFromDb(searchParams),
+    () => getOperationsAnalyticsFromDb(searchParams, marketScope),
     ["ops-analytics", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -54,10 +59,11 @@ export async function getOperationsAnalyticsCached(
 
 export async function getOperationsKpisCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getOperationsKpisFromDb(searchParams),
+    () => getOperationsKpisFromDb(searchParams, marketScope),
     ["ops-kpis", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -66,10 +72,11 @@ export async function getOperationsKpisCached(
 
 export async function getOperationsStatusKpisCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getOperationsStatusKpisFromDb(searchParams),
+    () => getOperationsStatusKpisFromDb(searchParams, marketScope),
     ["ops-status-kpis", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -78,10 +85,11 @@ export async function getOperationsStatusKpisCached(
 
 export async function getOperationsSlaCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getOperationsSlaFromDb(searchParams),
+    () => getOperationsSlaFromDb(searchParams, marketScope),
     ["ops-sla", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -90,10 +98,11 @@ export async function getOperationsSlaCached(
 
 export async function getOperationsChartsCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getOperationsChartsFromDb(searchParams),
+    () => getOperationsChartsFromDb(searchParams, marketScope),
     ["ops-charts", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -158,10 +167,11 @@ export async function getNdReportSummaryCached(params: {
 
 export async function getStoreVisibilityAnalyticsCached(
   searchParams: Record<string, string | string[] | undefined>,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = stableParamsKey(searchParams);
+  const key = stableParamsKey(searchParams, marketScope);
   const cached = unstable_cache(
-    () => getStoreVisibilityAnalyticsFromDb(searchParams),
+    () => getStoreVisibilityAnalyticsFromDb(searchParams, marketScope),
     ["store-visibility", key],
     { revalidate: 3600, tags: [OPS_DATA_TAG] },
   );
@@ -171,10 +181,11 @@ export async function getStoreVisibilityAnalyticsCached(
 export async function getOperationsStatusDetailCached(
   searchParams: Record<string, string | string[] | undefined>,
   groupId: OperationsStatusGroupId,
+  marketScope: AllowedCountriesConfig = "all",
 ) {
-  const key = `${stableParamsKey(searchParams)}|${groupId}`;
+  const key = `${stableParamsKey(searchParams, marketScope)}|${groupId}`;
   const range = parseDateRange(searchParams);
-  const dbFilters = searchParamsToFilterParams(searchParams, range);
+  const dbFilters = searchParamsToFilterParams(searchParams, range, marketScope);
   const cached = unstable_cache(
     () => fetchOperationsStatusDetail(dbFilters, groupId),
     ["ops-status-detail", key],

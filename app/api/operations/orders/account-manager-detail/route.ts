@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccountManagerDetailFromDb } from "@/lib/orders/dbAnalytics";
+import { marketScopeForCurrentRequest } from "@/lib/orders/marketScopeServer";
 import { isPortalAuthenticated } from "@/lib/operations/apiAuth";
 import { serializeDateRange } from "@/lib/orders/params";
 
@@ -33,7 +34,11 @@ export async function GET(request: NextRequest) {
     delete paramsObj.am;
     delete paramsObj.accountManagerName;
 
-    const payload = await getAccountManagerDetailFromDb(paramsObj, accountManagerName);
+    const payload = await getAccountManagerDetailFromDb(
+      paramsObj,
+      accountManagerName,
+      marketScopeForCurrentRequest(),
+    );
     const { from, to } = serializeDateRange(payload.range);
 
     return NextResponse.json({
