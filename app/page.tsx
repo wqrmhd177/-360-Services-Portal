@@ -74,7 +74,7 @@ export default function HomePage() {
 
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-6xl bg-white rounded-3xl shadow-2xl overflow-hidden">
-          <div className="grid md:grid-cols-2 min-h-[600px]">
+          <div className="grid min-h-0 md:min-h-[600px] md:grid-cols-2">
             {/* Left Section - Sign In/Sign Up Form */}
             <div className="bg-white p-8 md:p-12 flex flex-col justify-center">
               {/* Logo */}

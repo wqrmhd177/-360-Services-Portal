@@ -4,7 +4,13 @@ import ConditionalLayout from "@/components/ConditionalLayout";
 
 export const metadata = {
   title: "360 Procurement Portal - Zambeel",
-  description: "Internal procurement workflow portal"
+  description: "Internal procurement workflow portal",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

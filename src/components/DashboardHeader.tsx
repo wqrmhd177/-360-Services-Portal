@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import NotificationCenter from "./NotificationCenter";
+import { MobileNavMenuButton } from "@/components/DashboardNavContext";
 
 interface ActiveAnnouncement {
   body: string;
@@ -13,12 +14,7 @@ interface Session {
   email: string;
 }
 
-interface DashboardHeaderProps {
-  collapsed?: boolean;
-  onToggleSidebar?: () => void;
-}
-
-export default function DashboardHeader({ collapsed, onToggleSidebar }: DashboardHeaderProps) {
+export default function DashboardHeader() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,9 +62,10 @@ export default function DashboardHeader({ collapsed, onToggleSidebar }: Dashboar
   }
 
   return (
-    <div className="border-b border-portal-200 bg-white px-4 py-3 sm:px-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
+    <div className="border-b border-portal-200 bg-white px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5">
+      <div className="flex items-center justify-between gap-3 sm:gap-4">
+        <MobileNavMenuButton />
+        <div className="min-w-0 flex-1">
           {announcementLoaded && announcement && (
             <div
               className="rounded-md bg-amber-50 px-4 py-2 text-xs sm:text-sm font-medium text-amber-900 ring-1 ring-amber-200/60"

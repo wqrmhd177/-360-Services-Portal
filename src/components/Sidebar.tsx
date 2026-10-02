@@ -36,6 +36,10 @@ import type { UserPermissions } from "@/lib/permissions";
 interface SidebarProps {
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Close mobile drawer after navigation (optional; route changes also close the drawer). */
+  onNavigate?: () => void;
+  showMobileClose?: boolean;
+  onMobileClose?: () => void;
 }
 
 interface Session {
@@ -57,6 +61,7 @@ function NavLink({
   indent = false,
   matchPrefix,
   badge,
+  onNavigate,
 }: {
   href: string;
   pathname: string;
@@ -66,11 +71,13 @@ function NavLink({
   indent?: boolean;
   matchPrefix?: string;
   badge?: number;
+  onNavigate?: () => void;
 }) {
   const active = matchPrefix ? pathname.includes(matchPrefix) : pathname === href;
   return (
     <Link
       href={href}
+      onClick={() => onNavigate?.()}
       className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
         indent ? "py-2 text-xs" : "font-medium"
       } ${
@@ -183,7 +190,13 @@ function DeptToggle({
   );
 }
 
-export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export default function Sidebar({
+  collapsed = false,
+  onToggle,
+  onNavigate,
+  showMobileClose = false,
+  onMobileClose,
+}: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParamsRaw = useSearchParams();
@@ -359,7 +372,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   if (loading || !session) {
     return (
       <aside
-        className={`flex h-screen flex-col border-r border-portal-700 bg-portal-900 ${
+        className={`flex h-full min-h-[100dvh] flex-col border-r border-portal-700 bg-portal-900 ${
           collapsed ? "w-20" : "w-64"
         }`}
       >
@@ -405,13 +418,23 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`flex h-screen flex-col border-r border-portal-700 bg-portal-900 transition-all duration-200 ${
+      className={`flex h-full min-h-[100dvh] flex-col border-r border-portal-700 bg-portal-900 shadow-xl transition-all duration-200 lg:shadow-none ${
         collapsed ? "w-20" : "w-64"
       }`}
     >
-      <div className="border-b border-portal-700 p-4">
+      <div className="border-b border-portal-700 p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-3">
-          {onToggle && (
+          {showMobileClose && onMobileClose ? (
+            <button
+              type="button"
+              onClick={onMobileClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-portal-700 bg-portal-800 text-portal-100 hover:bg-portal-700 focus:outline-none focus:ring-2 focus:ring-portal-400 lg:hidden"
+              aria-label="Close navigation menu"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          ) : null}
+          {onToggle && !showMobileClose ? (
             <button
               type="button"
               onClick={onToggle}
@@ -425,7 +448,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <ChevronLeft className="h-4 w-4" />
               )}
             </button>
-          )}
+          ) : null}
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="break-words font-semibold leading-snug text-white">
@@ -594,6 +617,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <NavLink
             href="/dashboard"
             pathname={pathname}
+            onNavigate={onNavigate}
             collapsed={collapsed}
             icon={<Home className={iconClassLg} />}
             label="Home"
@@ -618,6 +642,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                   <NavLink
                     href="/dashboard/movements"
                     pathname={pathname}
+                    onNavigate={onNavigate}
                     collapsed={collapsed}
                     icon={<Truck className={iconClass} />}
                     label="Movements"
@@ -635,10 +660,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       />
                       {growthOpen && (
                         <div className="ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                          <NavLink href="/dashboard/growth" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Growth Dashboard" indent />
-                          <NavLink href="/dashboard/growth/quotation-requests" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/growth/quotation-requests" />
-                          <NavLink href="/dashboard/growth/purchase-requests" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/growth/purchase-requests" />
-                          <NavLink href="/dashboard/growth/purchase-orders" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/growth/purchase-orders" />
+                          <NavLink href="/dashboard/growth" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Home className={iconClass} />} label="Growth Dashboard" indent />
+                          <NavLink href="/dashboard/growth/quotation-requests" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/growth/quotation-requests" />
+                          <NavLink href="/dashboard/growth/purchase-requests" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/growth/purchase-requests" />
+                          <NavLink href="/dashboard/growth/purchase-orders" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/growth/purchase-orders" />
                         </div>
                       )}
                     </div>
@@ -655,10 +680,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       />
                       {approverOpen && (
                         <div className="ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                          <NavLink href="/dashboard/approver" pathname={pathname} collapsed={collapsed} icon={<CheckSquare className={iconClass} />} label="Approver Dashboard" indent />
-                          <NavLink href="/dashboard/approver/quotation-requests" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/approver/quotation-requests" />
-                          <NavLink href="/dashboard/approver/pr" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/approver/pr" />
-                          <NavLink href="/dashboard/approver/purchase-orders" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/approver/purchase-orders" />
+                          <NavLink href="/dashboard/approver" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<CheckSquare className={iconClass} />} label="Approver Dashboard" indent />
+                          <NavLink href="/dashboard/approver/quotation-requests" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/approver/quotation-requests" />
+                          <NavLink href="/dashboard/approver/pr" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/approver/pr" />
+                          <NavLink href="/dashboard/approver/purchase-orders" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/approver/purchase-orders" />
                         </div>
                       )}
                     </div>
@@ -675,7 +700,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       />
                       {financeOpen && (
                         <div className="ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                          <NavLink href="/dashboard/finance" pathname={pathname} collapsed={collapsed} icon={<Banknote className={iconClass} />} label="Finance Dashboard" indent />
+                          <NavLink href="/dashboard/finance" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Banknote className={iconClass} />} label="Finance Dashboard" indent />
                           <div>
                             <button
                               type="button"
@@ -848,10 +873,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                       />
                       {procurementOpen && (
                         <div className="ml-2 space-y-0.5 border-l border-portal-700 pl-2">
-                          <NavLink href="/dashboard/procurement" pathname={pathname} collapsed={collapsed} icon={<TrendingUp className={iconClass} />} label="Procurement Dashboard" indent />
-                          <NavLink href="/dashboard/procurement/quotation-requests" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/procurement/quotation-requests" />
-                          <NavLink href="/dashboard/procurement/pr" pathname={pathname} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/procurement/pr" />
-                          <NavLink href="/dashboard/procurement/po" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/procurement/po" />
+                          <NavLink href="/dashboard/procurement" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<TrendingUp className={iconClass} />} label="Procurement Dashboard" indent />
+                          <NavLink href="/dashboard/procurement/quotation-requests" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Quotation Requests" indent matchPrefix="/procurement/quotation-requests" />
+                          <NavLink href="/dashboard/procurement/pr" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<ShoppingCart className={iconClass} />} label="Purchase Requests" indent matchPrefix="/procurement/pr" />
+                          <NavLink href="/dashboard/procurement/po" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Package className={iconClass} />} label="Purchase Orders" indent matchPrefix="/procurement/po" />
                         </div>
                       )}
                     </div>
@@ -878,34 +903,34 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               {opsOpen && !collapsed && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
                   {canNav("operations.orders") ? (
-                  <NavLink href="/dashboard/operations/orders" pathname={pathname} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
+                  <NavLink href="/dashboard/operations/orders" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Home className={iconClass} />} label="Dashboard" indent matchPrefix="/operations/orders" />
                   ) : null}
                   {canNav("operations.overall_performance") ? (
-                  <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
+                  <NavLink href="/dashboard/operations/overall-performance" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<BarChart3 className={iconClass} />} label="Overall Performance" indent matchPrefix="/operations/overall-performance" />
                   ) : null}
                   {canNav("operations.op_performance") ? (
-                  <NavLink href="/dashboard/operations/op-performance" pathname={pathname} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
+                  <NavLink href="/dashboard/operations/op-performance" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Activity className={iconClass} />} label="OP Performance" indent matchPrefix="/operations/op-performance" />
                   ) : null}
                   {canNav("operations.ticketing") ? (
-                  <NavLink href="/dashboard/operations/ticketing" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
+                  <NavLink href="/dashboard/operations/ticketing" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Ticketing" indent matchPrefix="/operations/ticketing" />
                   ) : null}
                   {canNav("operations.picking") ? (
-                  <NavLink href="/dashboard/operations/picking" pathname={pathname} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
+                  <NavLink href="/dashboard/operations/picking" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<ClipboardList className={iconClass} />} label="Product Pictures" indent matchPrefix="/operations/picking" />
                   ) : null}
                   {canNav("operations.store_visibility") ? (
-                  <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
+                  <NavLink href="/dashboard/operations/store-visibility" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Eye className={iconClass} />} label="Store Visibility" indent matchPrefix="/operations/store-visibility" />
                   ) : null}
                   {canNav("operations.sku_performance") ? (
-                  <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
+                  <NavLink href="/dashboard/operations/sku-performance" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Layers className={iconClass} />} label="SKU Performance" indent matchPrefix="/operations/sku-performance" />
                   ) : null}
                   {canNav("operations.inventory") ? (
-                  <NavLink href="/dashboard/operations/inventory" pathname={pathname} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
+                  <NavLink href="/dashboard/operations/inventory" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Warehouse className={iconClass} />} label="Inventory" indent matchPrefix="/operations/inventory" />
                   ) : null}
                   {canNav("operations.nd_report") ? (
-                  <NavLink href="/dashboard/operations/nd-report" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
+                  <NavLink href="/dashboard/operations/nd-report" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="ND Report" indent matchPrefix="/operations/nd-report" />
                   ) : null}
                   {canNav("operations.channel_list") ? (
-                  <NavLink href="/dashboard/operations/channel-list" pathname={pathname} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
+                  <NavLink href="/dashboard/operations/channel-list" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Radio className={iconClass} />} label="Channel List" indent matchPrefix="/operations/channel-list" />
                   ) : null}
                 </div>
               )}
@@ -931,6 +956,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                   <NavLink
                     href="/dashboard/product-availability"
                     pathname={pathname}
+                    onNavigate={onNavigate}
                     collapsed={collapsed}
                     icon={<ClipboardList className={iconClass} />}
                     label="Product Availability"
@@ -958,13 +984,13 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               {plOpen && !collapsed && (
                 <div className="mt-0.5 ml-2 space-y-0.5 border-l border-portal-700 pl-2">
                   {canNav("product_listing.suppliers") ? (
-                  <NavLink href="/dashboard/product-listing/suppliers" pathname={pathname} collapsed={collapsed} icon={<Truck className={iconClass} />} label="Suppliers" indent matchPrefix="/product-listing/suppliers" />
+                  <NavLink href="/dashboard/product-listing/suppliers" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Truck className={iconClass} />} label="Suppliers" indent matchPrefix="/product-listing/suppliers" />
                   ) : null}
                   {canNav("product_listing.products") ? (
-                  <NavLink href="/dashboard/product-listing/products" pathname={pathname} collapsed={collapsed} icon={<Package className={iconClass} />} label="Products" indent matchPrefix="/product-listing/products" />
+                  <NavLink href="/dashboard/product-listing/products" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<Package className={iconClass} />} label="Products" indent matchPrefix="/product-listing/products" />
                   ) : null}
                   {canNav("product_listing.product_updates") ? (
-                  <NavLink href="/dashboard/product-listing/product-updates" pathname={pathname} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Product Updates" indent matchPrefix="/product-listing/product-updates" badge={plPendingCount} />
+                  <NavLink href="/dashboard/product-listing/product-updates" pathname={pathname} onNavigate={onNavigate} collapsed={collapsed} icon={<FileText className={iconClass} />} label="Product Updates" indent matchPrefix="/product-listing/product-updates" badge={plPendingCount} />
                   ) : null}
                 </div>
               )}
@@ -975,6 +1001,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             <NavLink
               href="/dashboard/admin/users"
               pathname={pathname}
+              onNavigate={onNavigate}
               collapsed={collapsed}
               icon={<Settings className={iconClassLg} />}
               label="Admin Users"

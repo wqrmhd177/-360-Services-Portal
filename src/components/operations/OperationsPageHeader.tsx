@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import NotificationCenter from "@/components/NotificationCenter";
+import { MobileNavMenuButton } from "@/components/DashboardNavContext";
 
 export function OperationsPageHeader({
   title,
@@ -17,8 +18,10 @@ export function OperationsPageHeader({
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-      <div className="min-w-0 shrink">
-        <h1 className="text-xl font-bold leading-tight text-[var(--foreground)]">
+      <div className="flex min-w-0 shrink items-start gap-2">
+        <MobileNavMenuButton className="mt-0.5" />
+        <div className="min-w-0">
+        <h1 className="text-lg font-bold leading-tight text-[var(--foreground)] sm:text-xl">
           {title}
         </h1>
         {subtitle ? (
@@ -26,8 +29,9 @@ export function OperationsPageHeader({
             {subtitle}
           </div>
         ) : null}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
         {children}
         <OperationsChromeButtons showRefresh={showRefresh} />
       </div>

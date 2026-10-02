@@ -193,7 +193,7 @@ function CountryBifurcationSidebar({
   };
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-[var(--card-border)] overflow-y-auto sm:w-72">
+    <div className="flex max-h-[38vh] w-full shrink-0 flex-col overflow-y-auto border-b border-[var(--card-border)] lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
       {countries.map(({ country, orders }) => {
         const isAll = country === "All";
         const isExpanded = expandedCountry === country;
@@ -464,14 +464,14 @@ function DaysCountrySubgroupSplitPanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <CountryBifurcationSidebar
         countries={sidebarCountries}
         countrySummaries={data.countrySummaries}
         selected={selected}
         onSelect={setSelected}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <RightPanelHeader showDate subgroupLabel={subgroupLabel} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {rows.length === 0 ? (
@@ -549,14 +549,14 @@ function CountryTagSplitPanel({
     .filter((t) => !selected.bifurcation || t.orderGroups.length > 0);
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <CountryBifurcationSidebar
         countries={sidebarCountries}
         countrySummaries={data.countrySummaries}
         selected={selected}
         onSelect={setSelected}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <RightPanelHeader showDate={false} subgroupLabel="Reason / Tag" />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {filteredTags.length === 0 ? (

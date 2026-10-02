@@ -9,7 +9,9 @@ interface ListTableShellProps {
 export function ListTableShell({ children }: ListTableShellProps) {
   return (
     <div className="card overflow-hidden p-0">
-      <div className="overflow-x-auto">{children}</div>
+      <div className="-mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0">
+        {children}
+      </div>
     </div>
   );
 }

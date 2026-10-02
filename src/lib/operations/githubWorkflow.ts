@@ -57,7 +57,7 @@ export async function dispatchOrdersSyncWorkflow(jobId: string): Promise<{
       return {
         ok: false,
         error:
-          "GitHub rejected the token (401 Bad credentials). Create a new PAT with Actions read/write on this repo and update GITHUB_TOKEN in Vercel.",
+          "GitHub rejected GITHUB_TOKEN (401 Bad credentials). The token is missing, expired, revoked, or pasted incorrectly. Create a new PAT: classic with scopes repo + workflow, or fine-grained with this repo and Actions Read and write. Set GITHUB_TOKEN in Vercel (Production), confirm GITHUB_REPO is wqrmhd177/-360-Services-Portal, then redeploy. To sync without GitHub, remove GITHUB_TOKEN (uses in-app Metabase sync; may timeout on large datasets).",
       };
     }
     if (response.status === 403) {
